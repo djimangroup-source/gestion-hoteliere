@@ -113,15 +113,28 @@ main{flex:999 1 560px;min-width:0;padding:32px clamp(16px,4vw,48px)}
   <nav class="side" aria-label="Navigation principale">
     <div class="brand">Gestion hôtelière</div>
     <div class="org" id="orgLabel"></div>
-    <button data-view="tarifs">Tarifs</button>
-    <button data-view="abonnement">Mon abonnement</button>
+    <button data-view="dashboard">Tableau de bord</button>
+    <button data-view="reservations">Réservations</button>
+    <button data-view="planning">Planning</button>
+    <button data-view="clients">Clients</button>
     <button data-view="chambres">Chambres</button>
+    <button data-view="caisse">Caisse</button>
+    <button data-view="factures">Factures</button>
+    <div style="height:1px;background:rgba(255,255,255,.12);margin:10px 0"></div>
+    <button data-view="abonnement">Mon abonnement</button>
+    <button data-view="tarifs">Tarifs</button>
     <button data-view="admin" id="navAdmin" class="hidden">Administration</button>
     <div class="spacer"></div>
     <button data-logout>Se déconnecter</button>
   </nav>
   <main>
     <div id="banner"></div>
+    <section id="v-dashboard" class="hidden"></section>
+    <section id="v-reservations" class="hidden"></section>
+    <section id="v-planning" class="hidden"></section>
+    <section id="v-clients" class="hidden"></section>
+    <section id="v-caisse" class="hidden"></section>
+    <section id="v-factures" class="hidden"></section>
     <section id="v-tarifs" class="hidden"></section>
     <section id="v-abonnement" class="hidden"></section>
     <section id="v-chambres" class="hidden"></section>
@@ -137,7 +150,8 @@ const SUPABASE_URL = 'https://kuuyhtvdnoqyikrcbpot.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_0AT6IoJyfnTlANz0Lf-erg_Sj85F1yT';
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-const S = { session:null, member:null, org:null, overview:null, plans:[], providers:[], isAdmin:false, cycle:'monthly', view:'abonnement', signup:false };
+const S = { session:null, member:null, org:null, overview:null, plans:[], providers:[], isAdmin:false, cycle:'monthly', view:'dashboard', signup:false, est:null, ests:[], rooms:[] };
+const VIEWS = ['dashboard','reservations','planning','clients','caisse','factures','tarifs','abonnement','chambres','admin'];
 const $ = (id) => document.getElementById(id);
 const esc = (v) => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const fcfa = (n) => n == null ? '—' : new Intl.NumberFormat('fr-FR').format(n).replace(/ | /g,' ') + ' FCFA';
@@ -238,8 +252,8 @@ function go(view){
   if (!S.org && view !== 'admin') view = 'admin';
   S.view = view;
   document.querySelectorAll('nav.side [data-view]').forEach(b => b.classList.toggle('active', b.dataset.view === view));
-  ['tarifs','abonnement','chambres','admin'].forEach(v => $('v-'+v).classList.toggle('hidden', v !== view));
-  ({ tarifs: renderTarifs, abonnement: renderAbonnement, chambres: renderChambres, admin: renderAdmin })[view]();
+  VIEWS.forEach(v => $('v-'+v).classList.toggle('hidden', v !== view));
+  ({ dashboard: renderDashboard, reservations: renderReservations, planning: renderPlanning, clients: renderClients, caisse: renderCaisse, factures: renderFactures, tarifs: renderTarifs, abonnement: renderAbonnement, chambres: renderChambres, admin: renderAdmin })[view]();
 }
 
 /* ---------- Tarifs ---------- */
@@ -392,7 +406,7 @@ async function renderChambres(){
   const el = $('v-chambres'); el.innerHTML = '<p class="muted">Chargement…</p>';
   const [est, rooms] = await Promise.all([
     sb.from('establishments').select('id,name').eq('organization_id', S.org).eq('is_active', true).order('created_at'),
-    sb.from('rooms').select('id,number,room_type,housekeeping_status,is_active,establishments(name)').eq('organization_id', S.org).order('number')
+    sb.from('rooms').select('id,number,room_type,base_rate,housekeeping_status,is_active,establishments(name)').eq('organization_id', S.org).order('number')
   ]);
   const u = (S.overview && S.overview.usage) || {};
   const HK = { clean:'Propre', dirty:'Sale', cleaning:'En nettoyage', ready:'Prête', out_of_service:'Hors service' };
@@ -403,17 +417,22 @@ async function renderChambres(){
       <div style="flex:1 1 200px"><label for="rEst">Établissement</label><select id="rEst">${(est.data || []).map(e => `<option value="${esc(e.id)}">${esc(e.name)}</option>`).join('')}</select></div>
       <div style="flex:1 1 140px"><label for="rNum">Numéro</label><input id="rNum" required></div>
       <div style="flex:1 1 160px"><label for="rType">Type</label><input id="rType" placeholder="Ex. Double, Studio"></div>
+      <div style="flex:1 1 130px"><label for="rRate">Prix / nuit (F)</label><input id="rRate" type="number" min="0"></div>
       <button class="primary">Ajouter la chambre</button></form>` : ''}
-    <div class="card">${(rooms.data || []).length === 0 ? '<p class="muted">Aucune chambre enregistrée.</p>' : `<div class="tablewrap"><table class="table"><thead><tr><th>N°</th><th>Type</th><th>Établissement</th><th>État</th><th>Statut</th>${canAdd ? '<th></th>' : ''}</tr></thead><tbody>
-      ${(rooms.data || []).map(r => `<tr><td><strong>${esc(r.number)}</strong></td><td>${esc(r.room_type || '—')}</td><td>${esc(r.establishments ? r.establishments.name : '')}</td><td>${HK[r.housekeeping_status] || ''}</td><td><span class="pill ${r.is_active ? 'st-active' : 'st-cancelled'}">${r.is_active ? 'Active' : 'Désactivée'}</span></td>${canAdd ? `<td><button class="small ghost" data-toggle-room="${esc(r.id)}" data-on="${r.is_active}">${r.is_active ? 'Désactiver' : 'Réactiver'}</button></td>` : ''}</tr>`).join('')}
+    <div class="card">${(rooms.data || []).length === 0 ? '<p class="muted">Aucune chambre enregistrée.</p>' : `<div class="tablewrap"><table class="table"><thead><tr><th>N°</th><th>Type</th><th>Prix / nuit</th><th>État</th><th>Statut</th>${canAdd ? '<th></th>' : ''}</tr></thead><tbody>
+      ${(rooms.data || []).map(r => `<tr><td><strong>${esc(r.number)}</strong></td><td>${esc(r.room_type || '—')}</td><td>${r.base_rate != null ? money(r.base_rate) : '—'}</td><td><select aria-label="État de la chambre ${esc(r.number)}" data-hk="${esc(r.id)}" style="min-height:36px;max-width:160px" ${r.is_active ? '' : 'disabled'}>${opt(HKS, r.housekeeping_status)}</select></td><td><span class="pill ${r.is_active ? 'st-active' : 'st-cancelled'}">${r.is_active ? 'Active' : 'Désactivée'}</span></td>${canAdd ? `<td><button class="small ghost" data-toggle-room="${esc(r.id)}" data-on="${r.is_active}">${r.is_active ? 'Désactiver' : 'Réactiver'}</button></td>` : ''}</tr>`).join('')}
       </tbody></table></div>`}</div>`;
   const f = $('roomForm');
   if (f) f.onsubmit = async (e) => {
     e.preventDefault();
-    const { error } = await sb.from('rooms').insert({ establishment_id: $('rEst').value, number: $('rNum').value.trim(), room_type: $('rType').value.trim() || null });
+    const { error } = await sb.from('rooms').insert({ establishment_id: $('rEst').value, number: $('rNum').value.trim(), room_type: $('rType').value.trim() || null, base_rate: $('rRate').value === '' ? null : +$('rRate').value });
     if (error) return toast(error.code === '23505' ? 'Ce numéro de chambre existe déjà.' : errMsg(error), true);
     toast('Chambre ajoutée.'); await loadCommon(); renderChambres();
   };
+  el.querySelectorAll('[data-hk]').forEach(sel => sel.onchange = async () => {
+    const { error } = await sb.from('rooms').update({ housekeeping_status: sel.value }).eq('id', sel.dataset.hk);
+    if (error) { toast(errMsg(error), true); return renderChambres(); } toast('État mis à jour.');
+  });
   el.querySelectorAll('[data-toggle-room]').forEach(b => b.onclick = async () => {
     const { error } = await sb.from('rooms').update({ is_active: b.dataset.on !== 'true' }).eq('id', b.dataset.toggleRoom);
     if (error) return toast(errMsg(error), true);
@@ -495,7 +514,326 @@ async function renderAdmin(){
   });
 }
 
-sb.auth.onAuthStateChange((evt) => { if (['SIGNED_IN','SIGNED_OUT'].includes(evt)) { S.view = 'abonnement'; boot(); } });
+/* ================= Modules métier ================= */
+const RSTATUS = { pending:'En attente', confirmed:'Confirmée', checked_in:'En séjour', checked_out:'Partie', cancelled:'Annulée', no_show:'Non présentée' };
+const RSTCLS = { pending:'st-pending', confirmed:'st-trial', checked_in:'st-active', checked_out:'st-cancelled', cancelled:'st-expired', no_show:'st-expired' };
+const SOURCE = { direct:'Direct', telephone:'Téléphone', walk_in:'Walk-in', whatsapp:'WhatsApp', agence:'Agence', en_ligne:'En ligne' };
+const PMETHOD = { cash:'Espèces', orange_money:'Orange Money', mtn_money:'MTN MoMo', moov_money:'Moov Money', wave:'Wave', card:'Carte', bank_transfer:'Virement' };
+const HKS = { clean:'Propre', dirty:'Sale', cleaning:'En nettoyage', ready:'Prête', out_of_service:'Hors service' };
+const money = (n) => new Intl.NumberFormat('fr-FR').format(Math.round(Number(n || 0))).replace(/ | /g,' ') + ' F';
+const iso = (d) => { const x = new Date(d); x.setMinutes(x.getMinutes() - x.getTimezoneOffset()); return x.toISOString().slice(0,10); };
+const today = () => iso(new Date());
+const addDays = (s, n) => { const d = new Date(s + 'T00:00:00'); d.setDate(d.getDate() + n); return iso(d); };
+const dfr = (s) => s ? new Date(s + (s.length === 10 ? 'T00:00:00' : '')).toLocaleDateString('fr-FR', { day:'2-digit', month:'short' }) : '—';
+const opt = (obj, sel) => Object.entries(obj).map(([k,v]) => `<option value="${k}" ${k === sel ? 'selected' : ''}>${esc(v)}</option>`).join('');
+const can = (roles) => S.member && roles.includes(S.member.role);
+
+async function loadEst(){
+  const [e, r] = await Promise.all([
+    sb.from('establishments').select('id,name,city').eq('organization_id', S.org).eq('is_active', true).order('created_at'),
+    sb.from('rooms').select('id,number,room_type,base_rate,housekeeping_status,is_active,establishment_id').eq('organization_id', S.org).eq('is_active', true).order('number')
+  ]);
+  S.ests = e.data || []; if (!S.est || !S.ests.find(x => x.id === S.est)) S.est = S.ests[0] && S.ests[0].id;
+  S.rooms = (r.data || []).filter(x => x.establishment_id === S.est);
+}
+const head = (title, right='') => `<div class="row between" style="margin-bottom:20px"><h1 style="font-size:32px">${title}</h1><div class="row">${right}</div></div>`;
+function readOnlyNote(){ return S.overview && !S.overview.can_write ? `<p class="muted" style="margin:-8px 0 16px">Consultation seule : réactivez votre abonnement pour enregistrer de nouvelles opérations.</p>` : ''; }
+
+/* ---------- Tableau de bord ---------- */
+async function renderDashboard(){
+  const el = $('v-dashboard'); el.innerHTML = '<p class="muted">Chargement…</p>';
+  await loadEst();
+  const t = today();
+  const [arr, dep, inh, pay] = await Promise.all([
+    sb.from('reservation_balances').select('*').eq('establishment_id', S.est).eq('check_in', t).in('status', ['pending','confirmed']),
+    sb.from('reservation_balances').select('*').eq('establishment_id', S.est).eq('check_out', t).eq('status', 'checked_in'),
+    sb.from('reservation_balances').select('id').eq('establishment_id', S.est).eq('status', 'checked_in'),
+    can(['owner','admin','manager','receptionist','accountant']) ? sb.from('cash_movements').select('amount,kind').eq('establishment_id', S.est).gte('created_at', t + 'T00:00:00') : { data: [] }
+  ]);
+  const total = S.rooms.length, occ = (inh.data || []).length;
+  const cashIn = (pay.data || []).filter(m => m.kind === 'payment' || m.kind === 'income').reduce((a, m) => a + Number(m.amount), 0);
+  const hk = (s) => S.rooms.filter(r => r.housekeeping_status === s).length;
+  const k = (l, v, sub='') => `<div class="card kpi"><div class="l">${l}</div><div class="v">${v}</div>${sub ? `<div class="muted" style="font-size:12px">${sub}</div>` : ''}</div>`;
+  const list = (rows, action, label) => (rows || []).length === 0 ? '<p class="muted">Aucun.</p>' : `<div class="tablewrap"><table class="table"><tbody>${rows.map(r => `<tr><td><strong>${esc(r.guest_name)}</strong><div class="muted" style="font-size:12px">Ch. ${esc(r.room_number)} · ${r.nights} nuit(s)</div></td><td>${r.balance > 0 ? `<span class="pill st-pending">Solde ${money(r.balance)}</span>` : '<span class="pill st-active">Réglé</span>'}</td><td style="text-align:right"><button class="small primary" data-${action}="${r.id}">${label}</button></td></tr>`).join('')}</tbody></table></div>`;
+  el.innerHTML = head(`Tableau de bord <span class="muted" style="font-size:16px;font-family:Manrope">· ${new Date().toLocaleDateString('fr-FR', { weekday:'long', day:'numeric', month:'long' })}</span>`,
+      `<button class="primary" data-newresa>Nouvelle réservation</button><button data-walkin>Walk-in</button>`) + readOnlyNote() + `
+    <div class="grid g4" style="margin-bottom:16px">
+      ${k("Taux d'occupation", total ? Math.round(occ / total * 100) + ' %' : '—', `${occ} / ${total} chambres occupées`)}
+      ${k('Arrivées du jour', (arr.data || []).length)}${k('Départs du jour', (dep.data || []).length)}
+      ${k('Encaissé aujourd’hui', money(cashIn))}
+    </div>
+    <div class="grid g2" style="margin-bottom:16px">
+      <div class="card"><h3 style="font-size:20px;margin-bottom:8px">Arrivées</h3>${list(arr.data, 'checkin', 'Check-in')}</div>
+      <div class="card"><h3 style="font-size:20px;margin-bottom:8px">Départs</h3>${list(dep.data, 'checkout', 'Check-out')}</div>
+    </div>
+    <div class="card"><h3 style="font-size:20px;margin-bottom:10px">État des chambres</h3>
+      <div class="row">${Object.entries(HKS).map(([kk, v]) => `<span class="pill ${kk === 'clean' || kk === 'ready' ? 'st-active' : kk === 'dirty' ? 'st-pending' : kk === 'out_of_service' ? 'st-expired' : 'st-trial'}">${v} : ${hk(kk)}</span>`).join('')}</div></div>`;
+  bindResaActions(el, renderDashboard);
+}
+
+/* ---------- Réservations ---------- */
+async function renderReservations(){
+  const el = $('v-reservations'); el.innerHTML = '<p class="muted">Chargement…</p>';
+  await loadEst();
+  const f = S._rf || { from: addDays(today(), -7), status: 'active', q: '' };
+  let q = sb.from('reservation_balances').select('*').eq('establishment_id', S.est).gte('check_out', f.from).order('check_in').limit(300);
+  if (f.status === 'active') q = q.in('status', ['pending','confirmed','checked_in']); else if (f.status !== 'all') q = q.eq('status', f.status);
+  const { data, error } = await q; if (error) toast(errMsg(error), true);
+  const rows = (data || []).filter(r => !f.q || (r.guest_name + ' ' + r.room_number + ' ' + (r.guest_phone || '')).toLowerCase().includes(f.q.toLowerCase()));
+  el.innerHTML = head('Réservations', `<button class="primary" data-newresa>Nouvelle réservation</button>`) + readOnlyNote() + `
+    <div class="card row" style="margin-bottom:14px;align-items:flex-end">
+      <div style="flex:1 1 180px"><label for="rfQ">Recherche</label><input id="rfQ" value="${esc(f.q)}" placeholder="Client, chambre, téléphone"></div>
+      <div style="flex:1 1 150px"><label for="rfFrom">Départ à partir du</label><input id="rfFrom" type="date" value="${f.from}"></div>
+      <div style="flex:1 1 160px"><label for="rfSt">Statut</label><select id="rfSt"><option value="active">En cours et à venir</option><option value="all">Toutes</option>${opt(RSTATUS, f.status)}</select></div>
+    </div>
+    <div class="card">${rows.length === 0 ? '<p class="muted">Aucune réservation.</p>' : `<div class="tablewrap"><table class="table"><thead><tr><th>Client</th><th>Ch.</th><th>Arrivée</th><th>Départ</th><th>Nuits</th><th>Total</th><th>Solde</th><th>Statut</th><th></th></tr></thead><tbody>
+      ${rows.map(r => `<tr><td><strong>${esc(r.guest_name)}</strong><div class="muted" style="font-size:12px">${esc(r.guest_phone || '')} · ${SOURCE[r.source] || ''}</div></td><td>${esc(r.room_number)}</td><td>${dfr(r.check_in)}</td><td>${dfr(r.check_out)}</td><td>${r.nights}</td><td>${money(r.total_amount)}</td><td>${r.balance > 0 ? `<strong style="color:var(--amber)">${money(r.balance)}</strong>` : '<span style="color:var(--green)">0 F</span>'}</td><td><span class="pill ${RSTCLS[r.status]}">${RSTATUS[r.status]}</span></td><td><button class="small ghost" data-open="${r.id}">Ouvrir</button></td></tr>`).join('')}
+    </tbody></table></div>`}</div>`;
+  $('rfSt').value = f.status;
+  const upd = () => { S._rf = { from: $('rfFrom').value || f.from, status: $('rfSt').value, q: $('rfQ').value }; renderReservations(); };
+  $('rfFrom').onchange = upd; $('rfSt').onchange = upd; $('rfQ').onchange = upd;
+  bindResaActions(el, renderReservations);
+}
+
+function bindResaActions(el, refresh){
+  el.querySelectorAll('[data-newresa]').forEach(b => b.onclick = () => openResaForm({}, refresh));
+  el.querySelectorAll('[data-walkin]').forEach(b => b.onclick = () => openResaForm({ walkin: true }, refresh));
+  el.querySelectorAll('[data-open]').forEach(b => b.onclick = () => openResa(b.dataset.open, refresh));
+  el.querySelectorAll('[data-checkin]').forEach(b => b.onclick = async () => { const { error } = await sb.rpc('check_in_reservation', { p_reservation: b.dataset.checkin }); if (error) return toast(errMsg(error), true); toast('Client enregistré en chambre.'); refresh(); });
+  el.querySelectorAll('[data-checkout]').forEach(b => b.onclick = () => openResa(b.dataset.checkout, refresh, true));
+}
+
+async function openResaForm(pre, refresh){
+  if (!S.rooms.length) await loadEst();
+  if (!S.rooms.length) return toast('Ajoutez d’abord des chambres.', true);
+  const ci = pre.check_in || today(), co = pre.check_out || addDays(ci, 1);
+  const { data: guests } = await sb.from('guests').select('id,full_name,phone').eq('organization_id', S.org).order('full_name').limit(500);
+  modal(`<h2 style="font-size:24px;margin-bottom:12px">${pre.walkin ? 'Walk-in (arrivée immédiate)' : pre.id ? 'Modifier la réservation' : 'Nouvelle réservation'}</h2>
+    <form id="resaForm">
+      <div class="field"><label for="fGuest">Client existant</label><select id="fGuest"><option value="">— Nouveau client —</option>${(guests || []).map(g => `<option value="${g.id}" ${pre.guest_id === g.id ? 'selected' : ''}>${esc(g.full_name)}${g.phone ? ' · ' + esc(g.phone) : ''}</option>`).join('')}</select></div>
+      <div class="row" id="newGuest"><div style="flex:1 1 180px" class="field"><label for="fName">Nom complet</label><input id="fName" value="${esc(pre.guest_name || '')}"></div><div style="flex:1 1 140px" class="field"><label for="fPhone">Téléphone</label><input id="fPhone" value="${esc(pre.guest_phone || '')}"></div></div>
+      <div class="row"><div style="flex:1 1 140px" class="field"><label for="fIn">Arrivée</label><input id="fIn" type="date" required value="${ci}" ${pre.walkin ? 'readonly' : ''}></div><div style="flex:1 1 140px" class="field"><label for="fOut">Départ</label><input id="fOut" type="date" required value="${co}"></div></div>
+      <div class="field"><label for="fRoom">Chambre</label><select id="fRoom">${S.rooms.map(r => `<option value="${r.id}" data-rate="${r.base_rate || 0}" ${pre.room_id === r.id ? 'selected' : ''}>${esc(r.number)}${r.room_type ? ' · ' + esc(r.room_type) : ''}${r.housekeeping_status === 'out_of_service' ? ' (hors service)' : ''}</option>`).join('')}</select><div class="muted" id="fAvail" style="font-size:12px;margin-top:4px"></div></div>
+      <div class="row"><div style="flex:1 1 120px" class="field"><label for="fRate">Prix / nuit (F)</label><input id="fRate" type="number" min="0" required value="${pre.nightly_rate ?? ''}"></div><div style="flex:1 1 100px" class="field"><label for="fDisc">Remise (F)</label><input id="fDisc" type="number" min="0" value="${pre.discount || 0}"></div><div style="flex:1 1 80px" class="field"><label for="fAd">Adultes</label><input id="fAd" type="number" min="1" value="${pre.adults || 1}"></div></div>
+      <div class="row"><div style="flex:1 1 140px" class="field"><label for="fSrc">Origine</label><select id="fSrc">${opt(SOURCE, pre.walkin ? 'walk_in' : (pre.source || 'direct'))}</select></div><div style="flex:2 1 200px" class="field"><label for="fNotes">Notes</label><input id="fNotes" value="${esc(pre.notes || '')}"></div></div>
+      <p style="font-weight:700;margin:4px 0 14px" id="fTotal"></p>
+      <div class="row"><button class="primary">${pre.id ? 'Enregistrer' : pre.walkin ? 'Enregistrer et faire le check-in' : 'Créer la réservation'}</button><button type="button" class="ghost" data-close>Annuler</button></div>
+    </form>`);
+  const calc = () => {
+    const n = Math.max(0, (new Date($('fOut').value) - new Date($('fIn').value)) / 864e5);
+    $('fTotal').textContent = n > 0 ? `${n} nuit(s) · Total ${money(Math.max(0, n * (+$('fRate').value || 0) - (+$('fDisc').value || 0)))}` : 'La date de départ doit suivre la date d’arrivée.';
+    $('newGuest').classList.toggle('hidden', !!$('fGuest').value);
+  };
+  const avail = async () => {
+    const { data } = await sb.from('reservations').select('id,room_id').eq('establishment_id', S.est).not('status', 'in', '(cancelled,no_show,checked_out)').lt('check_in', $('fOut').value).gt('check_out', $('fIn').value);
+    const busy = new Set((data || []).filter(x => x.id !== pre.id).map(x => x.room_id));
+    [...$('fRoom').options].forEach(o => { o.disabled = busy.has(o.value); });
+    if ($('fRoom').selectedOptions[0] && $('fRoom').selectedOptions[0].disabled) { const f = [...$('fRoom').options].find(o => !o.disabled); if (f) $('fRoom').value = f.value; }
+    $('fAvail').textContent = `${S.rooms.length - busy.size} chambre(s) disponible(s) sur la période.`;
+    if (!$('fRate').value) $('fRate').value = $('fRoom').selectedOptions[0] ? $('fRoom').selectedOptions[0].dataset.rate : 0;
+    calc();
+  };
+  ['fRate','fDisc','fGuest'].forEach(id => $(id).oninput = calc);
+  $('fIn').onchange = avail; $('fOut').onchange = avail;
+  $('fRoom').onchange = () => { $('fRate').value = $('fRoom').selectedOptions[0].dataset.rate || 0; calc(); };
+  await avail();
+  $('resaForm').onsubmit = async (e) => {
+    e.preventDefault();
+    const btn = e.submitter; btn.disabled = true;
+    try {
+      let gid = $('fGuest').value || null;
+      if (!gid) {
+        const nm = $('fName').value.trim(); if (nm.length < 2) throw new Error('Indiquez le nom du client.');
+        const g = await sb.from('guests').insert({ organization_id: S.org, full_name: nm, phone: $('fPhone').value.trim() || null }).select('id').single();
+        if (g.error) throw g.error; gid = g.data.id;
+      }
+      const row = { establishment_id: S.est, room_id: $('fRoom').value, guest_id: gid, guest_name: '-', check_in: $('fIn').value, check_out: $('fOut').value, nightly_rate: +$('fRate').value || 0, discount: +$('fDisc').value || 0, adults: +$('fAd').value || 1, source: $('fSrc').value, notes: $('fNotes').value.trim() || null };
+      const res = pre.id ? await sb.from('reservations').update(row).eq('id', pre.id).select('id').single() : await sb.from('reservations').insert({ ...row, status: 'confirmed', created_by: S.session.user.id }).select('id').single();
+      if (res.error) throw (res.error.message || '').includes('no_double_booking') ? new Error('Cette chambre est déjà réservée sur ces dates.') : res.error;
+      if (pre.walkin) { const c = await sb.rpc('check_in_reservation', { p_reservation: res.data.id }); if (c.error) throw c.error; }
+      closeModal(); toast(pre.id ? 'Réservation modifiée.' : pre.walkin ? 'Client enregistré en chambre.' : 'Réservation créée.');
+      refresh();
+    } catch (err) { btn.disabled = false; toast(errMsg(err), true); }
+  };
+}
+
+async function openResa(id, refresh, focusCheckout){
+  const [{ data: r }, { data: pays }] = await Promise.all([
+    sb.from('reservation_balances').select('*').eq('id', id).single(),
+    can(['owner','admin','manager','receptionist','accountant']) ? sb.from('cash_movements').select('created_at,kind,method,amount,label,reference').eq('reservation_id', id).order('created_at') : { data: [] }
+  ]);
+  if (!r) return toast('Réservation introuvable.', true);
+  const active = ['pending','confirmed','checked_in'].includes(r.status);
+  modal(`<div class="row between"><h2 style="font-size:24px">${esc(r.guest_name)}</h2><span class="pill ${RSTCLS[r.status]}">${RSTATUS[r.status]}</span></div>
+    <p class="muted" style="margin:4px 0 14px">Chambre ${esc(r.room_number)} · ${dfr(r.check_in)} → ${dfr(r.check_out)} · ${r.nights} nuit(s) · ${SOURCE[r.source]}${r.notes ? '<br>' + esc(r.notes) : ''}</p>
+    <div class="grid" style="grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px;text-align:center">
+      <div class="card" style="padding:12px"><div class="muted" style="font-size:12px">Total</div><strong>${money(r.total_amount)}</strong></div>
+      <div class="card" style="padding:12px"><div class="muted" style="font-size:12px">Payé</div><strong style="color:var(--green)">${money(r.paid)}</strong></div>
+      <div class="card" style="padding:12px"><div class="muted" style="font-size:12px">Solde</div><strong style="color:${r.balance > 0 ? 'var(--amber)' : 'var(--green)'}">${money(r.balance)}</strong></div>
+    </div>
+    ${(pays || []).length ? `<div style="font-size:13px;margin-bottom:14px">${pays.map(p => `<div class="row between" style="border-bottom:1px solid #F0ECE3;padding:6px 0"><span>${new Date(p.created_at).toLocaleDateString('fr-FR')} · ${esc(p.label)} · ${PMETHOD[p.method]}</span><strong>${p.kind === 'refund' ? '−' : ''}${money(p.amount)}</strong></div>`).join('')}</div>` : ''}
+    ${active && r.balance > 0 && can(['owner','admin','manager','receptionist','accountant']) ? `<form id="payForm" class="row" style="align-items:flex-end;margin-bottom:14px">
+      <div style="flex:1 1 110px"><label for="pAmt">Encaisser (F)</label><input id="pAmt" type="number" min="1" max="${r.balance}" value="${r.balance}" required></div>
+      <div style="flex:1 1 130px"><label for="pMeth">Moyen</label><select id="pMeth">${opt(PMETHOD, 'cash')}</select></div>
+      <div style="flex:1 1 110px"><label for="pRef">Référence</label><input id="pRef" placeholder="N° transaction"></div>
+      <button class="primary">Encaisser</button></form>` : ''}
+    <div class="row">
+      ${['pending','confirmed'].includes(r.status) ? `<button class="primary" id="aIn">Check-in</button>` : ''}
+      ${r.status === 'checked_in' ? `<button class="primary" id="aOut">Check-out</button>` : ''}
+      ${r.status !== 'cancelled' ? `<button id="aInv">Facture</button>` : ''}
+      ${active ? `<button class="ghost" id="aEdit">Modifier / prolonger</button>` : ''}
+      ${['pending','confirmed'].includes(r.status) ? `<button class="ghost" id="aCancel">Annuler la réservation</button>` : ''}
+      <button class="ghost" data-close>Fermer</button>
+    </div>`);
+  const done = (m) => { toast(m); closeModal(); refresh(); };
+  const pf = $('payForm'); if (pf) pf.onsubmit = async (e) => { e.preventDefault(); e.submitter.disabled = true;
+    const { error } = await sb.from('cash_movements').insert({ establishment_id: r.establishment_id, reservation_id: r.id, kind: 'payment', method: $('pMeth').value, amount: +$('pAmt').value, label: r.status === 'checked_in' ? 'Paiement séjour' : 'Acompte', reference: $('pRef').value.trim() || null });
+    if (error) { e.submitter.disabled = false; return toast(errMsg(error), true); } toast('Paiement enregistré.'); openResa(id, refresh); };
+  const a = (x, fn) => { const b = $(x); if (b) b.onclick = fn; };
+  a('aIn', async () => { const { error } = await sb.rpc('check_in_reservation', { p_reservation: r.id }); if (error) return toast(errMsg(error), true); done('Client enregistré en chambre.'); });
+  a('aOut', async () => { if (r.balance > 0 && !$('aOut').dataset.confirm) { $('aOut').dataset.confirm = 1; $('aOut').textContent = `Solde ${money(r.balance)} impayé — confirmer le départ`; return; }
+    const { error } = await sb.rpc('check_out_reservation', { p_reservation: r.id }); if (error) return toast(errMsg(error), true); done('Départ enregistré. Chambre à nettoyer.'); });
+  a('aInv', async () => { const { data, error } = await sb.rpc('issue_guest_invoice', { p_reservation: r.id }); if (error) return toast(errMsg(error), true); const { data: inv } = await sb.from('guest_invoices').select('*').eq('id', data).single(); printGuestInvoice(inv); });
+  a('aEdit', () => openResaForm(r, refresh));
+  a('aCancel', async () => { if (!$('aCancel').dataset.confirm) { $('aCancel').dataset.confirm = 1; $('aCancel').textContent = 'Confirmer l’annulation'; return; }
+    const { error } = await sb.from('reservations').update({ status: 'cancelled' }).eq('id', r.id); if (error) return toast(errMsg(error), true); done('Réservation annulée.'); });
+  if (focusCheckout && $('aOut')) $('aOut').focus();
+}
+
+function printGuestInvoice(i){
+  if (!i) return;
+  const est = S.ests.find(e => e.id === i.establishment_id) || {};
+  const w = window.open('', '_blank'); if (!w) return toast("Autorisez l'ouverture de fenêtres pour imprimer.", true);
+  w.document.write(`<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>Facture ${esc(i.number)}</title><style>body{font:14px/1.5 system-ui,sans-serif;color:#1B2430;max-width:760px;margin:36px auto;padding:0 20px}h1{font-size:24px;margin:0}table{width:100%;border-collapse:collapse;margin-top:20px}td,th{padding:9px;border-bottom:1px solid #ddd;text-align:left}.r{text-align:right}.top{display:flex;justify-content:space-between;gap:20px}</style></head><body>
+  <div class="top"><div><h1>${esc(est.name || '')}</h1><div>${esc(est.city || '')}</div></div><div class="r"><strong>FACTURE ${esc(i.number)}</strong><br>Émise le ${new Date(i.issued_at).toLocaleDateString('fr-FR')}</div></div>
+  <p style="margin-top:24px">Client : <strong>${esc(i.guest_name)}</strong></p>
+  <table><tr><th>Désignation</th><th class="r">Qté</th><th class="r">P.U.</th><th class="r">Montant</th></tr>
+  ${(i.lines || []).map(l => `<tr><td>${esc(l.label)}</td><td class="r">${l.qty}</td><td class="r">${money(l.unit)}</td><td class="r">${money(l.amount)}</td></tr>`).join('')}
+  <tr><th colspan="3" class="r">Total</th><th class="r">${money(i.total)}</th></tr><tr><td colspan="3" class="r">Déjà réglé</td><td class="r">${money(i.paid)}</td></tr><tr><th colspan="3" class="r">Reste à payer</th><th class="r">${money(i.balance)}</th></tr></table>
+  <p style="margin-top:30px;font-size:12px;color:#666">Montants en francs CFA (XOF).</p><script>window.print()<\/script></body></html>`);
+  w.document.close();
+}
+
+/* ---------- Planning ---------- */
+async function renderPlanning(){
+  const el = $('v-planning'); el.innerHTML = '<p class="muted">Chargement…</p>';
+  await loadEst();
+  const start = S._ps || addDays(today(), -1), days = 14, end = addDays(start, days);
+  const { data } = await sb.from('reservations').select('id,room_id,guest_name,check_in,check_out,status').eq('establishment_id', S.est).not('status', 'in', '(cancelled,no_show)').lt('check_in', end).gt('check_out', start);
+  const dates = [...Array(days)].map((_, i) => addDays(start, i));
+  const col = { pending:'#F2D49B', confirmed:'#BFD3EE', checked_in:'#0F5E4E', checked_out:'#D6D1C6' };
+  const cell = 52;
+  el.innerHTML = head('Planning', `<button class="ghost small" id="pPrev">← 7 jours</button><button class="ghost small" id="pToday">Aujourd'hui</button><button class="ghost small" id="pNext">7 jours →</button><button class="primary small" data-newresa>Nouvelle réservation</button>`) + `
+    <div class="card" style="padding:0;overflow-x:auto"><div style="min-width:${110 + days * cell}px">
+      <div style="display:grid;grid-template-columns:110px repeat(${days},${cell}px);position:sticky;top:0;background:#fff;border-bottom:1px solid var(--line)">
+        <div style="padding:10px;font-size:12px;font-weight:700;color:var(--muted)">Chambre</div>
+        ${dates.map(d => `<div style="padding:8px 0;text-align:center;font-size:11px;${d === today() ? 'background:var(--green-l);font-weight:700' : ''}">${new Date(d + 'T00:00:00').toLocaleDateString('fr-FR', { weekday:'short' })}<br><strong>${d.slice(8)}</strong></div>`).join('')}
+      </div>
+      ${S.rooms.map(rm => { const rs = (data || []).filter(x => x.room_id === rm.id);
+        return `<div style="display:grid;grid-template-columns:110px repeat(${days},${cell}px);position:relative;border-bottom:1px solid #F0ECE3;height:46px">
+          <div style="padding:12px 10px;font-weight:700">${esc(rm.number)} <span class="muted" style="font-weight:400;font-size:11px">${HKS[rm.housekeeping_status] === 'Propre' ? '' : esc(HKS[rm.housekeeping_status])}</span></div>
+          ${dates.map(d => `<button aria-label="Réserver ${esc(rm.number)} le ${d}" data-slot="${rm.id}|${d}" style="min-height:46px;border:none;border-left:1px solid #F4F1EA;border-radius:0;background:transparent;padding:0"></button>`).join('')}
+          ${rs.map(x => { const a = Math.max(0, (new Date(x.check_in) - new Date(start)) / 864e5), b = Math.min(days, (new Date(x.check_out) - new Date(start)) / 864e5);
+            return `<button data-open="${x.id}" title="${esc(x.guest_name)}" style="position:absolute;top:6px;height:34px;min-height:34px;left:${110 + a * cell + cell / 2}px;width:${Math.max(cell / 2, (b - a) * cell - 4)}px;background:${col[x.status]};color:${x.status === 'checked_in' ? '#fff' : '#1B2430'};border:none;border-radius:8px;font-size:12px;font-weight:700;padding:0 8px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;text-align:left">${esc(x.guest_name)}</button>`; }).join('')}
+        </div>`; }).join('') || '<p class="muted" style="padding:16px">Aucune chambre.</p>'}
+    </div></div>
+    <div class="row" style="margin-top:10px;font-size:12px">${Object.entries(col).map(([k, c]) => `<span><span style="display:inline-block;width:12px;height:12px;border-radius:3px;background:${c};vertical-align:middle"></span> ${RSTATUS[k]}</span>`).join('')}<span class="muted">· Cliquez sur une case vide pour réserver.</span></div>`;
+  $('pPrev').onclick = () => { S._ps = addDays(start, -7); renderPlanning(); };
+  $('pNext').onclick = () => { S._ps = addDays(start, 7); renderPlanning(); };
+  $('pToday').onclick = () => { S._ps = null; renderPlanning(); };
+  el.querySelectorAll('[data-slot]').forEach(b => b.onclick = () => { const [room, d] = b.dataset.slot.split('|'); const rm = S.rooms.find(x => x.id === room); openResaForm({ room_id: room, check_in: d, check_out: addDays(d, 1), nightly_rate: rm ? rm.base_rate : '' }, renderPlanning); });
+  bindResaActions(el, renderPlanning);
+}
+
+/* ---------- Clients ---------- */
+async function renderClients(){
+  const el = $('v-clients'); el.innerHTML = '<p class="muted">Chargement…</p>';
+  const { data } = await sb.from('guests').select('*').eq('organization_id', S.org).order('full_name').limit(1000);
+  const q = (S._cq || '').toLowerCase();
+  const rows = (data || []).filter(g => !q || (g.full_name + ' ' + (g.phone || '') + ' ' + (g.email || '')).toLowerCase().includes(q));
+  el.innerHTML = head('Clients', `<button class="primary" id="cNew">Nouveau client</button>`) + `
+    <div class="card" style="margin-bottom:14px"><label for="cQ">Recherche</label><input id="cQ" value="${esc(S._cq || '')}" placeholder="Nom, téléphone, e-mail"></div>
+    <div class="card">${rows.length === 0 ? '<p class="muted">Aucun client.</p>' : `<div class="tablewrap"><table class="table"><thead><tr><th>Nom</th><th>Téléphone</th><th>Pièce d'identité</th><th>Nationalité</th><th></th></tr></thead><tbody>
+      ${rows.map(g => `<tr><td><strong>${esc(g.full_name)}</strong><div class="muted" style="font-size:12px">${esc(g.email || '')}</div></td><td>${esc(g.phone || '—')}</td><td>${g.id_type ? esc(g.id_type.toUpperCase()) + ' ' + esc(g.id_number || '') : '—'}</td><td>${esc(g.nationality || '—')}</td><td><button class="small ghost" data-guest="${g.id}">Fiche</button></td></tr>`).join('')}
+    </tbody></table></div>`}</div>`;
+  $('cQ').onchange = (e) => { S._cq = e.target.value; renderClients(); };
+  $('cNew').onclick = () => guestForm({});
+  el.querySelectorAll('[data-guest]').forEach(b => b.onclick = () => guestForm(rows.find(g => g.id === b.dataset.guest)));
+}
+async function guestForm(g){
+  let hist = '';
+  if (g.id) {
+    const { data } = await sb.from('reservation_balances').select('id,room_number,check_in,check_out,total_amount,paid,status').eq('guest_id', g.id).order('check_in', { ascending: false });
+    hist = `<h3 style="font-size:18px;margin:16px 0 6px">Historique des séjours</h3>${(data || []).length ? data.map(r => `<div class="row between" style="border-bottom:1px solid #F0ECE3;padding:6px 0;font-size:13px"><span>${dfr(r.check_in)} → ${dfr(r.check_out)} · Ch. ${esc(r.room_number)} · ${RSTATUS[r.status]}</span><span>${money(r.paid)} / ${money(r.total_amount)}</span></div>`).join('') : '<p class="muted">Aucun séjour.</p>'}`;
+  }
+  const ID = { cni:'CNI', passeport:'Passeport', permis:'Permis', carte_consulaire:'Carte consulaire', autre:'Autre' };
+  modal(`<h2 style="font-size:24px;margin-bottom:12px">${g.id ? esc(g.full_name) : 'Nouveau client'}</h2><form id="gForm">
+    <div class="field"><label for="gN">Nom complet</label><input id="gN" required minlength="2" value="${esc(g.full_name || '')}"></div>
+    <div class="row"><div class="field" style="flex:1 1 140px"><label for="gP">Téléphone</label><input id="gP" value="${esc(g.phone || '')}"></div><div class="field" style="flex:1 1 180px"><label for="gE">E-mail</label><input id="gE" type="email" value="${esc(g.email || '')}"></div></div>
+    <div class="row"><div class="field" style="flex:1 1 130px"><label for="gT">Pièce</label><select id="gT"><option value="">—</option>${opt(ID, g.id_type)}</select></div><div class="field" style="flex:1 1 150px"><label for="gI">N° de pièce</label><input id="gI" value="${esc(g.id_number || '')}"></div><div class="field" style="flex:1 1 130px"><label for="gNat">Nationalité</label><input id="gNat" value="${esc(g.nationality || '')}"></div></div>
+    <div class="row"><button class="primary">Enregistrer</button><button type="button" class="ghost" data-close>Fermer</button></div></form>${hist}`);
+  $('gForm').onsubmit = async (e) => { e.preventDefault();
+    const row = { full_name: $('gN').value.trim(), phone: $('gP').value.trim() || null, email: $('gE').value.trim() || null, id_type: $('gT').value || null, id_number: $('gI').value.trim() || null, nationality: $('gNat').value.trim() || null };
+    const { error } = g.id ? await sb.from('guests').update(row).eq('id', g.id) : await sb.from('guests').insert({ ...row, organization_id: S.org });
+    if (error) return toast(errMsg(error), true); closeModal(); toast('Client enregistré.'); renderClients(); };
+}
+
+/* ---------- Caisse ---------- */
+async function renderCaisse(){
+  const el = $('v-caisse'); el.innerHTML = '<p class="muted">Chargement…</p>';
+  if (!can(['owner','admin','manager','receptionist','accountant'])) { el.innerHTML = head('Caisse') + '<p class="muted">Accès réservé.</p>'; return; }
+  await loadEst();
+  const { data: sess } = await sb.from('cash_sessions').select('*').eq('establishment_id', S.est).eq('status', 'open').maybeSingle();
+  const since = sess ? sess.opened_at : today() + 'T00:00:00';
+  const { data: mv } = await sb.from('cash_movements').select('*').eq('establishment_id', S.est).gte('created_at', since).order('created_at', { ascending: false });
+  const cash = (mv || []).filter(m => m.method === 'cash' && (!sess || m.session_id === sess.id));
+  const sum = (arr, kinds) => arr.filter(m => kinds.includes(m.kind)).reduce((a, m) => a + Number(m.amount), 0);
+  const expected = (sess ? Number(sess.opening_balance) : 0) + sum(cash, ['payment','income']) - sum(cash, ['expense','refund']);
+  const byMethod = Object.keys(PMETHOD).map(k => [k, sum((mv || []).filter(m => m.method === k), ['payment','income']) - sum((mv || []).filter(m => m.method === k), ['expense','refund'])]).filter(x => x[1] !== 0);
+  el.innerHTML = head('Caisse', sess ? `<button class="ghost" id="kMove">Entrée / dépense</button><button class="primary" id="kClose">Clôturer la caisse</button>` : '') + readOnlyNote() + (sess ? `
+    <div class="grid g4" style="margin-bottom:16px">
+      <div class="card kpi"><div class="l">Ouverte le</div><div class="v" style="font-size:20px">${new Date(sess.opened_at).toLocaleString('fr-FR', { dateStyle:'short', timeStyle:'short' })}</div></div>
+      <div class="card kpi"><div class="l">Fond de caisse</div><div class="v">${money(sess.opening_balance)}</div></div>
+      <div class="card kpi"><div class="l">Espèces attendues</div><div class="v">${money(expected)}</div></div>
+      <div class="card kpi"><div class="l">Dépenses</div><div class="v">${money(sum(mv || [], ['expense']))}</div></div>
+    </div>` : `<div class="card" style="margin-bottom:16px"><h3 style="font-size:20px;margin-bottom:8px">La caisse est fermée</h3><p class="muted" style="margin:0 0 12px">Ouvrez la caisse avec le fond initial pour enregistrer des encaissements en espèces.</p>
+      <form id="kOpen" class="row" style="align-items:flex-end"><div style="flex:0 1 200px"><label for="kFund">Fond de caisse (F)</label><input id="kFund" type="number" min="0" value="0"></div><button class="primary">Ouvrir la caisse</button></form></div>`) + `
+    ${byMethod.length ? `<div class="card" style="margin-bottom:16px"><h3 style="font-size:18px;margin-bottom:8px">Solde par moyen de paiement ${sess ? '(session en cours)' : '(aujourd’hui)'}</h3><div class="row">${byMethod.map(([k, v]) => `<span class="pill st-trial">${PMETHOD[k]} : ${money(v)}</span>`).join('')}</div></div>` : ''}
+    <div class="card"><h3 style="font-size:18px;margin-bottom:8px">Journal</h3>${(mv || []).length === 0 ? '<p class="muted">Aucun mouvement.</p>' : `<div class="tablewrap"><table class="table"><thead><tr><th>Heure</th><th>Libellé</th><th>Moyen</th><th>Réf.</th><th class="r">Montant</th></tr></thead><tbody>
+      ${mv.map(m => `<tr><td>${new Date(m.created_at).toLocaleTimeString('fr-FR', { hour:'2-digit', minute:'2-digit' })}</td><td>${esc(m.label)}</td><td>${PMETHOD[m.method]}</td><td>${esc(m.reference || '')}</td><td style="text-align:right;font-weight:700;color:${['expense','refund'].includes(m.kind) ? 'var(--red)' : 'var(--green)'}">${['expense','refund'].includes(m.kind) ? '−' : '+'}${money(m.amount)}</td></tr>`).join('')}</tbody></table></div>`}</div>`;
+  const o = $('kOpen'); if (o) o.onsubmit = async (e) => { e.preventDefault(); const { error } = await sb.from('cash_sessions').insert({ establishment_id: S.est, opening_balance: +$('kFund').value || 0 }); if (error) return toast(errMsg(error), true); toast('Caisse ouverte.'); renderCaisse(); };
+  const mvb = $('kMove'); if (mvb) mvb.onclick = () => {
+    modal(`<h2 style="font-size:24px;margin-bottom:12px">Mouvement de caisse</h2><form id="mF">
+      <div class="row"><div class="field" style="flex:1 1 140px"><label for="mK">Type</label><select id="mK"><option value="expense">Dépense / sortie</option><option value="income">Entrée diverse</option></select></div><div class="field" style="flex:1 1 140px"><label for="mM">Moyen</label><select id="mM">${opt(PMETHOD, 'cash')}</select></div></div>
+      <div class="row"><div class="field" style="flex:1 1 120px"><label for="mA">Montant (F)</label><input id="mA" type="number" min="1" required></div><div class="field" style="flex:2 1 200px"><label for="mL">Libellé</label><input id="mL" required placeholder="Ex. Achat produits d'entretien"></div></div>
+      <div class="row"><button class="primary">Enregistrer</button><button type="button" class="ghost" data-close>Annuler</button></div></form>`);
+    $('mF').onsubmit = async (e) => { e.preventDefault(); const { error } = await sb.from('cash_movements').insert({ establishment_id: S.est, kind: $('mK').value, method: $('mM').value, amount: +$('mA').value, label: $('mL').value.trim() });
+      if (error) return toast(errMsg(error), true); closeModal(); toast('Mouvement enregistré.'); renderCaisse(); };
+  };
+  const cl = $('kClose'); if (cl) cl.onclick = () => {
+    modal(`<h2 style="font-size:24px;margin-bottom:8px">Clôture de caisse</h2><p>Espèces attendues : <strong>${money(expected)}</strong></p><form id="clF">
+      <div class="field"><label for="clC">Espèces comptées (F)</label><input id="clC" type="number" min="0" required value="${expected}"></div><p id="clD" class="muted"></p>
+      <div class="row"><button class="primary">Clôturer</button><button type="button" class="ghost" data-close>Annuler</button></div></form>`);
+    const diff = () => { const d = (+$('clC').value || 0) - expected; $('clD').textContent = d === 0 ? 'Aucun écart.' : `Écart : ${d > 0 ? '+' : ''}${money(d)}`; };
+    $('clC').oninput = diff; diff();
+    $('clF').onsubmit = async (e) => { e.preventDefault(); const { error } = await sb.from('cash_sessions').update({ status: 'closed', counted_balance: +$('clC').value || 0 }).eq('id', sess.id);
+      if (error) return toast(errMsg(error), true); closeModal(); toast('Caisse clôturée.'); renderCaisse(); };
+  };
+}
+
+/* ---------- Factures clients ---------- */
+async function renderFactures(){
+  const el = $('v-factures'); el.innerHTML = '<p class="muted">Chargement…</p>';
+  await loadEst();
+  const { data } = await sb.from('guest_invoices').select('*').eq('organization_id', S.org).order('issued_at', { ascending: false }).limit(300);
+  S._ginv = data || [];
+  el.innerHTML = head('Factures') + `<div class="card">${S._ginv.length === 0 ? '<p class="muted">Aucune facture. Émettez-en une depuis une réservation (bouton « Facture »).</p>' : `<div class="tablewrap"><table class="table"><thead><tr><th>N°</th><th>Date</th><th>Client</th><th>Total</th><th>Réglé</th><th>Reste</th><th></th></tr></thead><tbody>
+    ${S._ginv.map(i => `<tr><td><strong>${esc(i.number)}</strong></td><td>${new Date(i.issued_at).toLocaleDateString('fr-FR')}</td><td>${esc(i.guest_name)}</td><td>${money(i.total)}</td><td>${money(i.paid)}</td><td>${i.balance > 0 ? `<strong style="color:var(--amber)">${money(i.balance)}</strong>` : '0 F'}</td><td><button class="small ghost" data-pinv="${i.id}">Imprimer / PDF</button></td></tr>`).join('')}
+  </tbody></table></div>`}</div>`;
+  el.querySelectorAll('[data-pinv]').forEach(b => b.onclick = () => printGuestInvoice(S._ginv.find(i => i.id === b.dataset.pinv)));
+}
+
+sb.auth.onAuthStateChange((evt) => { if (['SIGNED_IN','SIGNED_OUT'].includes(evt)) { S.view = 'dashboard'; boot(); } });
 boot();
 </script>
 </body>
