@@ -1,0 +1,502 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Gestion hôtelière – Abonnements</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Manrope:wght@400;500;600;700&display=swap">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<style>
+:root{--bg:#F7F5F0;--card:#FFFFFF;--ink:#1B2430;--muted:#4A5563;--line:#E2DED4;--green:#0F5E4E;--green-d:#0A4236;--green-l:#DCEFE8;--gold:#B07D24;--gold-l:#F2D49B;--red:#8A2A14;--red-l:#FBE3DC;--amber:#7A4E0C;--amber-l:#FCF3E3;--blue:#1E4A80;--blue-l:#EEF3FA;--nav:#1B2430}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 Manrope,system-ui,sans-serif}
+h1,h2,h3{font-family:Fraunces,Georgia,serif;font-weight:600;margin:0}
+button,input,select{font:inherit}
+button{cursor:pointer;min-height:44px;border-radius:10px;padding:0 18px;font-weight:700;border:2px solid var(--green);background:#fff;color:var(--green)}
+button.primary{background:var(--green);color:#fff}
+button.gold{background:var(--gold-l);border-color:var(--gold-l);color:var(--ink)}
+button.ghost{border:1px solid #C9C3B5;color:var(--ink);font-weight:600}
+button.small{min-height:36px;padding:0 12px;font-size:13px}
+button:disabled{opacity:.5;cursor:not-allowed}
+input,select{min-height:44px;border:1px solid #CFC9BC;border-radius:10px;padding:0 12px;background:#fff;color:var(--ink);width:100%}
+label{display:block;font-size:13px;font-weight:600;color:var(--muted);margin:0 0 6px}
+.field{margin-bottom:14px}
+a{color:var(--green)}
+.hidden{display:none!important}
+.shell{display:flex;min-height:100vh;flex-wrap:wrap}
+nav.side{width:240px;flex:1 1 240px;max-width:260px;background:var(--nav);color:#C9CED6;padding:24px 16px;display:flex;flex-direction:column;gap:4px}
+nav.side .brand{font-family:Fraunces,serif;color:#fff;font-size:20px;margin-bottom:6px}
+nav.side .org{font-size:13px;margin-bottom:18px;color:#9AA3B2}
+nav.side button{border:none;background:transparent;color:#C9CED6;text-align:left;font-weight:600;width:100%}
+nav.side button.active{background:var(--green);color:#fff}
+nav.side .spacer{flex:1}
+main{flex:999 1 560px;min-width:0;padding:32px clamp(16px,4vw,48px)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:24px}
+.grid{display:grid;gap:16px}
+.g2{grid-template-columns:repeat(auto-fit,minmax(280px,1fr))}
+.g4{grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}
+.g5{grid-template-columns:repeat(auto-fit,minmax(180px,1fr))}
+.muted{color:var(--muted)}
+.eyebrow{font-size:12px;font-weight:700;letter-spacing:1.5px;color:var(--gold);text-transform:uppercase}
+.pill{display:inline-block;font-size:12px;font-weight:700;padding:4px 10px;border-radius:999px}
+.st-trial{background:var(--blue-l);color:var(--blue)}.st-active{background:var(--green-l);color:var(--green-d)}.st-past_due{background:var(--amber-l);color:var(--amber)}.st-expired{background:var(--red-l);color:var(--red)}.st-cancelled,.st-suspended{background:#ECE8DF;color:var(--muted)}
+.st-succeeded{background:var(--green-l);color:var(--green-d)}.st-pending{background:var(--amber-l);color:var(--amber)}.st-failed,.st-refunded{background:var(--red-l);color:var(--red)}
+.banner{display:flex;align-items:center;gap:14px;padding:14px 18px;border-radius:14px;margin-bottom:22px;flex-wrap:wrap;font-weight:600}
+.banner span{flex:1;min-width:200px}
+.b-info{background:var(--blue-l);color:var(--blue)}.b-warn{background:var(--amber-l);color:var(--amber)}.b-danger{background:var(--red-l);color:var(--red)}
+.toggle{display:inline-flex;gap:4px;background:#E7E3DA;padding:4px;border-radius:999px}
+.toggle button{border:none;border-radius:999px;background:transparent;color:var(--ink);font-weight:600}
+.toggle button.on{background:var(--green);color:#fff;font-weight:700}
+.plan{position:relative;display:flex;flex-direction:column;gap:10px;border-radius:16px;padding:28px 22px;background:#fff;border:1px solid var(--line)}
+.plan.reco{background:var(--green);color:#fff;border-color:var(--green);box-shadow:0 18px 40px rgba(15,94,78,.28)}
+.plan.reco .muted{color:#CFE3DD}
+.plan .badge{position:absolute;top:-13px;left:22px;background:var(--gold);color:#fff;font-size:11px;font-weight:700;letter-spacing:1.5px;padding:6px 12px;border-radius:999px}
+.plan .price{font-size:30px;font-weight:700}
+.plan .save{min-height:22px;font-size:13px;font-weight:700;color:var(--green)}
+.plan.reco .save{color:var(--gold-l)}
+.plan ul{list-style:none;padding:0;margin:6px 0 0;display:flex;flex-direction:column;gap:6px;font-size:14px}
+.plan li::before{content:"✓";font-weight:700;color:var(--green);margin-right:8px}
+.plan.reco li::before{color:var(--gold-l)}
+.plan.reco button{background:var(--gold-l);border-color:var(--gold-l);color:var(--ink)}
+.bar{height:10px;background:#ECE8DF;border-radius:999px;overflow:hidden}.bar>div{height:100%;background:var(--green)}
+.bar.full>div{background:var(--red)}
+.table{width:100%;border-collapse:collapse;font-size:14px}
+.tablewrap{overflow-x:auto}
+.table th{text-align:left;font-size:12px;color:var(--muted);padding:10px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
+.table td{padding:12px 8px;border-bottom:1px solid #F0ECE3;vertical-align:middle}
+.kpi .v{font-family:Fraunces,serif;font-size:28px;font-weight:600}
+.kpi .l{font-size:12px;color:var(--muted);font-weight:600}
+.auth{min-height:100vh;display:grid;place-items:center;padding:24px}
+.auth .card{width:100%;max-width:440px}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.between{justify-content:space-between}
+.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);max-width:92vw;padding:14px 20px;border-radius:12px;background:var(--ink);color:#fff;font-weight:600;z-index:50;box-shadow:0 10px 30px rgba(0,0,0,.25)}
+.toast.err{background:var(--red)}
+.modal{position:fixed;inset:0;background:rgba(27,36,48,.55);display:grid;place-items:center;padding:16px;z-index:40}
+.modal .card{width:100%;max-width:480px}
+.big{font-family:Fraunces,serif;font-size:56px;line-height:1;color:var(--green)}
+@media (max-width:700px){nav.side{max-width:none}}
+</style>
+</head>
+<body>
+
+<div id="auth" class="auth hidden">
+  <div class="card">
+    <div class="eyebrow">Gestion hôtelière &amp; résidences</div>
+    <h1 id="authTitle" style="font-size:30px;margin:6px 0 18px">Connexion</h1>
+    <form id="authForm">
+      <div class="field"><label for="email">Adresse e-mail</label><input id="email" type="email" required autocomplete="email"></div>
+      <div class="field"><label for="password">Mot de passe</label><input id="password" type="password" required minlength="8" autocomplete="current-password"></div>
+      <button class="primary" style="width:100%" id="authBtn">Se connecter</button>
+    </form>
+    <p class="muted" style="margin:16px 0 0;font-size:14px"><span id="authSwitchTxt">Pas encore de compte ?</span> <a href="#" id="authSwitch">Créer un compte – 30 jours gratuits</a></p>
+  </div>
+</div>
+
+<div id="onboard" class="auth hidden">
+  <div class="card">
+    <div class="eyebrow">Essai gratuit de 30 jours</div>
+    <h1 style="font-size:28px;margin:6px 0 8px">Créez votre établissement</h1>
+    <p class="muted" style="margin:0 0 18px">Votre période d'essai démarre dès la création.</p>
+    <form id="onboardForm">
+      <div class="field"><label for="orgName">Nom de l'organisation ou du groupe</label><input id="orgName" required minlength="2"></div>
+      <div class="field"><label for="estName">Nom de l'établissement</label><input id="estName" required minlength="2"></div>
+      <div class="field"><label for="estCity">Ville</label><input id="estCity"></div>
+      <button class="primary" style="width:100%">Commencer l'essai gratuit</button>
+    </form>
+    <p style="margin:14px 0 0"><a href="#" data-logout>Se déconnecter</a></p>
+  </div>
+</div>
+
+<div id="app" class="shell hidden">
+  <nav class="side" aria-label="Navigation principale">
+    <div class="brand">Gestion hôtelière</div>
+    <div class="org" id="orgLabel"></div>
+    <button data-view="tarifs">Tarifs</button>
+    <button data-view="abonnement">Mon abonnement</button>
+    <button data-view="chambres">Chambres</button>
+    <button data-view="admin" id="navAdmin" class="hidden">Administration</button>
+    <div class="spacer"></div>
+    <button data-logout>Se déconnecter</button>
+  </nav>
+  <main>
+    <div id="banner"></div>
+    <section id="v-tarifs" class="hidden"></section>
+    <section id="v-abonnement" class="hidden"></section>
+    <section id="v-chambres" class="hidden"></section>
+    <section id="v-admin" class="hidden"></section>
+  </main>
+</div>
+
+<div id="modal" class="modal hidden" role="dialog" aria-modal="true"><div class="card" id="modalBody"></div></div>
+<div id="toast" class="toast hidden" role="status"></div>
+
+<script>
+const SUPABASE_URL = 'https://kuuyhtvdnoqyikrcbpot.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_0AT6IoJyfnTlANz0Lf-erg_Sj85F1yT';
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+const S = { session:null, member:null, org:null, overview:null, plans:[], providers:[], isAdmin:false, cycle:'monthly', view:'abonnement', signup:false };
+const $ = (id) => document.getElementById(id);
+const esc = (v) => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const fcfa = (n) => n == null ? '—' : new Intl.NumberFormat('fr-FR').format(n).replace(/ | /g,' ') + ' FCFA';
+const date = (d) => d ? new Date(d).toLocaleDateString('fr-FR', {day:'numeric', month:'short', year:'numeric'}) : '—';
+const STATUS = { trial:'Essai', active:'Actif', past_due:'Échéance dépassée', expired:'Expiré', cancelled:'Résilié', suspended:'Suspendu' };
+const PAYST = { pending:'En attente', succeeded:'Payé', failed:'Échoué', cancelled:'Annulé', refunded:'Remboursé' };
+const CYCLE = { trial:'Essai', monthly:'Mensuel', yearly:'Annuel' };
+const METHOD = { orange_money:'Orange Money', mtn_money:'MTN MoMo', moov_money:'Moov Money', wave:'Wave', card:'Carte bancaire', bank_transfer:'Virement bancaire', cash:'Espèces' };
+const FEAT = { reception:'Réception & planning', reservations:'Réservations', clients:'Fiches clients', billing:'Facturation', payments:'Encaissements', cash:'Caisse', housekeeping:'Housekeeping', expenses:'Dépenses', basic_reports:'Rapports de base', users:'Utilisateurs', pdf_export:'Export PDF', advanced_reservations:'Réservations avancées', rates:'Tarifs', promotions:'Promotions', services:'Services', advanced_housekeeping:'Housekeeping avancé', maintenance:'Maintenance', financial_reports:'Rapports financiers', occupancy_stats:"Statistiques d'occupation", full_history:'Historique complet', excel_export:'Export Excel', user_permissions:'Permissions utilisateurs', notifications:'Notifications', restaurant:'Restaurant', bar:'Bar', orders:'Commandes', room_charge_transfer:'Transfert sur chambre', inventory:'Stocks', suppliers:'Fournisseurs', staff:'Personnel', groups:'Groupes', accounting:'Comptabilité simplifiée', advanced_dashboard:'Dashboard avancé', adr_revpar:'ADR & RevPAR', revenue_by_service:'CA par service', online_booking:'Réservation en ligne', online_payment:'Paiement en ligne', whatsapp_sms:'WhatsApp / SMS', api:'API', channel_manager:'Channel Manager', ota:'Connexion OTA', dynamic_pricing:'Tarification dynamique', revenue_management:'Revenue Management', advanced_crm:'CRM avancé', loyalty:'Fidélité', advanced_promotions:'Promotions avancées', whatsapp_automation:'Automatisation WhatsApp', custom_reports:'Rapports personnalisables', ai_assistant:'Assistant IA', smart_alerts:'Alertes intelligentes', advanced_api:'API avancée', full_audit:'Audit complet', multi_property:'Multi-établissements', multi_city:'Multi-villes', central_admin:'Administration centralisée', hotel_groups:'Groupes hôteliers', financial_consolidation:'Consolidation financière', national_dashboard:'Dashboard national', advanced_permissions:'Permissions avancées', custom_api:'API personnalisée', custom_integrations:'Intégrations spécifiques', data_migration:'Migration des données', training:'Formation', priority_support:'Support prioritaire' };
+
+function toast(msg, err=false){ const t=$('toast'); t.textContent=msg; t.className='toast'+(err?' err':''); clearTimeout(t._h); t._h=setTimeout(()=>t.classList.add('hidden'), 5000); }
+function errMsg(e){ return (e && (e.message || e.error_description)) || 'Une erreur est survenue.'; }
+function modal(html){ $('modalBody').innerHTML = html; $('modal').classList.remove('hidden'); }
+function closeModal(){ $('modal').classList.add('hidden'); }
+$('modal').addEventListener('click', e => { if (e.target.id === 'modal' || e.target.closest('[data-close]')) closeModal(); });
+function show(id){ ['auth','onboard','app'].forEach(x => $(x).classList.toggle('hidden', x !== id)); }
+
+/* ---------- Authentification ---------- */
+function renderAuth(){
+  $('authTitle').textContent = S.signup ? 'Créer un compte' : 'Connexion';
+  $('authBtn').textContent = S.signup ? 'Créer mon compte' : 'Se connecter';
+  $('authSwitchTxt').textContent = S.signup ? 'Déjà inscrit ?' : 'Pas encore de compte ?';
+  $('authSwitch').textContent = S.signup ? 'Se connecter' : 'Créer un compte – 30 jours gratuits';
+  $('password').autocomplete = S.signup ? 'new-password' : 'current-password';
+}
+$('authSwitch').addEventListener('click', e => { e.preventDefault(); S.signup = !S.signup; renderAuth(); });
+$('authForm').addEventListener('submit', async e => {
+  e.preventDefault();
+  const email = $('email').value.trim(), password = $('password').value;
+  const btn = $('authBtn'); btn.disabled = true;
+  try {
+    if (S.signup) {
+      const { data, error } = await sb.auth.signUp({ email, password });
+      if (error) throw error;
+      if (!data.session) { toast('Compte créé. Confirmez votre adresse e-mail puis connectez-vous.'); S.signup = false; renderAuth(); }
+    } else {
+      const { error } = await sb.auth.signInWithPassword({ email, password });
+      if (error) throw error;
+    }
+  } catch (err) { toast(err.message === 'Invalid login credentials' ? 'Identifiants incorrects.' : errMsg(err), true); }
+  finally { btn.disabled = false; }
+});
+document.addEventListener('click', async e => { if (e.target.closest('[data-logout]')) { e.preventDefault(); await sb.auth.signOut(); } });
+
+$('onboardForm').addEventListener('submit', async e => {
+  e.preventDefault();
+  const b = e.submitter; if (b) b.disabled = true;
+  const { error } = await sb.rpc('create_organization', { p_org_name: $('orgName').value.trim(), p_establishment_name: $('estName').value.trim(), p_city: $('estCity').value.trim() || null });
+  if (b) b.disabled = false;
+  if (error) return toast(errMsg(error), true);
+  toast('Votre essai gratuit de 30 jours a démarré.');
+  await boot();
+});
+
+/* ---------- Chargement ---------- */
+async function boot(){
+  const { data: { session } } = await sb.auth.getSession();
+  S.session = session;
+  if (!session) { renderAuth(); return show('auth'); }
+  const [mem, adm] = await Promise.all([
+    sb.from('organization_members').select('organization_id, role, organizations(name)').eq('user_id', session.user.id).eq('is_active', true).limit(1),
+    sb.rpc('is_platform_admin')
+  ]);
+  S.isAdmin = adm.data === true;
+  S.member = mem.data && mem.data[0];
+  $('navAdmin').classList.toggle('hidden', !S.isAdmin);
+  if (!S.member) {
+    if (S.isAdmin) { show('app'); $('orgLabel').textContent = 'Administrateur plateforme'; return go('admin'); }
+    return show('onboard');
+  }
+  S.org = S.member.organization_id;
+  $('orgLabel').textContent = S.member.organizations ? S.member.organizations.name : '';
+  show('app');
+  await loadCommon();
+  go(S.view);
+}
+async function loadCommon(){
+  const [ov, pl, pr] = await Promise.all([
+    sb.rpc('get_subscription_overview', { p_org: S.org }),
+    sb.from('plans').select('*').eq('is_active', true).eq('is_public', true).order('sort_order'),
+    sb.from('payment_providers').select('code,name,kind').eq('is_active', true).order('sort_order')
+  ]);
+  if (ov.error) toast(errMsg(ov.error), true);
+  S.overview = ov.data; S.plans = pl.data || []; S.providers = pr.data || [];
+  renderBanner();
+}
+function renderBanner(){
+  const o = S.overview, el = $('banner');
+  if (!o || !o.alert) { el.innerHTML = ''; return; }
+  const cls = o.status === 'expired' || o.status === 'suspended' ? 'b-danger' : (o.days_remaining <= 3 || o.status === 'past_due') ? 'b-warn' : 'b-info';
+  el.innerHTML = `<div class="banner ${cls}" role="alert"><span>${esc(o.alert)}</span><button class="small primary" data-go="tarifs">Choisir une formule</button></div>`;
+}
+document.addEventListener('click', e => { const g = e.target.closest('[data-go]'); if (g) go(g.dataset.go); });
+document.querySelectorAll('nav.side [data-view]').forEach(b => b.addEventListener('click', () => go(b.dataset.view)));
+
+function go(view){
+  if (view === 'admin' && !S.isAdmin) view = 'abonnement';
+  if (!S.org && view !== 'admin') view = 'admin';
+  S.view = view;
+  document.querySelectorAll('nav.side [data-view]').forEach(b => b.classList.toggle('active', b.dataset.view === view));
+  ['tarifs','abonnement','chambres','admin'].forEach(v => $('v-'+v).classList.toggle('hidden', v !== view));
+  ({ tarifs: renderTarifs, abonnement: renderAbonnement, chambres: renderChambres, admin: renderAdmin })[view]();
+}
+
+/* ---------- Tarifs ---------- */
+function renderTarifs(){
+  const o = S.overview || {}; const cur = o.plan || {};
+  const trial = S.plans.find(p => p.is_trial);
+  const paid = S.plans.filter(p => !p.is_trial && !p.is_quote_based);
+  const ent = S.plans.find(p => p.is_quote_based);
+  const y = S.cycle === 'yearly';
+  const cards = paid.map(p => {
+    const isCur = cur.id === p.id && o.billing_cycle === S.cycle && o.status !== 'expired';
+    const save = p.monthly_price * 12 - (p.yearly_price || 0);
+    const label = isCur ? 'Formule actuelle' : (o.billing_cycle && o.billing_cycle !== 'trial' ? 'Passer à cette formule' : 'Choisir cette formule');
+    const prev = paid[paid.indexOf(p) - 1];
+    const feats = (p.features || []).filter(f => !prev || !(prev.features || []).includes(f)).slice(0, 9).map(f => `<li>${esc(FEAT[f] || f)}</li>`).join('');
+    return `<div class="plan ${p.is_recommended ? 'reco' : ''}">
+      ${p.is_recommended ? '<div class="badge">RECOMMANDÉ</div>' : ''}
+      <h3 style="font-size:24px">${esc(p.name)}</h3>
+      <div class="muted" style="font-size:13px">${p.max_rooms ? "Jusqu'à " + p.max_rooms + ' chambres/unités' : 'Selon configuration'} · ${p.max_users ? p.max_users + ' utilisateurs' : 'utilisateurs illimités'}</div>
+      <div><span class="price">${fcfa(y ? p.yearly_price : p.monthly_price).replace(' FCFA','')}</span> <span class="muted" style="font-size:13px">FCFA / ${y ? 'an' : 'mois'}</span></div>
+      <div class="save">${y && save > 0 ? 'Économisez ' + fcfa(save) + ' avec l’annuel' : ''}</div>
+      <button data-checkout="${esc(p.slug)}" ${isCur ? 'disabled' : ''}>${label}</button>
+      <ul>${prev ? '<li>Tout ' + esc(prev.name) + ' +</li>' : ''}${feats}</ul>
+    </div>`;
+  }).join('');
+  $('v-tarifs').innerHTML = `
+    <div style="text-align:center;margin-bottom:26px">
+      <div class="eyebrow">Gestion hôtelière &amp; résidences</div>
+      <h1 style="font-size:clamp(28px,4vw,42px);margin:8px 0">Choisissez la formule adaptée à votre établissement</h1>
+      <p class="muted" style="margin:0 0 16px">Vos données sont toujours conservées, même après expiration.</p>
+      <div class="toggle" role="group" aria-label="Périodicité">
+        <button class="${y ? '' : 'on'}" data-cycle="monthly">Mensuel</button>
+        <button class="${y ? 'on' : ''}" data-cycle="yearly">Annuel · 2 mois offerts</button>
+      </div>
+    </div>
+    <div class="grid g4" style="align-items:stretch;margin-bottom:18px">${cards}</div>
+    <div class="grid g2">
+      ${trial ? `<div class="card row between"><div><h3 style="font-size:20px">${esc(trial.name)} · ${trial.trial_days} jours</h3><div class="muted" style="font-size:14px">0 FCFA · ${trial.max_rooms} chambres · ${trial.max_users} utilisateurs · 1 caisse · 1 devise</div></div>
+        <button class="${o.billing_cycle === 'trial' ? '' : 'ghost'}" disabled>${o.billing_cycle === 'trial' ? 'Essai en cours' : 'Essai déjà utilisé'}</button></div>` : ''}
+      ${ent ? `<div class="card row between" style="background:var(--ink);color:#fff;border-color:var(--ink)"><div><h3 style="font-size:20px">${esc(ent.name)}</h3><div style="font-size:14px;color:#C9CED6">À partir de ${fcfa(ent.monthly_price)}/mois · ${esc(ent.description || '')}</div></div>
+        <button class="gold" data-quote>Demander un devis</button></div>` : ''}
+    </div>`;
+  $('v-tarifs').querySelectorAll('[data-cycle]').forEach(b => b.onclick = () => { S.cycle = b.dataset.cycle; renderTarifs(); });
+  $('v-tarifs').querySelectorAll('[data-checkout]').forEach(b => b.onclick = () => openCheckout(b.dataset.checkout, S.cycle));
+  const q = $('v-tarifs').querySelector('[data-quote]');
+  if (q) q.onclick = () => modal(`<h2 style="font-size:24px;margin-bottom:10px">Formule Enterprise</h2><p class="muted">La formule Enterprise est établie sur devis selon le nombre d'établissements, de villes et les intégrations souhaitées. Votre demande est à adresser à l'administrateur de la plateforme, qui activera la formule après accord.</p><button class="primary" data-close>Fermer</button>`);
+}
+
+function openCheckout(slug, cycle){
+  if (!['owner','admin'].includes(S.member.role)) return toast("Seul le propriétaire ou un administrateur peut gérer l'abonnement.", true);
+  const p = S.plans.find(x => x.slug === slug); if (!p) return;
+  const amount = cycle === 'yearly' ? p.yearly_price : p.monthly_price;
+  const opts = S.providers.map(pr => `<option value="${esc(pr.code)}">${esc(pr.name)}</option>`).join('');
+  modal(`<h2 style="font-size:24px">${esc(p.name)} · ${CYCLE[cycle]}</h2>
+    <p style="font-size:28px;font-weight:700;margin:10px 0 2px">${fcfa(amount)}</p>
+    <p class="muted" style="margin:0 0 16px">${cycle === 'yearly' ? 'Valable 1 an' : 'Valable 1 mois'} à compter de l'activation.</p>
+    ${S.providers.length ? `<div class="field"><label for="payMethod">Moyen de paiement</label><select id="payMethod">${opts}</select></div>
+      <p class="muted" style="font-size:13px">Les paiements Mobile Money et carte seront proposés dès l'ouverture de ces services.</p>
+      <div class="row"><button class="primary" id="payGo">Confirmer la demande</button><button class="ghost" data-close>Annuler</button></div>`
+      : `<p class="muted">Aucun moyen de paiement n'est disponible pour le moment.</p><button class="ghost" data-close>Fermer</button>`}`);
+  const g = $('payGo'); if (!g) return;
+  g.onclick = async () => {
+    g.disabled = true;
+    const method = $('payMethod').value;
+    const { data, error } = await sb.rpc('start_subscription_checkout', { p_org: S.org, p_plan_slug: slug, p_cycle: cycle, p_method: method });
+    if (error) { g.disabled = false; return toast(errMsg(error), true); }
+    const ref = String(data).slice(0, 8).toUpperCase();
+    modal(`<h2 style="font-size:24px">Demande enregistrée</h2>
+      <p>Référence de paiement : <strong>${ref}</strong> — montant : <strong>${fcfa(amount)}</strong>.</p>
+      <p class="muted">${method === 'bank_transfer' ? 'Effectuez le virement en indiquant cette référence.' : 'Réglez ce montant en espèces en indiquant cette référence.'} Votre abonnement sera activé dès la validation du paiement.</p>
+      <button class="primary" data-close>Compris</button>`);
+    await loadCommon(); if (S.view === 'abonnement') renderAbonnement();
+  };
+}
+
+/* ---------- Mon abonnement ---------- */
+async function renderAbonnement(){
+  const el = $('v-abonnement'); el.innerHTML = '<p class="muted">Chargement…</p>';
+  await loadCommon();
+  const o = S.overview; if (!o) { el.innerHTML = '<p class="muted">Abonnement introuvable.</p>'; return; }
+  const canPay = ['owner','admin','accountant'].includes(S.member.role);
+  const [pays, invs] = canPay ? await Promise.all([
+    sb.from('payments').select('id,created_at,paid_at,amount,payment_method,status,billing_cycle,plans(name)').eq('organization_id', S.org).order('created_at', { ascending:false }).limit(50),
+    sb.from('subscription_invoices').select('*').eq('organization_id', S.org).order('issued_at', { ascending:false })
+  ]) : [{ data: [] }, { data: [] }];
+  const u = o.usage || {};
+  const bar = (n, max) => { const pct = max ? Math.min(100, n / max * 100) : 0; return `<div class="bar ${max && n >= max ? 'full' : ''}"><div style="width:${pct}%"></div></div>`; };
+  const isPaid = o.billing_cycle !== 'trial';
+  const other = o.billing_cycle === 'monthly' ? 'yearly' : 'monthly';
+  const yp = o.plan.yearly_price, mp = o.plan.monthly_price;
+  const invByPay = Object.fromEntries((invs.data || []).map(i => [i.payment_id, i]));
+  S._invoices = invs.data || [];
+  el.innerHTML = `
+    <div class="row between" style="margin-bottom:22px">
+      <div><div class="muted" style="font-size:13px">${esc($('orgLabel').textContent)}</div><h1 style="font-size:34px">Mon abonnement</h1></div>
+      <div class="row"><button class="ghost" id="seeInv">Voir les factures</button><button class="primary" data-go="tarifs">Changer de formule</button></div>
+    </div>
+    <div class="card grid" style="grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:24px;margin-bottom:16px">
+      <div>
+        <div class="eyebrow" style="color:var(--muted)">Formule actuelle</div>
+        <div class="row" style="margin:6px 0"><h2 style="font-size:30px">${esc(o.plan.name)}</h2><span class="pill st-${esc(o.status)}">${STATUS[o.status] || esc(o.status)}</span></div>
+        <div>${isPaid ? fcfa(o.price) + ' / ' + (o.billing_cycle === 'yearly' ? 'an' : 'mois') : '0 FCFA'} · <span class="muted">${CYCLE[o.billing_cycle]}</span></div>
+        ${isPaid && canPay ? `<div class="row" style="margin-top:12px">
+          ${yp != null ? `<button class="small" data-switch="${other}">${other === 'yearly' ? "Passer à l'annuel" : 'Passer au mensuel'}</button>` : ''}
+          <button class="small ghost" data-renew>Renouveler</button></div>
+          ${other === 'yearly' && yp != null ? `<div style="font-size:13px;color:var(--green);font-weight:600;margin-top:8px">En annuel : ${fcfa(yp)}/an, soit ${fcfa(mp*12-yp)} économisés</div>` : ''}` : ''}
+      </div>
+      <div class="grid" style="grid-template-columns:1fr 1fr;gap:14px 18px;font-size:14px">
+        <div><div class="muted" style="font-size:12px">Date de début</div><strong>${date(o.start_at)}</strong></div>
+        <div><div class="muted" style="font-size:12px">Date d'expiration</div><strong>${date(o.end_at)}</strong></div>
+        <div><div class="muted" style="font-size:12px">Prochain paiement</div><strong>${isPaid ? date(o.next_billing_at) : date(o.end_at)}</strong></div>
+        <div><div class="muted" style="font-size:12px">Périodicité</div><strong>${CYCLE[o.billing_cycle]}</strong></div>
+      </div>
+      <div style="background:var(--bg);border-radius:12px;padding:18px;display:grid;place-items:center;text-align:center">
+        <div><div class="big">${o.days_remaining}</div><div class="muted">jour${o.days_remaining > 1 ? 's' : ''} restant${o.days_remaining > 1 ? 's' : ''}</div></div>
+      </div>
+    </div>
+    <div class="grid g2" style="margin-bottom:16px">
+      <div class="card"><div class="row between"><strong>Chambres / unités</strong><strong>${u.rooms} / ${u.max_rooms ?? '∞'}</strong></div><div style="margin:10px 0">${bar(u.rooms, u.max_rooms)}</div><div class="muted" style="font-size:13px">${u.max_rooms ? Math.max(0, u.max_rooms - u.rooms) + ' unité(s) encore disponible(s)' : 'Sans limite'}</div></div>
+      <div class="card"><div class="row between"><strong>Utilisateurs</strong><strong>${u.users} / ${u.max_users ?? '∞'}</strong></div><div style="margin:10px 0">${bar(u.users, u.max_users)}</div><div class="muted" style="font-size:13px">${u.max_users ? Math.max(0, u.max_users - u.users) + ' place(s) disponible(s)' : 'Sans limite'}</div></div>
+    </div>
+    ${o.status === 'expired' ? `<div class="card" style="margin-bottom:16px"><span class="pill st-expired">ABONNEMENT EXPIRÉ</span><h3 style="font-size:22px;margin:10px 0 6px">Vos données sont en sécurité.</h3><p class="muted" style="margin:0 0 12px">Clients, réservations, factures, paiements, chambres et rapports sont conservés. Les nouvelles opérations (réservations, check-in, encaissements, ajout de chambres ou d'utilisateurs) reprendront dès la réactivation.</p><button class="primary" data-go="tarifs">Choisir une formule et réactiver</button></div>` : ''}
+    <div class="card" id="histo">
+      <h3 style="font-size:22px;margin-bottom:12px">Historique des paiements</h3>
+      ${!canPay ? '<p class="muted">Réservé au propriétaire, aux administrateurs et au comptable.</p>' : (pays.data || []).length === 0 ? '<p class="muted">Aucun paiement pour le moment.</p>' : `<div class="tablewrap"><table class="table"><thead><tr><th>Date</th><th>Formule</th><th>Moyen</th><th>Montant</th><th>Statut</th><th>Facture</th></tr></thead><tbody>
+      ${(pays.data || []).map(p => { const inv = invByPay[p.id]; return `<tr><td>${date(p.paid_at || p.created_at)}</td><td>${esc(p.plans ? p.plans.name : '')} · ${CYCLE[p.billing_cycle]}</td><td>${METHOD[p.payment_method] || esc(p.payment_method)}</td><td><strong>${fcfa(p.amount)}</strong></td><td><span class="pill st-${esc(p.status)}">${PAYST[p.status] || esc(p.status)}</span></td><td>${inv ? `<a href="#" data-inv="${esc(inv.id)}">${esc(inv.number)}</a>` : '—'}</td></tr>`; }).join('')}
+      </tbody></table></div>`}
+    </div>`;
+  el.querySelectorAll('[data-switch]').forEach(b => b.onclick = () => openCheckout(o.plan.slug, b.dataset.switch));
+  const rn = el.querySelector('[data-renew]'); if (rn) rn.onclick = () => openCheckout(o.plan.slug, o.billing_cycle);
+  $('seeInv').onclick = () => { const h = $('histo'); h.scrollIntoView({ behavior:'smooth' }); if (!S._invoices.length) toast('Aucune facture émise pour le moment.'); };
+  el.querySelectorAll('[data-inv]').forEach(a => a.onclick = (e) => { e.preventDefault(); printInvoice(S._invoices.find(i => i.id === a.dataset.inv)); });
+}
+
+function printInvoice(i){
+  if (!i) return;
+  const w = window.open('', '_blank');
+  if (!w) return toast("Autorisez l'ouverture de fenêtres pour imprimer la facture.", true);
+  w.document.write(`<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>Facture ${esc(i.number)}</title><style>body{font:15px/1.5 system-ui,sans-serif;color:#1B2430;max-width:720px;margin:40px auto;padding:0 20px}h1{font-size:26px;margin:0}table{width:100%;border-collapse:collapse;margin-top:24px}td,th{padding:10px;border-bottom:1px solid #ddd;text-align:left}.r{text-align:right}</style></head><body>
+  <h1>Facture ${esc(i.number)}</h1><p>Émise le ${date(i.issued_at)}<br>Client : ${esc($('orgLabel').textContent)}</p>
+  <table><tr><th>Désignation</th><th>Période</th><th class="r">Montant</th></tr>
+  <tr><td>Abonnement ${esc(i.plan_name)} (${CYCLE[i.billing_cycle] || esc(i.billing_cycle)})</td><td>${date(i.period_start)} – ${date(i.period_end)}</td><td class="r">${fcfa(i.amount)}</td></tr>
+  <tr><th colspan="2" class="r">Total payé</th><th class="r">${fcfa(i.amount)}</th></tr></table>
+  <script>window.print()<\/script></body></html>`);
+  w.document.close();
+}
+
+/* ---------- Chambres (contrôle des limites) ---------- */
+async function renderChambres(){
+  const el = $('v-chambres'); el.innerHTML = '<p class="muted">Chargement…</p>';
+  const [est, rooms] = await Promise.all([
+    sb.from('establishments').select('id,name').eq('organization_id', S.org).eq('is_active', true).order('created_at'),
+    sb.from('rooms').select('id,number,room_type,housekeeping_status,is_active,establishments(name)').eq('organization_id', S.org).order('number')
+  ]);
+  const u = (S.overview && S.overview.usage) || {};
+  const HK = { clean:'Propre', dirty:'Sale', cleaning:'En nettoyage', ready:'Prête', out_of_service:'Hors service' };
+  const canAdd = ['owner','admin','manager'].includes(S.member.role);
+  el.innerHTML = `
+    <div class="row between" style="margin-bottom:20px"><h1 style="font-size:34px">Chambres</h1><span class="pill st-active">${u.rooms ?? 0} / ${u.max_rooms ?? '∞'} utilisées</span></div>
+    ${canAdd ? `<form class="card row" id="roomForm" style="margin-bottom:16px;align-items:flex-end">
+      <div style="flex:1 1 200px"><label for="rEst">Établissement</label><select id="rEst">${(est.data || []).map(e => `<option value="${esc(e.id)}">${esc(e.name)}</option>`).join('')}</select></div>
+      <div style="flex:1 1 140px"><label for="rNum">Numéro</label><input id="rNum" required></div>
+      <div style="flex:1 1 160px"><label for="rType">Type</label><input id="rType" placeholder="Ex. Double, Studio"></div>
+      <button class="primary">Ajouter la chambre</button></form>` : ''}
+    <div class="card">${(rooms.data || []).length === 0 ? '<p class="muted">Aucune chambre enregistrée.</p>' : `<div class="tablewrap"><table class="table"><thead><tr><th>N°</th><th>Type</th><th>Établissement</th><th>État</th><th>Statut</th>${canAdd ? '<th></th>' : ''}</tr></thead><tbody>
+      ${(rooms.data || []).map(r => `<tr><td><strong>${esc(r.number)}</strong></td><td>${esc(r.room_type || '—')}</td><td>${esc(r.establishments ? r.establishments.name : '')}</td><td>${HK[r.housekeeping_status] || ''}</td><td><span class="pill ${r.is_active ? 'st-active' : 'st-cancelled'}">${r.is_active ? 'Active' : 'Désactivée'}</span></td>${canAdd ? `<td><button class="small ghost" data-toggle-room="${esc(r.id)}" data-on="${r.is_active}">${r.is_active ? 'Désactiver' : 'Réactiver'}</button></td>` : ''}</tr>`).join('')}
+      </tbody></table></div>`}</div>`;
+  const f = $('roomForm');
+  if (f) f.onsubmit = async (e) => {
+    e.preventDefault();
+    const { error } = await sb.from('rooms').insert({ establishment_id: $('rEst').value, number: $('rNum').value.trim(), room_type: $('rType').value.trim() || null });
+    if (error) return toast(error.code === '23505' ? 'Ce numéro de chambre existe déjà.' : errMsg(error), true);
+    toast('Chambre ajoutée.'); await loadCommon(); renderChambres();
+  };
+  el.querySelectorAll('[data-toggle-room]').forEach(b => b.onclick = async () => {
+    const { error } = await sb.from('rooms').update({ is_active: b.dataset.on !== 'true' }).eq('id', b.dataset.toggleRoom);
+    if (error) return toast(errMsg(error), true);
+    await loadCommon(); renderChambres();
+  });
+}
+
+/* ---------- Administration plateforme ---------- */
+async function renderAdmin(){
+  const el = $('v-admin'); el.innerHTML = '<p class="muted">Chargement…</p>';
+  const [st, subs, pend, plans] = await Promise.all([
+    sb.rpc('admin_platform_stats'),
+    sb.from('subscriptions').select('organization_id,status,billing_cycle,trial_end_at,current_period_end,organizations(name),plans(name)').order('created_at', { ascending:false }).limit(500),
+    sb.from('payments').select('id,created_at,amount,payment_method,billing_cycle,organizations(name),plans(name)').eq('status', 'pending').order('created_at'),
+    sb.from('plans').select('*').order('sort_order')
+  ]);
+  if (st.error) { el.innerHTML = `<p class="muted">${esc(errMsg(st.error))}</p>`; return; }
+  const s = st.data;
+  const k = (l, v) => `<div class="card kpi"><div class="l">${l}</div><div class="v">${v}</div></div>`;
+  const top = (s.plans_usage || [])[0];
+  el.innerHTML = `
+    <div class="eyebrow">Administrateur national</div><h1 style="font-size:34px;margin:4px 0 20px">Vue d'ensemble de la plateforme</h1>
+    <div class="grid g5" style="margin-bottom:18px">
+      ${k('Établissements', s.establishments)}${k('Essais actifs', s.trials_active)}${k('Essais expirés', s.trials_expired)}${k('Abonnements actifs', s.subscriptions_active)}${k('Abonnements expirés', s.subscriptions_expired)}
+      ${k('Revenus du mois', fcfa(s.revenue_current_month))}${k("Revenus de l'année", fcfa(s.revenue_current_year))}${k('Revenu mensuel récurrent', fcfa(s.mrr))}${k('Utilisateurs', s.users)}${k('Chambres gérées', s.rooms)}
+    </div>
+    <p class="muted" style="margin:-6px 0 18px">Formule la plus utilisée : <strong>${top ? esc(top.plan) + ' (' + top.count + ')' : '—'}</strong> · Suspendus : ${s.suspended}</p>
+
+    <div class="card" style="margin-bottom:16px"><h3 style="font-size:20px;margin-bottom:10px">Paiements en attente de validation</h3>
+      ${(pend.data || []).length === 0 ? '<p class="muted">Aucun paiement en attente.</p>' : `<div class="tablewrap"><table class="table"><thead><tr><th>Date</th><th>Organisation</th><th>Formule</th><th>Moyen</th><th>Montant</th><th>Référence de transaction</th><th></th></tr></thead><tbody>
+      ${pend.data.map(p => `<tr><td>${date(p.created_at)}</td><td>${esc(p.organizations ? p.organizations.name : '')}</td><td>${esc(p.plans ? p.plans.name : '')} · ${CYCLE[p.billing_cycle]}</td><td>${METHOD[p.payment_method] || ''}</td><td><strong>${fcfa(p.amount)}</strong><div class="muted" style="font-size:12px">Réf. ${esc(String(p.id).slice(0,8).toUpperCase())}</div></td>
+        <td><input aria-label="Référence de transaction" id="ref-${esc(p.id)}" placeholder="N° de reçu / virement"></td>
+        <td class="row"><button class="small primary" data-confirm="${esc(p.id)}">Valider</button><button class="small ghost" data-fail="${esc(p.id)}">Rejeter</button></td></tr>`).join('')}</tbody></table></div>`}
+    </div>
+
+    <div class="card" style="margin-bottom:16px"><div class="row between" style="margin-bottom:10px"><h3 style="font-size:20px">Abonnements</h3><input id="subSearch" aria-label="Rechercher une organisation" placeholder="Rechercher…" style="max-width:260px"></div>
+      <div class="tablewrap"><table class="table"><thead><tr><th>Organisation</th><th>Formule</th><th>Statut</th><th>Échéance</th><th>Actions</th></tr></thead><tbody id="subRows">
+      ${(subs.data || []).map(x => `<tr data-name="${esc((x.organizations ? x.organizations.name : '').toLowerCase())}"><td><strong>${esc(x.organizations ? x.organizations.name : '')}</strong></td><td>${esc(x.plans ? x.plans.name : '')} · ${CYCLE[x.billing_cycle]}</td><td><span class="pill st-${esc(x.status)}">${STATUS[x.status] || esc(x.status)}</span></td><td>${date(x.billing_cycle === 'trial' ? x.trial_end_at : x.current_period_end)}</td>
+        <td class="row">${x.billing_cycle === 'trial' ? `<button class="small" data-extend="${esc(x.organization_id)}">Prolonger l'essai de 15 j</button>` : ''}
+        ${x.status === 'suspended' || x.status === 'expired' ? `<button class="small primary" data-status="active" data-org="${esc(x.organization_id)}">Activer 1 mois</button>` : `<button class="small ghost" data-status="suspended" data-org="${esc(x.organization_id)}">Suspendre</button>`}</td></tr>`).join('') || '<tr><td colspan="5" class="muted">Aucun établissement inscrit.</td></tr>'}
+      </tbody></table></div></div>
+
+    <div class="card"><h3 style="font-size:20px;margin-bottom:10px">Formules et prix</h3>
+      <div class="tablewrap"><table class="table"><thead><tr><th>Formule</th><th>Mensuel (FCFA)</th><th>Annuel (FCFA)</th><th>Chambres max</th><th>Utilisateurs max</th><th>Active</th><th></th></tr></thead><tbody>
+      ${(plans.data || []).map(p => `<tr><td><strong>${esc(p.name)}</strong>${p.is_trial ? ' <span class="muted">(essai)</span>' : ''}</td>
+        <td><input type="number" min="0" id="pm-${esc(p.id)}" value="${p.monthly_price}" aria-label="Prix mensuel ${esc(p.name)}" style="max-width:130px"></td>
+        <td><input type="number" min="0" id="py-${esc(p.id)}" value="${p.yearly_price ?? ''}" placeholder="Sur devis" aria-label="Prix annuel ${esc(p.name)}" style="max-width:130px"></td>
+        <td><input type="number" min="1" id="pr-${esc(p.id)}" value="${p.max_rooms ?? ''}" placeholder="Illimité" aria-label="Chambres max ${esc(p.name)}" style="max-width:110px"></td>
+        <td><input type="number" min="1" id="pu-${esc(p.id)}" value="${p.max_users ?? ''}" placeholder="Illimité" aria-label="Utilisateurs max ${esc(p.name)}" style="max-width:110px"></td>
+        <td><input type="checkbox" id="pa-${esc(p.id)}" ${p.is_active ? 'checked' : ''} aria-label="Formule ${esc(p.name)} active" style="width:22px;min-height:22px"></td>
+        <td><button class="small" data-saveplan="${esc(p.id)}">Enregistrer</button></td></tr>`).join('')}
+      </tbody></table></div></div>`;
+  const num = (id) => { const v = $(id).value.trim(); return v === '' ? null : parseInt(v, 10); };
+  $('subSearch').oninput = (e) => { const q = e.target.value.toLowerCase(); $('subRows').querySelectorAll('tr[data-name]').forEach(r => r.classList.toggle('hidden', !r.dataset.name.includes(q))); };
+  el.querySelectorAll('[data-confirm]').forEach(b => b.onclick = async () => {
+    const ref = $('ref-' + b.dataset.confirm).value.trim();
+    if (!ref) return toast('Saisissez la référence de la transaction avant de valider.', true);
+    b.disabled = true;
+    const { data, error } = await sb.rpc('confirm_subscription_payment', { p_payment_id: b.dataset.confirm, p_transaction_reference: ref, p_payload: { validated_by: 'admin' } });
+    if (error) { b.disabled = false; return toast(errMsg(error), true); }
+    toast('Paiement validé – facture ' + (data.invoice || '') + ' émise.'); renderAdmin();
+  });
+  el.querySelectorAll('[data-fail]').forEach(b => b.onclick = async () => {
+    const { error } = await sb.rpc('fail_subscription_payment', { p_payment_id: b.dataset.fail, p_reason: 'Rejeté par l’administrateur' });
+    if (error) return toast(errMsg(error), true); toast('Paiement rejeté.'); renderAdmin();
+  });
+  el.querySelectorAll('[data-extend]').forEach(b => b.onclick = async () => {
+    const { error } = await sb.rpc('admin_extend_trial', { p_org: b.dataset.extend, p_days: 15 });
+    if (error) return toast(errMsg(error), true); toast("Essai prolongé de 15 jours."); renderAdmin();
+  });
+  el.querySelectorAll('[data-status]').forEach(b => b.onclick = async () => {
+    const { error } = await sb.rpc('admin_set_subscription_status', { p_org: b.dataset.org, p_status: b.dataset.status, p_until: null, p_reason: b.dataset.status === 'suspended' ? 'Suspension administrative' : null });
+    if (error) return toast(errMsg(error), true); toast('Statut mis à jour.'); renderAdmin();
+  });
+  el.querySelectorAll('[data-saveplan]').forEach(b => b.onclick = async () => {
+    const id = b.dataset.saveplan;
+    const { error } = await sb.from('plans').update({ monthly_price: num('pm-' + id) ?? 0, yearly_price: num('py-' + id), max_rooms: num('pr-' + id), max_users: num('pu-' + id), is_active: $('pa-' + id).checked }).eq('id', id);
+    if (error) return toast(errMsg(error), true); toast('Formule enregistrée.');
+  });
+}
+
+sb.auth.onAuthStateChange((evt) => { if (['SIGNED_IN','SIGNED_OUT'].includes(evt)) { S.view = 'abonnement'; boot(); } });
+boot();
+</script>
+</body>
+</html>
