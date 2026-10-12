@@ -170,7 +170,7 @@ $('authForm').addEventListener('submit', async e => {
   const btn = $('authBtn'); btn.disabled = true;
   try {
     if (S.signup) {
-      const { data, error } = await sb.auth.signUp({ email, password });
+      const { data, error } = await sb.auth.signUp({ email, password, options: { emailRedirectTo: location.origin + location.pathname } });
       if (error) throw error;
       if (!data.session) { toast('Compte créé. Confirmez votre adresse e-mail puis connectez-vous.'); S.signup = false; renderAuth(); }
     } else {
