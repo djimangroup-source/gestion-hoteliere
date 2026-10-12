@@ -105,7 +105,7 @@ main{flex:999 1 560px;min-width:0;padding:32px clamp(16px,4vw,48px)}
       <div class="field"><label for="estCity">Ville</label><input id="estCity"></div>
       <button class="primary" style="width:100%">Commencer l'essai gratuit</button>
     </form>
-    <p style="margin:14px 0 0"><a href="#" data-logout>Se déconnecter</a></p>
+    <p style="margin:14px 0 0" class="row between"><a href="#" data-logout>Se déconnecter</a><a href="#" id="onboardAdmin" class="hidden">Accéder à l'administration →</a></p>
   </div>
 </div>
 
@@ -196,6 +196,7 @@ $('authForm').addEventListener('submit', async e => {
 });
 document.addEventListener('click', async e => { if (e.target.closest('[data-logout]')) { e.preventDefault(); await sb.auth.signOut(); } });
 
+$('onboardAdmin').addEventListener('click', e => { e.preventDefault(); S.view = 'admin'; boot(); });
 $('onboardForm').addEventListener('submit', async e => {
   e.preventDefault();
   const b = e.submitter; if (b) b.disabled = true;
@@ -219,7 +220,8 @@ async function boot(){
   S.member = mem.data && mem.data[0];
   $('navAdmin').classList.toggle('hidden', !S.isAdmin);
   if (!S.member) {
-    if (S.isAdmin) { show('app'); $('orgLabel').textContent = 'Administrateur plateforme'; return go('admin'); }
+    $('onboardAdmin').classList.toggle('hidden', !S.isAdmin);
+    if (S.isAdmin && S.view === 'admin') { show('app'); $('orgLabel').textContent = 'Administrateur plateforme'; return go('admin'); }
     return show('onboard');
   }
   S.org = S.member.organization_id;
