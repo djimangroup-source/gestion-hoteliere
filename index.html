@@ -132,7 +132,7 @@ main{flex:1;min-width:0;width:100%;max-width:1360px;margin:0 auto;padding:28px c
   <nav class="side" aria-label="Navigation principale">
     <div class="brand">Horus Hotel</div>
     <div class="org" id="orgLabel"></div>
-    <button data-view="dashboard">Tableau de bord</button>
+    <button data-view="dashboard">Accueil</button>
     <button data-view="controle">Contrôle <span id="alertBadge" class="hidden" style="display:inline-block;min-width:20px;padding:0 6px;border-radius:999px;background:var(--green);color:#fff;font-size:12px;line-height:20px"></span></button>
     <button data-view="reservations">Réservations</button>
     <button data-view="planning">Planning</button>
@@ -140,6 +140,7 @@ main{flex:1;min-width:0;width:100%;max-width:1360px;margin:0 auto;padding:28px c
     <button data-view="chambres">Chambres</button>
     <button data-view="caisse">Caisse</button>
     <button data-view="factures">Factures</button>
+    <button data-view="rapports">Rapports</button>
     <details class="more" id="navMore">
       <summary>Réglages</summary>
       <div class="menu">
@@ -163,6 +164,7 @@ main{flex:1;min-width:0;width:100%;max-width:1360px;margin:0 auto;padding:28px c
     <section id="v-mapage" class="hidden"></section>
     <section id="v-equipe" class="hidden"></section>
     <section id="v-controle" class="hidden"></section>
+    <section id="v-rapports" class="hidden"></section>
     <section id="v-tarifs" class="hidden"></section>
     <section id="v-abonnement" class="hidden"></section>
     <section id="v-chambres" class="hidden"></section>
@@ -181,7 +183,7 @@ const SUPABASE_KEY = 'sb_publishable_0AT6IoJyfnTlANz0Lf-erg_Sj85F1yT';
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 const S = { session:null, member:null, org:null, overview:null, plans:[], providers:[], isAdmin:false, cycle:'monthly', view:'dashboard', signup:false, est:null, ests:[], rooms:[] };
-const VIEWS = ['controle','equipe','mapage','dashboard','reservations','planning','clients','caisse','factures','tarifs','abonnement','chambres','admin'];
+const VIEWS = ['rapports','controle','equipe','mapage','dashboard','reservations','planning','clients','caisse','factures','tarifs','abonnement','chambres','admin'];
 const $ = (id) => document.getElementById(id);
 const esc = (v) => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const fcfa = (n) => n == null ? '—' : new Intl.NumberFormat('fr-FR').format(n).replace(/ | /g,' ') + ' FCFA';
@@ -305,9 +307,9 @@ document.querySelectorAll('nav.side [data-view]').forEach(b => b.addEventListene
 
 const ROLE_VIEWS = {
   owner: null, admin: null,
-  manager: ['dashboard','reservations','planning','clients','chambres','caisse','factures','mapage'],
+  manager: ['dashboard','reservations','planning','clients','chambres','caisse','factures','rapports','mapage'],
   receptionist: ['dashboard','reservations','planning','clients','chambres','caisse','factures'],
-  accountant: ['dashboard','reservations','caisse','factures'],
+  accountant: ['dashboard','reservations','caisse','factures','rapports'],
   housekeeping: ['chambres'],
   staff: ['dashboard','planning']
 };
@@ -322,7 +324,7 @@ function go(view){
   document.querySelectorAll('nav.side [data-view]').forEach(b => b.classList.toggle('active', b.dataset.view === view));
   const more = $('navMore'); if (more) { more.open = false; more.classList.toggle('active', !!more.querySelector(`[data-view="${view}"]`)); }
   VIEWS.forEach(v => $('v-'+v).classList.toggle('hidden', v !== view));
-  ({ controle: renderControle, equipe: renderEquipe, mapage: renderMaPage, dashboard: renderDashboard, reservations: renderReservations, planning: renderPlanning, clients: renderClients, caisse: renderCaisse, factures: renderFactures, tarifs: renderTarifs, abonnement: renderAbonnement, chambres: renderChambres, admin: renderAdmin })[view]();
+  ({ rapports: renderRapports, controle: renderControle, equipe: renderEquipe, mapage: renderMaPage, dashboard: renderDashboard, reservations: renderReservations, planning: renderPlanning, clients: renderClients, caisse: renderCaisse, factures: renderFactures, tarifs: renderTarifs, abonnement: renderAbonnement, chambres: renderChambres, admin: renderAdmin })[view]();
 }
 
 /* ---------- Tarifs ---------- */
@@ -907,6 +909,97 @@ async function renderFactures(){
     ${S._ginv.map(i => `<tr><td><strong>${esc(i.number)}</strong></td><td>${new Date(i.issued_at).toLocaleDateString('fr-FR')}</td><td>${esc(i.guest_name)}</td><td>${money(i.total)}</td><td>${money(i.paid)}</td><td>${i.balance > 0 ? `<strong style="color:var(--amber)">${money(i.balance)}</strong>` : '0 F'}</td><td><button class="small ghost" data-pinv="${i.id}">Imprimer / PDF</button></td></tr>`).join('')}
   </tbody></table></div>`}</div>`;
   el.querySelectorAll('[data-pinv]').forEach(b => b.onclick = () => printGuestInvoice(S._ginv.find(i => i.id === b.dataset.pinv)));
+}
+
+/* ================= Rapports financiers ================= */
+function periodOf(key){
+  const t = new Date(today() + 'T00:00:00'), y = t.getFullYear(), m = t.getMonth();
+  const f = (d) => iso(d);
+  switch (key) {
+    case '7j': return [addDays(today(), -6), today()];
+    case '30j': return [addDays(today(), -29), today()];
+    case 'mois_dernier': return [f(new Date(y, m - 1, 1)), f(new Date(y, m, 0))];
+    case 'annee': return [f(new Date(y, 0, 1)), today()];
+    default: return [f(new Date(y, m, 1)), f(new Date(y, m + 1, 0))];
+  }
+}
+async function renderRapports(){
+  const el = $('v-rapports'); el.innerHTML = '<p class="muted">Calcul en cours…</p>';
+  const key = S._rk || 'mois';
+  const [from, to] = key === 'perso' && S._rfrom ? [S._rfrom, S._rto] : periodOf(key);
+  const { data: r, error } = await sb.rpc('financial_report', { p_org: S.org, p_from: from, p_to: to });
+  if (error) { el.innerHTML = head('Rapports') + `<p class="muted">${esc(errMsg(error))}</p>`; return; }
+  S._rep = r;
+  const PER = { mois:'Ce mois', mois_dernier:'Mois dernier', '7j':'7 derniers jours', '30j':'30 derniers jours', annee:'Depuis le 1er janvier', perso:'Personnalisée' };
+  const max = Math.max(1, ...r.series.map(x => x.rev));
+  const k = (l, v, sub) => `<div class="card kpi"><div class="l">${l}</div><div class="v">${v}</div>${sub ? `<div class="muted" style="font-size:12px">${sub}</div>` : ''}</div>`;
+  const dlabel = (d) => new Date(d + 'T00:00:00').toLocaleDateString('fr-FR', { day:'numeric', month:'short' });
+  el.innerHTML = head('Rapports', `<button class="small" type="button" id="rCsv">Export Excel</button><button class="small" type="button" id="rPdf">PDF / imprimer</button>`) + `
+    <div class="card row" style="margin-bottom:16px;align-items:flex-end">
+      <div style="flex:1 1 180px"><label for="rPer">Période</label><select id="rPer">${Object.entries(PER).map(([kk, v]) => `<option value="${kk}" ${kk === key ? 'selected' : ''}>${v}</option>`).join('')}</select></div>
+      <div style="flex:1 1 150px"><label for="rFrom">Du</label><input id="rFrom" type="date" value="${from}"></div>
+      <div style="flex:1 1 150px"><label for="rTo">Au</label><input id="rTo" type="date" value="${to}"></div>
+    </div>
+    <div class="grid g4" style="margin-bottom:16px">
+      ${k('Chiffre d\u2019affaires hébergement', money(r.room_revenue), `${r.sold_nights} nuit(s) vendue(s)`)}
+      ${k('Taux d\u2019occupation', String(r.occupancy_pct).replace('.', ',') + ' %', `${r.sold_nights} / ${r.available_nights} nuits`)}
+      ${k('Prix moyen par nuit (ADR)', money(r.adr), 'CA ÷ nuits vendues')}
+      ${k('Revenu par chambre (RevPAR)', money(r.revpar), 'CA ÷ nuits disponibles')}
+      ${k('Encaissé', money(r.cash_in), 'toutes méthodes')}
+      ${k('Dépenses', money(r.expenses), r.refunds > 0 ? `+ ${money(r.refunds)} remboursés` : '')}
+      ${k('Résultat de caisse', money(r.cash_in - r.expenses - r.refunds), 'encaissé − dépenses − remboursements')}
+      ${k('Impayés', money(r.unpaid_total), `${r.unpaid.length} séjour(s)`)}
+    </div>
+    <div class="card" style="margin-bottom:16px">
+      <h3 style="font-size:20px;margin-bottom:12px">Chiffre d\u2019affaires par jour</h3>
+      <div style="overflow-x:auto"><div style="display:flex;align-items:flex-end;gap:3px;height:200px;min-width:${Math.max(300, r.series.length * 14)}px" role="img" aria-label="Chiffre d'affaires quotidien du ${dlabel(from)} au ${dlabel(to)}">
+        ${r.series.map(x => `<div title="${dlabel(x.d)} : ${money(x.rev)} · ${x.sold} nuit(s)" style="flex:1;min-width:8px;height:${Math.max(2, x.rev / max * 100)}%;background:${x.d === today() ? 'var(--green)' : '#D9A184'};border-radius:5px 5px 2px 2px"></div>`).join('')}
+      </div></div>
+      <div class="row between muted" style="font-size:12px;margin-top:6px"><span>${dlabel(from)}</span><span>Maximum : ${money(max)}</span><span>${dlabel(to)}</span></div>
+    </div>
+    <div class="grid g2" style="margin-bottom:16px">
+      <div class="card"><h3 style="font-size:20px;margin-bottom:8px">Par origine</h3>${r.by_source.length ? `<table class="table"><thead><tr><th>Origine</th><th>Nuits</th><th style="text-align:right">CA</th></tr></thead><tbody>${r.by_source.map(x => `<tr><td>${SOURCE[x.source] || esc(x.source)}</td><td>${x.nights}</td><td style="text-align:right">${money(x.revenue)}</td></tr>`).join('')}</tbody></table>` : '<p class="muted">Aucune nuit vendue.</p>'}</div>
+      <div class="card"><h3 style="font-size:20px;margin-bottom:8px">Encaissements par moyen</h3>${Object.keys(r.by_method).length ? `<table class="table"><tbody>${Object.entries(r.by_method).map(([m, v]) => `<tr><td>${PMETHOD[m] || esc(m)}</td><td style="text-align:right;font-weight:700">${money(v)}</td></tr>`).join('')}</tbody></table>` : '<p class="muted">Aucun mouvement.</p>'}</div>
+    </div>
+    <div class="grid g2" style="margin-bottom:16px">
+      <div class="card"><h3 style="font-size:20px;margin-bottom:8px">Par chambre</h3><div class="tablewrap" style="max-height:340px;overflow-y:auto"><table class="table"><thead><tr><th>Chambre</th><th>Nuits</th><th>Occupation</th><th style="text-align:right">CA</th></tr></thead><tbody>${r.by_room.map(x => `<tr><td><strong>${esc(x.room)}</strong></td><td>${x.nights}</td><td>${Math.round(x.nights / r.days * 100)} %</td><td style="text-align:right">${money(x.revenue)}</td></tr>`).join('')}</tbody></table></div></div>
+      <div class="card"><h3 style="font-size:20px;margin-bottom:8px">Impayés</h3>${r.unpaid.length ? `<div class="tablewrap" style="max-height:340px;overflow-y:auto"><table class="table"><thead><tr><th>Client</th><th>Séjour</th><th style="text-align:right">Reste</th><th></th></tr></thead><tbody>${r.unpaid.map(u => `<tr><td><strong>${esc(u.guest_name)}</strong><div class="muted" style="font-size:12px">${esc(u.guest_phone || '')}</div></td><td style="font-size:13px">Ch. ${esc(u.room_number)} · ${dfr(u.check_in)} → ${dfr(u.check_out)}<br><span class="pill ${RSTCLS[u.status]}">${RSTATUS[u.status]}</span></td><td style="text-align:right;font-weight:700;color:var(--amber)">${money(u.balance)}</td><td><button class="small ghost" type="button" data-open="${u.id}">Ouvrir</button></td></tr>`).join('')}</tbody></table></div>` : '<p class="muted">Aucun impayé.</p>'}</div>
+    </div>
+    <p class="muted" style="font-size:12px">Le chiffre d\u2019affaires compte chaque nuit dans la période où elle est consommée (réservations confirmées, en séjour ou terminées), remise répartie sur les nuits. ${r.cancellations} annulation(s) et ${r.no_shows} non-présentation(s) sur la période.</p>`;
+  $('rPer').onchange = (e) => { S._rk = e.target.value; if (S._rk === 'perso') { S._rfrom = from; S._rto = to; } renderRapports(); };
+  const custom = () => { if ($('rFrom').value && $('rTo').value && $('rTo').value >= $('rFrom').value) { S._rk = 'perso'; S._rfrom = $('rFrom').value; S._rto = $('rTo').value; renderRapports(); } else toast('Période invalide.', true); };
+  $('rFrom').onchange = custom; $('rTo').onchange = custom;
+  el.querySelectorAll('[data-open]').forEach(b => b.onclick = () => openResa(b.dataset.open, renderRapports));
+  $('rCsv').onclick = () => exportReportCsv(r);
+  $('rPdf').onclick = () => printReport(r);
+}
+function exportReportCsv(r){
+  const q = (v) => '"' + String(v ?? '').replace(/"/g, '""') + '"';
+  const n = (v) => String(Math.round(Number(v || 0)));
+  const lines = [
+    ['Rapport Horus Hotel', $('orgLabel').textContent.split(' · ')[0]], ['Période', r.from + ' au ' + r.to], [],
+    ['Indicateur', 'Valeur'], ['Chiffre d\u2019affaires hébergement (F)', n(r.room_revenue)], ['Nuits vendues', r.sold_nights], ['Nuits disponibles', r.available_nights],
+    ['Taux d\u2019occupation (%)', String(r.occupancy_pct).replace('.', ',')], ['ADR (F)', n(r.adr)], ['RevPAR (F)', n(r.revpar)], ['Encaissé (F)', n(r.cash_in)], ['Dépenses (F)', n(r.expenses)], ['Remboursements (F)', n(r.refunds)], ['Impayés (F)', n(r.unpaid_total)], [],
+    ['Date', 'CA hébergement (F)', 'Nuits vendues', 'Encaissé (F)'], ...r.series.map(x => [x.d, n(x.rev), x.sold, n(x.cash)]), [],
+    ['Chambre', 'Nuits', 'CA (F)'], ...r.by_room.map(x => [x.room, x.nights, n(x.revenue)]), [],
+    ['Impayés : client', 'Téléphone', 'Chambre', 'Arrivée', 'Départ', 'Total (F)', 'Payé (F)', 'Reste (F)'], ...r.unpaid.map(u => [u.guest_name, u.guest_phone, u.room_number, u.check_in, u.check_out, n(u.total_amount), n(u.paid), n(u.balance)])
+  ];
+  const csv = '\ufeff' + lines.map(l => l.map(q).join(';')).join('\r\n');
+  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+  a.download = `rapport-horus-${r.from}-${r.to}.csv`; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  toast('Fichier téléchargé : il s\u2019ouvre dans Excel.');
+}
+function printReport(r){
+  const w = window.open('', '_blank'); if (!w) return toast("Autorisez l'ouverture de fenêtres pour imprimer.", true);
+  const row = (a, b) => `<tr><td>${a}</td><td class="r">${b}</td></tr>`;
+  w.document.write(`<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>Rapport ${esc(r.from)} – ${esc(r.to)}</title><style>body{font:13px/1.5 system-ui,sans-serif;color:#2B1E16;max-width:800px;margin:30px auto;padding:0 20px}h1{color:#B4532A;font-size:24px;margin:0}h2{font-size:16px;margin:22px 0 6px}table{width:100%;border-collapse:collapse}td,th{padding:6px 8px;border-bottom:1px solid #ddd;text-align:left}.r{text-align:right}</style></head><body>
+    <h1>Rapport d\u2019activité</h1><p>${esc($('orgLabel').textContent.split(' · ')[0])} · du ${new Date(r.from + 'T00:00:00').toLocaleDateString('fr-FR')} au ${new Date(r.to + 'T00:00:00').toLocaleDateString('fr-FR')}</p>
+    <h2>Indicateurs</h2><table>${row('Chiffre d\u2019affaires hébergement', money(r.room_revenue))}${row('Nuits vendues / disponibles', r.sold_nights + ' / ' + r.available_nights)}${row('Taux d\u2019occupation', String(r.occupancy_pct).replace('.', ',') + ' %')}${row('ADR', money(r.adr))}${row('RevPAR', money(r.revpar))}${row('Encaissé', money(r.cash_in))}${row('Dépenses', money(r.expenses))}${row('Remboursements', money(r.refunds))}${row('Impayés', money(r.unpaid_total))}</table>
+    <h2>Encaissements par moyen</h2><table>${Object.entries(r.by_method).map(([m, v]) => row(PMETHOD[m] || esc(m), money(v))).join('') || row('Aucun', '')}</table>
+    <h2>Par chambre</h2><table><tr><th>Chambre</th><th>Nuits</th><th class="r">CA</th></tr>${r.by_room.map(x => `<tr><td>${esc(x.room)}</td><td>${x.nights}</td><td class="r">${money(x.revenue)}</td></tr>`).join('')}</table>
+    <h2>Impayés</h2><table><tr><th>Client</th><th>Séjour</th><th class="r">Reste</th></tr>${r.unpaid.map(u => `<tr><td>${esc(u.guest_name)}</td><td>Ch. ${esc(u.room_number)} · ${esc(u.check_in)} → ${esc(u.check_out)}</td><td class="r">${money(u.balance)}</td></tr>`).join('') || '<tr><td colspan="3">Aucun</td></tr>'}</table>
+    <p style="margin-top:24px;font-size:11px;color:#777">Édité le ${new Date().toLocaleString('fr-FR')} avec Horus Hotel.</p><script>window.print()<\/script></body></html>`);
+  w.document.close();
 }
 
 /* ================= Contrôle : alertes, rapport du jour, journal ================= */
