@@ -90,6 +90,8 @@ main{flex:999 1 560px;min-width:0;padding:32px clamp(16px,4vw,48px)}
       <div class="field"><label for="password">Mot de passe</label><input id="password" type="password" required minlength="8" autocomplete="current-password"></div>
       <button class="primary" style="width:100%" id="authBtn">Se connecter</button>
     </form>
+    <div class="row" style="margin-top:12px"><button type="button" class="ghost" id="magicBtn" style="flex:1 1 200px">Recevoir un lien de connexion par e-mail</button></div>
+    <p style="margin:10px 0 0;font-size:14px"><a href="#" id="forgotLink">Mot de passe oublié ?</a></p>
     <p class="muted" style="margin:16px 0 0;font-size:14px"><span id="authSwitchTxt">Pas encore de compte ?</span> <a href="#" id="authSwitch">Créer un compte – 30 jours gratuits</a></p>
   </div>
 </div>
@@ -181,6 +183,25 @@ function renderAuth(){
   $('authSwitch').textContent = S.signup ? 'Se connecter' : 'Créer un compte – 30 jours gratuits';
   $('password').autocomplete = S.signup ? 'new-password' : 'current-password';
 }
+const appUrl = () => location.origin + location.pathname;
+$('magicBtn').addEventListener('click', async () => {
+  const email = $('email').value.trim();
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return toast('Saisissez d\u2019abord votre adresse e-mail.', true);
+  if (location.protocol === 'file:') return toast('La connexion par lien fonctionne uniquement sur l\u2019adresse en ligne de l\u2019application.', true);
+  $('magicBtn').disabled = true;
+  const { error } = await sb.auth.signInWithOtp({ email, options: { shouldCreateUser: false, emailRedirectTo: appUrl() } });
+  $('magicBtn').disabled = false;
+  if (error) return toast(/rate|limit/i.test(error.message) ? 'Trop de demandes : réessayez dans quelques minutes.' : 'Envoi impossible. Vérifiez l\u2019adresse ou créez un compte.', true);
+  toast('Lien envoyé : ouvrez l\u2019e-mail reçu sur cet appareil pour vous connecter.');
+});
+$('forgotLink').addEventListener('click', async (e) => {
+  e.preventDefault();
+  const email = $('email').value.trim();
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return toast('Saisissez d\u2019abord votre adresse e-mail.', true);
+  const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: appUrl() });
+  if (error) return toast('Envoi impossible pour le moment.', true);
+  toast('Si un compte existe, un e-mail de réinitialisation vient d\u2019être envoyé.');
+});
 $('authSwitch').addEventListener('click', e => { e.preventDefault(); S.signup = !S.signup; renderAuth(); });
 $('authForm').addEventListener('submit', async e => {
   e.preventDefault();
@@ -1033,7 +1054,12 @@ async function renderPublicPage(slug){
   };
 }
 
-sb.auth.onAuthStateChange((evt) => { if (PUBLIC_SLUG) return; if (['SIGNED_IN','SIGNED_OUT'].includes(evt)) { S.view = 'dashboard'; boot(); } });
+sb.auth.onAuthStateChange((evt) => { if (PUBLIC_SLUG) return;
+  if (evt === 'PASSWORD_RECOVERY') {
+    modal(`<h2 style="font-size:24px;margin-bottom:10px">Nouveau mot de passe</h2><form id="npF"><div class="field"><label for="npw">Nouveau mot de passe (8 caractères minimum)</label><input id="npw" type="password" minlength="8" required autocomplete="new-password"></div><button class="primary">Enregistrer</button></form>`);
+    $('npF').onsubmit = async (ev) => { ev.preventDefault(); const { error } = await sb.auth.updateUser({ password: $('npw').value }); if (error) return toast(errMsg(error), true); closeModal(); toast('Mot de passe modifié.'); };
+    return;
+  } if (['SIGNED_IN','SIGNED_OUT'].includes(evt)) { S.view = 'dashboard'; boot(); } });
 boot();
 </script>
 </body>
