@@ -107,6 +107,7 @@ main{flex:1;min-width:0;width:100%;max-width:1360px;margin:0 auto;padding:28px c
   <div class="card">
     <div class="eyebrow">Essai gratuit de 30 jours</div>
     <h1 style="font-size:28px;margin:6px 0 8px">Créez votre établissement</h1>
+    <div id="myInvites"></div>
     <p class="muted" style="margin:0 0 18px">Votre période d'essai démarre dès la création.</p>
     <form id="onboardForm">
       <div class="field"><label for="orgName">Nom de l'organisation ou du groupe</label><input id="orgName" required minlength="2"></div>
@@ -131,6 +132,7 @@ main{flex:1;min-width:0;width:100%;max-width:1360px;margin:0 auto;padding:28px c
     <button data-view="factures">Factures</button>
     <div style="height:1px;background:rgba(255,255,255,.12);margin:10px 0"></div>
     <button data-view="abonnement">Abonnement</button>
+    <button data-view="equipe">Équipe</button>
     <button data-view="mapage">Ma page</button>
     <button data-view="tarifs">Tarifs</button>
     <button data-view="admin" id="navAdmin" class="hidden">Administration</button>
@@ -146,6 +148,7 @@ main{flex:1;min-width:0;width:100%;max-width:1360px;margin:0 auto;padding:28px c
     <section id="v-caisse" class="hidden"></section>
     <section id="v-factures" class="hidden"></section>
     <section id="v-mapage" class="hidden"></section>
+    <section id="v-equipe" class="hidden"></section>
     <section id="v-tarifs" class="hidden"></section>
     <section id="v-abonnement" class="hidden"></section>
     <section id="v-chambres" class="hidden"></section>
@@ -164,7 +167,7 @@ const SUPABASE_KEY = 'sb_publishable_0AT6IoJyfnTlANz0Lf-erg_Sj85F1yT';
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 const S = { session:null, member:null, org:null, overview:null, plans:[], providers:[], isAdmin:false, cycle:'monthly', view:'dashboard', signup:false, est:null, ests:[], rooms:[] };
-const VIEWS = ['mapage','dashboard','reservations','planning','clients','caisse','factures','tarifs','abonnement','chambres','admin'];
+const VIEWS = ['equipe','mapage','dashboard','reservations','planning','clients','caisse','factures','tarifs','abonnement','chambres','admin'];
 const $ = (id) => document.getElementById(id);
 const esc = (v) => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const fcfa = (n) => n == null ? '—' : new Intl.NumberFormat('fr-FR').format(n).replace(/ | /g,' ') + ' FCFA';
@@ -256,10 +259,12 @@ async function boot(){
   if (!S.member) {
     $('onboardAdmin').classList.toggle('hidden', !S.isAdmin);
     if (S.isAdmin && S.view === 'admin') { show('app'); $('orgLabel').textContent = 'Administrateur plateforme'; return go('admin'); }
+    await renderMyInvites();
     return show('onboard');
   }
   S.org = S.member.organization_id;
-  $('orgLabel').textContent = S.member.organizations ? S.member.organizations.name : '';
+  $('orgLabel').textContent = (S.member.organizations ? S.member.organizations.name : '') + ' · ' + (ROLE_LABEL[S.member.role] || '');
+  applyRoleNav();
   show('app');
   await loadCommon();
   go(S.view);
@@ -283,13 +288,25 @@ function renderBanner(){
 document.addEventListener('click', e => { const g = e.target.closest('[data-go]'); if (g) go(g.dataset.go); });
 document.querySelectorAll('nav.side [data-view]').forEach(b => b.addEventListener('click', () => go(b.dataset.view)));
 
+const ROLE_VIEWS = {
+  owner: null, admin: null,
+  manager: ['dashboard','reservations','planning','clients','chambres','caisse','factures','mapage'],
+  receptionist: ['dashboard','reservations','planning','clients','chambres','caisse','factures'],
+  accountant: ['dashboard','reservations','caisse','factures'],
+  housekeeping: ['chambres'],
+  staff: ['dashboard','planning']
+};
+const ROLE_LABEL = { owner:'Propriétaire', admin:'Administrateur', manager:'Gérant', receptionist:'Réceptionniste', housekeeping:'Ménage', accountant:'Comptable', staff:'Employé' };
+const allowed = (v) => v === 'admin' ? S.isAdmin : (!S.member || !ROLE_VIEWS[S.member.role] || ROLE_VIEWS[S.member.role].includes(v));
+function applyRoleNav(){ document.querySelectorAll('nav.side [data-view]').forEach(b => { if (b.dataset.view !== 'admin') b.classList.toggle('hidden', !allowed(b.dataset.view)); }); }
 function go(view){
   if (view === 'admin' && !S.isAdmin) view = 'abonnement';
+  if (S.org && !allowed(view)) view = (ROLE_VIEWS[S.member.role] || ['dashboard'])[0];
   if (!S.org && view !== 'admin') view = 'admin';
   S.view = view;
   document.querySelectorAll('nav.side [data-view]').forEach(b => b.classList.toggle('active', b.dataset.view === view));
   VIEWS.forEach(v => $('v-'+v).classList.toggle('hidden', v !== view));
-  ({ mapage: renderMaPage, dashboard: renderDashboard, reservations: renderReservations, planning: renderPlanning, clients: renderClients, caisse: renderCaisse, factures: renderFactures, tarifs: renderTarifs, abonnement: renderAbonnement, chambres: renderChambres, admin: renderAdmin })[view]();
+  ({ equipe: renderEquipe, mapage: renderMaPage, dashboard: renderDashboard, reservations: renderReservations, planning: renderPlanning, clients: renderClients, caisse: renderCaisse, factures: renderFactures, tarifs: renderTarifs, abonnement: renderAbonnement, chambres: renderChambres, admin: renderAdmin })[view]();
 }
 
 /* ---------- Tarifs ---------- */
@@ -871,6 +888,54 @@ async function renderFactures(){
     ${S._ginv.map(i => `<tr><td><strong>${esc(i.number)}</strong></td><td>${new Date(i.issued_at).toLocaleDateString('fr-FR')}</td><td>${esc(i.guest_name)}</td><td>${money(i.total)}</td><td>${money(i.paid)}</td><td>${i.balance > 0 ? `<strong style="color:var(--amber)">${money(i.balance)}</strong>` : '0 F'}</td><td><button class="small ghost" data-pinv="${i.id}">Imprimer / PDF</button></td></tr>`).join('')}
   </tbody></table></div>`}</div>`;
   el.querySelectorAll('[data-pinv]').forEach(b => b.onclick = () => printGuestInvoice(S._ginv.find(i => i.id === b.dataset.pinv)));
+}
+
+/* ================= Équipe ================= */
+const INVITABLE = { manager:'Gérant', receptionist:'Réceptionniste', housekeeping:'Ménage', accountant:'Comptable', admin:'Administrateur' };
+const ROLE_HELP = { admin:'Tous les accès sauf la gestion du propriétaire', manager:'Activité quotidienne, caisse, factures, page publique (consultation)', receptionist:'Réservations, clients, check-in/out, encaissements', accountant:'Caisse, factures et réservations', housekeeping:'État des chambres uniquement' };
+
+async function renderMyInvites(){
+  const box = $('myInvites'); box.innerHTML = '';
+  const { data } = await sb.rpc('my_invitations');
+  if (!data || !data.length) return;
+  box.innerHTML = `<div class="card" style="background:var(--green-l);border-color:#EBC0A5;margin-bottom:16px"><h3 style="font-size:18px;margin-bottom:8px">Invitation reçue</h3>${data.map(i => `<div class="row between" style="margin-top:8px"><span><strong>${esc(i.organization_name)}</strong> · ${esc(ROLE_LABEL[i.role] || i.role)}</span><button class="small primary" data-accept="${esc(i.id)}" type="button">Rejoindre</button></div>`).join('')}</div><p class="muted" style="text-align:center;margin:0 0 12px">— ou créez votre propre établissement —</p>`;
+  box.querySelectorAll('[data-accept]').forEach(b => b.onclick = async () => { b.disabled = true; const { error } = await sb.rpc('accept_invitation', { p_invitation: b.dataset.accept }); if (error) { b.disabled = false; return toast(errMsg(error), true); } toast('Bienvenue dans l\u2019équipe.'); S.view = 'dashboard'; boot(); });
+}
+
+async function renderEquipe(){
+  const el = $('v-equipe'); el.innerHTML = '<p class="muted">Chargement…</p>';
+  const isOwner = can(['owner']);
+  const [team, inv] = await Promise.all([ sb.rpc('org_team', { p_org: S.org }), sb.from('organization_invitations').select('*').eq('organization_id', S.org).eq('status', 'pending').order('created_at', { ascending: false }) ]);
+  if (team.error) { el.innerHTML = head('Équipe') + `<p class="muted">${esc(errMsg(team.error))}</p>`; return; }
+  const u = (S.overview && S.overview.usage) || {};
+  const me = S.session.user.id;
+  const canTouch = (m) => m.user_id !== me && m.role !== 'owner' && (isOwner || m.role !== 'admin');
+  const roleOpts = (sel) => Object.entries(INVITABLE).filter(([k]) => isOwner || k !== 'admin').map(([k, v]) => `<option value="${k}" ${k === sel ? 'selected' : ''}>${v}</option>`).join('');
+  const invMsg = (i) => `Bonjour, vous êtes invité(e) à rejoindre « ${$('orgLabel').textContent.split(' · ')[0]} » sur Horus Hotel en tant que ${ROLE_LABEL[i.role]}. Créez votre compte avec l\u2019adresse ${i.email} sur ${location.origin + location.pathname}, puis cliquez sur « Rejoindre ».`;
+  el.innerHTML = head('Équipe', `<span class="pill st-trial">${u.users ?? (team.data || []).filter(m => m.is_active).length} / ${u.max_users ?? '∞'} utilisateurs</span>`) + readOnlyNote() + `
+    <form class="card row" id="invForm" style="align-items:flex-end;margin-bottom:16px">
+      <div style="flex:2 1 220px"><label for="iMail">Adresse e-mail de l\u2019employé</label><input id="iMail" type="email" required placeholder="prenom.nom@exemple.com"></div>
+      <div style="flex:1 1 170px"><label for="iRole">Rôle</label><select id="iRole">${roleOpts('receptionist')}</select></div>
+      <button class="primary">Inviter</button>
+      <p class="muted" id="iHelp" style="flex:1 1 100%;margin:0;font-size:13px"></p>
+    </form>
+    ${(inv.data || []).length ? `<div class="card" style="margin-bottom:16px"><h3 style="font-size:18px;margin-bottom:8px">Invitations en attente</h3>${inv.data.map(i => `<div class="row between" style="padding:8px 0;border-bottom:1px solid var(--line)"><span>${esc(i.email)} · <strong>${esc(ROLE_LABEL[i.role])}</strong></span><span class="row"><button class="small" type="button" data-copyinv="${esc(i.id)}">Copier le message</button><button class="small ghost" type="button" data-revoke="${esc(i.id)}">Annuler</button></span></div>`).join('')}<p class="muted" style="font-size:12px;margin:10px 0 0">Envoyez le message par WhatsApp ou e-mail : l\u2019employé crée son compte avec cette adresse et rejoint l\u2019équipe.</p></div>` : ''}
+    <div class="card"><h3 style="font-size:18px;margin-bottom:8px">Membres</h3><div class="tablewrap"><table class="table"><thead><tr><th>E-mail</th><th>Rôle</th><th>Statut</th><th></th></tr></thead><tbody>
+      ${(team.data || []).map(m => `<tr><td>${esc(m.email)}${m.user_id === me ? ' <span class="muted">(vous)</span>' : ''}</td>
+        <td>${canTouch(m) ? `<select data-role="${esc(m.member_id)}" aria-label="Rôle de ${esc(m.email)}" style="max-width:180px;min-height:38px">${roleOpts(m.role)}</select>` : `<strong>${esc(ROLE_LABEL[m.role] || m.role)}</strong>`}</td>
+        <td><span class="pill ${m.is_active ? 'st-active' : 'st-cancelled'}">${m.is_active ? 'Actif' : 'Désactivé'}</span></td>
+        <td style="text-align:right">${canTouch(m) ? `<button class="small ghost" type="button" data-active="${esc(m.member_id)}" data-on="${m.is_active}">${m.is_active ? 'Désactiver' : 'Réactiver'}</button>` : ''}</td></tr>`).join('')}
+    </tbody></table></div></div>`;
+  const help = () => { $('iHelp').textContent = ROLE_HELP[$('iRole').value] || ''; }; $('iRole').onchange = help; help();
+  $('invForm').onsubmit = async (e) => { e.preventDefault();
+    const { data: row, error } = await sb.from('organization_invitations').insert({ organization_id: S.org, email: $('iMail').value.trim().toLowerCase(), role: $('iRole').value, invited_by: me }).select('*').single();
+    if (error) return toast(error.code === '23505' ? 'Une invitation est déjà en attente pour cette adresse.' : errMsg(error), true);
+    try { await navigator.clipboard.writeText(invMsg(row)); toast('Invitation créée. Message copié : envoyez-le à l\u2019employé.'); } catch (_) { toast('Invitation créée.'); }
+    renderEquipe(); };
+  el.querySelectorAll('[data-copyinv]').forEach(b => b.onclick = async () => { const i = inv.data.find(x => x.id === b.dataset.copyinv); try { await navigator.clipboard.writeText(invMsg(i)); toast('Message copié.'); } catch (_) { modal(`<p>${esc(invMsg(i))}</p><button class="primary" data-close>Fermer</button>`); } });
+  el.querySelectorAll('[data-revoke]').forEach(b => b.onclick = async () => { const { error } = await sb.from('organization_invitations').update({ status: 'revoked' }).eq('id', b.dataset.revoke); if (error) return toast(errMsg(error), true); toast('Invitation annulée.'); renderEquipe(); });
+  el.querySelectorAll('[data-role]').forEach(sel => sel.onchange = async () => { const { error } = await sb.from('organization_members').update({ role: sel.value }).eq('id', sel.dataset.role); if (error) { toast(errMsg(error), true); return renderEquipe(); } toast('Rôle modifié.'); });
+  el.querySelectorAll('[data-active]').forEach(b => b.onclick = async () => { const { error } = await sb.from('organization_members').update({ is_active: b.dataset.on !== 'true' }).eq('id', b.dataset.active); if (error) return toast(errMsg(error), true); await loadCommon(); renderEquipe(); });
 }
 
 /* ================= Ma page publique (espace propriétaire) ================= */
