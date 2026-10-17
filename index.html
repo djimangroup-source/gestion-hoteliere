@@ -5,34 +5,41 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Horus Hotel – Gestion hôtelière</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Manrope:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700;12..96,800&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&display=swap">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 <style>
-:root{--bg:#F7F5F0;--card:#FFFFFF;--ink:#1B2430;--muted:#4A5563;--line:#E2DED4;--green:#0F5E4E;--green-d:#0A4236;--green-l:#DCEFE8;--gold:#B07D24;--gold-l:#F2D49B;--red:#8A2A14;--red-l:#FBE3DC;--amber:#7A4E0C;--amber-l:#FCF3E3;--blue:#1E4A80;--blue-l:#EEF3FA;--nav:#1B2430}
+:root{--bg:#F3EBDD;--card:#FBF6EE;--ink:#2B1E16;--muted:#6E5A4A;--line:#E5D8C3;--green:#B4532A;--green-d:#8E3D1C;--green-l:#F7D9C4;--ok:#2F5A1E;--ok-l:#E6EEDC;--gold:#8C6A1E;--gold-l:#F2DCA8;--red:#8E2B2B;--red-l:#F2CFCF;--amber:#7A3216;--amber-l:#F7D9C4;--blue:#2E4C6E;--blue-l:#E3EAF1;--nav:#FBF6EE;--display:"Bricolage Grotesque",system-ui,sans-serif}
 *{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 Manrope,system-ui,sans-serif}
-h1,h2,h3{font-family:Fraunces,Georgia,serif;font-weight:600;margin:0}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.55 "DM Sans",system-ui,sans-serif}
+h1,h2,h3{font-family:var(--display);font-weight:800;letter-spacing:-.5px;margin:0}
 button,input,select{font:inherit}
-button{cursor:pointer;min-height:44px;border-radius:10px;padding:0 18px;font-weight:700;border:2px solid var(--green);background:#fff;color:var(--green)}
-button.primary{background:var(--green);color:#fff}
+button{cursor:pointer;min-height:44px;border-radius:999px;padding:0 20px;font-weight:700;border:2px solid var(--ink);background:transparent;color:var(--ink)}
+button.primary{background:var(--green);border-color:var(--green);color:#fff}
+button.primary:hover{background:var(--green-d);border-color:var(--green-d)}
+button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid #E9A27C;outline-offset:2px}
 button.gold{background:var(--gold-l);border-color:var(--gold-l);color:var(--ink)}
 button.ghost{border:1px solid #C9C3B5;color:var(--ink);font-weight:600}
 button.small{min-height:36px;padding:0 12px;font-size:13px}
 button:disabled{opacity:.5;cursor:not-allowed}
-input,select{min-height:44px;border:1px solid #CFC9BC;border-radius:10px;padding:0 12px;background:#fff;color:var(--ink);width:100%}
+input,select{min-height:44px;border:1px solid #D9C8AE;border-radius:12px;padding:0 12px;background:#fff;color:var(--ink);width:100%}
 label{display:block;font-size:13px;font-weight:600;color:var(--muted);margin:0 0 6px}
 .field{margin-bottom:14px}
 a{color:var(--green)}
 .hidden{display:none!important}
-.shell{display:flex;min-height:100vh;flex-wrap:wrap}
-nav.side{width:240px;flex:1 1 240px;max-width:260px;background:var(--nav);color:#C9CED6;padding:24px 16px;display:flex;flex-direction:column;gap:4px}
-nav.side .brand{font-family:Fraunces,serif;color:#fff;font-size:20px;margin-bottom:6px}
-nav.side .org{font-size:13px;margin-bottom:18px;color:#9AA3B2}
-nav.side button{border:none;background:transparent;color:#C9CED6;text-align:left;font-weight:600;width:100%}
-nav.side button.active{background:var(--green);color:#fff}
-nav.side .spacer{flex:1}
-main{flex:999 1 560px;min-width:0;padding:32px clamp(16px,4vw,48px)}
-.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:24px}
+.shell{display:flex;flex-direction:column;min-height:100vh}
+nav.side{position:sticky;top:0;z-index:20;background:var(--nav);border-bottom:1px solid var(--line);padding:10px clamp(12px,3vw,32px);display:flex;flex-wrap:wrap;align-items:center;gap:4px 6px}
+nav.side .brand{font-family:var(--display);font-weight:800;color:var(--ink);font-size:21px;margin-right:auto;display:flex;align-items:center;gap:10px}
+nav.side .brand::before{content:"";width:30px;height:30px;border-radius:9px;background:var(--green) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Cpath d='M9 20c4-5 18-5 22 0-4 5-18 5-22 0z' fill='none' stroke='%23FBF6EE' stroke-width='2.4'/%3E%3Ccircle cx='20' cy='20' r='3.2' fill='%23FBF6EE'/%3E%3C/svg%3E") center/26px no-repeat}
+nav.side .org{font-size:13px;color:var(--muted);margin-right:8px;max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+nav.side > div[style]{display:none}
+nav.side button{border:none;background:transparent;color:var(--ink);font-weight:600;min-height:40px;padding:0 11px;font-size:13.5px;white-space:nowrap}
+nav.side button[data-logout]{color:var(--muted);font-weight:500}
+@media (max-width:1380px){nav.side .org{display:none}}
+nav.side button:hover{background:var(--green-l)}
+nav.side button.active{background:var(--ink);color:var(--card)}
+nav.side .spacer{display:none}
+main{flex:1;min-width:0;width:100%;max-width:1360px;margin:0 auto;padding:28px clamp(16px,3vw,36px)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:22px;padding:24px}
 .grid{display:grid;gap:16px}
 .g2{grid-template-columns:repeat(auto-fit,minmax(280px,1fr))}
 .g4{grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}
@@ -40,32 +47,32 @@ main{flex:999 1 560px;min-width:0;padding:32px clamp(16px,4vw,48px)}
 .muted{color:var(--muted)}
 .eyebrow{font-size:12px;font-weight:700;letter-spacing:1.5px;color:var(--gold);text-transform:uppercase}
 .pill{display:inline-block;font-size:12px;font-weight:700;padding:4px 10px;border-radius:999px}
-.st-trial{background:var(--blue-l);color:var(--blue)}.st-active{background:var(--green-l);color:var(--green-d)}.st-past_due{background:var(--amber-l);color:var(--amber)}.st-expired{background:var(--red-l);color:var(--red)}.st-cancelled,.st-suspended{background:#ECE8DF;color:var(--muted)}
-.st-succeeded{background:var(--green-l);color:var(--green-d)}.st-pending{background:var(--amber-l);color:var(--amber)}.st-failed,.st-refunded{background:var(--red-l);color:var(--red)}
+.st-trial{background:var(--blue-l);color:var(--blue)}.st-active{background:var(--ok-l);color:var(--ok)}.st-past_due{background:var(--amber-l);color:var(--amber)}.st-expired{background:var(--red-l);color:var(--red)}.st-cancelled,.st-suspended{background:#ECE8DF;color:var(--muted)}
+.st-succeeded{background:var(--ok-l);color:var(--ok)}.st-pending{background:var(--amber-l);color:var(--amber)}.st-failed,.st-refunded{background:var(--red-l);color:var(--red)}
 .banner{display:flex;align-items:center;gap:14px;padding:14px 18px;border-radius:14px;margin-bottom:22px;flex-wrap:wrap;font-weight:600}
 .banner span{flex:1;min-width:200px}
 .b-info{background:var(--blue-l);color:var(--blue)}.b-warn{background:var(--amber-l);color:var(--amber)}.b-danger{background:var(--red-l);color:var(--red)}
-.toggle{display:inline-flex;gap:4px;background:#E7E3DA;padding:4px;border-radius:999px}
+.toggle{display:inline-flex;gap:4px;background:#E8DAC3;padding:4px;border-radius:999px}
 .toggle button{border:none;border-radius:999px;background:transparent;color:var(--ink);font-weight:600}
-.toggle button.on{background:var(--green);color:#fff;font-weight:700}
-.plan{position:relative;display:flex;flex-direction:column;gap:10px;border-radius:16px;padding:28px 22px;background:#fff;border:1px solid var(--line)}
-.plan.reco{background:var(--green);color:#fff;border-color:var(--green);box-shadow:0 18px 40px rgba(15,94,78,.28)}
-.plan.reco .muted{color:#CFE3DD}
-.plan .badge{position:absolute;top:-13px;left:22px;background:var(--gold);color:#fff;font-size:11px;font-weight:700;letter-spacing:1.5px;padding:6px 12px;border-radius:999px}
+.toggle button.on{background:var(--ink);color:var(--card);font-weight:700}
+.plan{position:relative;display:flex;flex-direction:column;gap:10px;border-radius:22px;padding:28px 22px;background:var(--card);border:1px solid var(--line)}
+.plan.reco{background:var(--ink);color:var(--card);border-color:var(--ink);box-shadow:0 18px 40px rgba(43,30,22,.25)}
+.plan.reco .muted{color:#D9C8B4}
+.plan .badge{position:absolute;top:-13px;left:22px;background:var(--green);color:#fff;font-size:11px;font-weight:700;letter-spacing:1.5px;padding:6px 12px;border-radius:999px}
 .plan .price{font-size:30px;font-weight:700}
 .plan .save{min-height:22px;font-size:13px;font-weight:700;color:var(--green)}
-.plan.reco .save{color:var(--gold-l)}
+.plan.reco .save{color:#F2B48F}
 .plan ul{list-style:none;padding:0;margin:6px 0 0;display:flex;flex-direction:column;gap:6px;font-size:14px}
 .plan li::before{content:"✓";font-weight:700;color:var(--green);margin-right:8px}
-.plan.reco li::before{color:var(--gold-l)}
-.plan.reco button{background:var(--gold-l);border-color:var(--gold-l);color:var(--ink)}
-.bar{height:10px;background:#ECE8DF;border-radius:999px;overflow:hidden}.bar>div{height:100%;background:var(--green)}
+.plan.reco li::before{color:#F2B48F}
+.plan.reco button{background:var(--green);border-color:var(--green);color:#fff}
+.bar{height:10px;background:#EADCC6;border-radius:999px;overflow:hidden}.bar>div{height:100%;background:var(--green)}
 .bar.full>div{background:var(--red)}
 .table{width:100%;border-collapse:collapse;font-size:14px}
 .tablewrap{overflow-x:auto}
 .table th{text-align:left;font-size:12px;color:var(--muted);padding:10px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
 .table td{padding:12px 8px;border-bottom:1px solid #F0ECE3;vertical-align:middle}
-.kpi .v{font-family:Fraunces,serif;font-size:28px;font-weight:600}
+.kpi .v{font-family:var(--display);font-size:30px;font-weight:800;letter-spacing:-.5px}
 .kpi .l{font-size:12px;color:var(--muted);font-weight:600}
 .auth{min-height:100vh;display:grid;place-items:center;padding:24px}
 .auth .card{width:100%;max-width:440px}
@@ -75,7 +82,7 @@ main{flex:999 1 560px;min-width:0;padding:32px clamp(16px,4vw,48px)}
 .toast.err{background:var(--red)}
 .modal{position:fixed;inset:0;background:rgba(27,36,48,.55);display:grid;place-items:center;padding:16px;z-index:40}
 .modal .card{width:100%;max-width:480px}
-.big{font-family:Fraunces,serif;font-size:56px;line-height:1;color:var(--green)}
+.big{font-family:var(--display);font-weight:800;font-size:56px;line-height:1;color:var(--green)}
 @media (max-width:700px){nav.side{max-width:none}}
 </style>
 </head>
@@ -123,12 +130,12 @@ main{flex:999 1 560px;min-width:0;padding:32px clamp(16px,4vw,48px)}
     <button data-view="caisse">Caisse</button>
     <button data-view="factures">Factures</button>
     <div style="height:1px;background:rgba(255,255,255,.12);margin:10px 0"></div>
-    <button data-view="abonnement">Mon abonnement</button>
-    <button data-view="mapage">Ma page publique</button>
+    <button data-view="abonnement">Abonnement</button>
+    <button data-view="mapage">Ma page</button>
     <button data-view="tarifs">Tarifs</button>
     <button data-view="admin" id="navAdmin" class="hidden">Administration</button>
     <div class="spacer"></div>
-    <button data-logout>Se déconnecter</button>
+    <button data-logout aria-label="Se déconnecter" title="Se déconnecter">Quitter</button>
   </nav>
   <main>
     <div id="banner"></div>
@@ -421,7 +428,7 @@ function printInvoice(i){
   if (!i) return;
   const w = window.open('', '_blank');
   if (!w) return toast("Autorisez l'ouverture de fenêtres pour imprimer la facture.", true);
-  w.document.write(`<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>Facture ${esc(i.number)}</title><style>body{font:15px/1.5 system-ui,sans-serif;color:#1B2430;max-width:720px;margin:40px auto;padding:0 20px}h1{font-size:26px;margin:0}table{width:100%;border-collapse:collapse;margin-top:24px}td,th{padding:10px;border-bottom:1px solid #ddd;text-align:left}.r{text-align:right}</style></head><body>
+  w.document.write(`<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>Facture ${esc(i.number)}</title><style>body{font:15px/1.5 system-ui,sans-serif;color:#2B1E16;max-width:720px;margin:40px auto;padding:0 20px}h1{font-size:26px;margin:0;color:#B4532A}table{width:100%;border-collapse:collapse;margin-top:24px}td,th{padding:10px;border-bottom:1px solid #ddd;text-align:left}.r{text-align:right}</style></head><body>
   <h1>Facture ${esc(i.number)}</h1><p>Émise le ${date(i.issued_at)}<br>Client : ${esc($('orgLabel').textContent)}</p>
   <table><tr><th>Désignation</th><th>Période</th><th class="r">Montant</th></tr>
   <tr><td>Abonnement ${esc(i.plan_name)} (${CYCLE[i.billing_cycle] || esc(i.billing_cycle)})</td><td>${date(i.period_start)} – ${date(i.period_end)}</td><td class="r">${fcfa(i.amount)}</td></tr>
@@ -586,7 +593,7 @@ async function renderDashboard(){
   const hk = (s) => S.rooms.filter(r => r.housekeeping_status === s).length;
   const k = (l, v, sub='') => `<div class="card kpi"><div class="l">${l}</div><div class="v">${v}</div>${sub ? `<div class="muted" style="font-size:12px">${sub}</div>` : ''}</div>`;
   const list = (rows, action, label) => (rows || []).length === 0 ? '<p class="muted">Aucun.</p>' : `<div class="tablewrap"><table class="table"><tbody>${rows.map(r => `<tr><td><strong>${esc(r.guest_name)}</strong><div class="muted" style="font-size:12px">Ch. ${esc(r.room_number)} · ${r.nights} nuit(s)</div></td><td>${r.balance > 0 ? `<span class="pill st-pending">Solde ${money(r.balance)}</span>` : '<span class="pill st-active">Réglé</span>'}</td><td style="text-align:right"><button class="small primary" data-${action}="${r.id}">${label}</button></td></tr>`).join('')}</tbody></table></div>`;
-  el.innerHTML = head(`Tableau de bord <span class="muted" style="font-size:16px;font-family:Manrope">· ${new Date().toLocaleDateString('fr-FR', { weekday:'long', day:'numeric', month:'long' })}</span>`,
+  el.innerHTML = head(`Tableau de bord <span class="muted" style="font-size:16px;font-family:DM Sans">· ${new Date().toLocaleDateString('fr-FR', { weekday:'long', day:'numeric', month:'long' })}</span>`,
       `<button class="primary" data-newresa>Nouvelle réservation</button><button data-walkin>Walk-in</button>`) + readOnlyNote() + pendBanner + `
     <div class="grid g4" style="margin-bottom:16px">
       ${k("Taux d'occupation", total ? Math.round(occ / total * 100) + ' %' : '—', `${occ} / ${total} chambres occupées`)}
@@ -618,7 +625,7 @@ async function renderReservations(){
       <div style="flex:1 1 160px"><label for="rfSt">Statut</label><select id="rfSt"><option value="active">En cours et à venir</option><option value="all">Toutes</option>${opt(RSTATUS, f.status)}</select></div>
     </div>
     <div class="card">${rows.length === 0 ? '<p class="muted">Aucune réservation.</p>' : `<div class="tablewrap"><table class="table"><thead><tr><th>Client</th><th>Ch.</th><th>Arrivée</th><th>Départ</th><th>Nuits</th><th>Total</th><th>Solde</th><th>Statut</th><th></th></tr></thead><tbody>
-      ${rows.map(r => `<tr><td><strong>${esc(r.guest_name)}</strong><div class="muted" style="font-size:12px">${esc(r.guest_phone || '')} · ${SOURCE[r.source] || ''}</div></td><td>${esc(r.room_number)}</td><td>${dfr(r.check_in)}</td><td>${dfr(r.check_out)}</td><td>${r.nights}</td><td>${money(r.total_amount)}</td><td>${r.balance > 0 ? `<strong style="color:var(--amber)">${money(r.balance)}</strong>` : '<span style="color:var(--green)">0 F</span>'}</td><td><span class="pill ${RSTCLS[r.status]}">${RSTATUS[r.status]}</span></td><td><button class="small ghost" data-open="${r.id}">Ouvrir</button></td></tr>`).join('')}
+      ${rows.map(r => `<tr><td><strong>${esc(r.guest_name)}</strong><div class="muted" style="font-size:12px">${esc(r.guest_phone || '')} · ${SOURCE[r.source] || ''}</div></td><td>${esc(r.room_number)}</td><td>${dfr(r.check_in)}</td><td>${dfr(r.check_out)}</td><td>${r.nights}</td><td>${money(r.total_amount)}</td><td>${r.balance > 0 ? `<strong style="color:var(--amber)">${money(r.balance)}</strong>` : '<span style="color:var(--ok)">0 F</span>'}</td><td><span class="pill ${RSTCLS[r.status]}">${RSTATUS[r.status]}</span></td><td><button class="small ghost" data-open="${r.id}">Ouvrir</button></td></tr>`).join('')}
     </tbody></table></div>`}</div>`;
   $('rfSt').value = f.status;
   const upd = () => { S._rf = { from: $('rfFrom').value || f.from, status: $('rfSt').value, q: $('rfQ').value }; renderReservations(); };
@@ -699,8 +706,8 @@ async function openResa(id, refresh, focusCheckout){
     <p class="muted" style="margin:4px 0 14px">Chambre ${esc(r.room_number)} · ${dfr(r.check_in)} → ${dfr(r.check_out)} · ${r.nights} nuit(s) · ${SOURCE[r.source]}${r.notes ? '<br>' + esc(r.notes) : ''}</p>
     <div class="grid" style="grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px;text-align:center">
       <div class="card" style="padding:12px"><div class="muted" style="font-size:12px">Total</div><strong>${money(r.total_amount)}</strong></div>
-      <div class="card" style="padding:12px"><div class="muted" style="font-size:12px">Payé</div><strong style="color:var(--green)">${money(r.paid)}</strong></div>
-      <div class="card" style="padding:12px"><div class="muted" style="font-size:12px">Solde</div><strong style="color:${r.balance > 0 ? 'var(--amber)' : 'var(--green)'}">${money(r.balance)}</strong></div>
+      <div class="card" style="padding:12px"><div class="muted" style="font-size:12px">Payé</div><strong style="color:var(--ok)">${money(r.paid)}</strong></div>
+      <div class="card" style="padding:12px"><div class="muted" style="font-size:12px">Solde</div><strong style="color:${r.balance > 0 ? 'var(--amber)' : 'var(--ok)'}">${money(r.balance)}</strong></div>
     </div>
     ${(pays || []).length ? `<div style="font-size:13px;margin-bottom:14px">${pays.map(p => `<div class="row between" style="border-bottom:1px solid #F0ECE3;padding:6px 0"><span>${new Date(p.created_at).toLocaleDateString('fr-FR')} · ${esc(p.label)} · ${PMETHOD[p.method]}</span><strong>${p.kind === 'refund' ? '−' : ''}${money(p.amount)}</strong></div>`).join('')}</div>` : ''}
     ${active && r.balance > 0 && can(['owner','admin','manager','receptionist','accountant']) ? `<form id="payForm" class="row" style="align-items:flex-end;margin-bottom:14px">
@@ -737,7 +744,7 @@ function printGuestInvoice(i){
   if (!i) return;
   const est = S.ests.find(e => e.id === i.establishment_id) || {};
   const w = window.open('', '_blank'); if (!w) return toast("Autorisez l'ouverture de fenêtres pour imprimer.", true);
-  w.document.write(`<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>Facture ${esc(i.number)}</title><style>body{font:14px/1.5 system-ui,sans-serif;color:#1B2430;max-width:760px;margin:36px auto;padding:0 20px}h1{font-size:24px;margin:0}table{width:100%;border-collapse:collapse;margin-top:20px}td,th{padding:9px;border-bottom:1px solid #ddd;text-align:left}.r{text-align:right}.top{display:flex;justify-content:space-between;gap:20px}</style></head><body>
+  w.document.write(`<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>Facture ${esc(i.number)}</title><style>body{font:14px/1.5 system-ui,sans-serif;color:#2B1E16;max-width:760px;margin:36px auto;padding:0 20px}h1{font-size:24px;margin:0;color:#B4532A}.top{border-bottom:3px solid #B4532A;padding-bottom:14px}table{width:100%;border-collapse:collapse;margin-top:20px}td,th{padding:9px;border-bottom:1px solid #ddd;text-align:left}.r{text-align:right}.top{display:flex;justify-content:space-between;gap:20px}</style></head><body>
   <div class="top"><div><h1>${esc(est.name || '')}</h1><div>${esc(est.city || '')}</div></div><div class="r"><strong>FACTURE ${esc(i.number)}</strong><br>Émise le ${new Date(i.issued_at).toLocaleDateString('fr-FR')}</div></div>
   <p style="margin-top:24px">Client : <strong>${esc(i.guest_name)}</strong></p>
   <table><tr><th>Désignation</th><th class="r">Qté</th><th class="r">P.U.</th><th class="r">Montant</th></tr>
@@ -754,7 +761,7 @@ async function renderPlanning(){
   const start = S._ps || addDays(today(), -1), days = 14, end = addDays(start, days);
   const { data } = await sb.from('reservations').select('id,room_id,guest_name,check_in,check_out,status').eq('establishment_id', S.est).not('status', 'in', '(cancelled,no_show)').lt('check_in', end).gt('check_out', start);
   const dates = [...Array(days)].map((_, i) => addDays(start, i));
-  const col = { pending:'#F2D49B', confirmed:'#BFD3EE', checked_in:'#0F5E4E', checked_out:'#D6D1C6' };
+  const col = { pending:'#F2DCA8', confirmed:'#C9D6E3', checked_in:'#B4532A', checked_out:'#DDD0BC' };
   const cell = 52;
   el.innerHTML = head('Planning', `<button class="ghost small" id="pPrev">← 7 jours</button><button class="ghost small" id="pToday">Aujourd'hui</button><button class="ghost small" id="pNext">7 jours →</button><button class="primary small" data-newresa>Nouvelle réservation</button>`) + `
     <div class="card" style="padding:0;overflow-x:auto"><div style="min-width:${110 + days * cell}px">
@@ -767,7 +774,7 @@ async function renderPlanning(){
           <div style="padding:12px 10px;font-weight:700">${esc(rm.number)} <span class="muted" style="font-weight:400;font-size:11px">${HKS[rm.housekeeping_status] === 'Propre' ? '' : esc(HKS[rm.housekeeping_status])}</span></div>
           ${dates.map(d => `<button aria-label="Réserver ${esc(rm.number)} le ${d}" data-slot="${rm.id}|${d}" style="min-height:46px;border:none;border-left:1px solid #F4F1EA;border-radius:0;background:transparent;padding:0"></button>`).join('')}
           ${rs.map(x => { const a = Math.max(0, (new Date(x.check_in) - new Date(start)) / 864e5), b = Math.min(days, (new Date(x.check_out) - new Date(start)) / 864e5);
-            return `<button data-open="${x.id}" title="${esc(x.guest_name)}" style="position:absolute;top:6px;height:34px;min-height:34px;left:${110 + a * cell + cell / 2}px;width:${Math.max(cell / 2, (b - a) * cell - 4)}px;background:${col[x.status]};color:${x.status === 'checked_in' ? '#fff' : '#1B2430'};border:none;border-radius:8px;font-size:12px;font-weight:700;padding:0 8px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;text-align:left">${esc(x.guest_name)}</button>`; }).join('')}
+            return `<button data-open="${x.id}" title="${esc(x.guest_name)}" style="position:absolute;top:6px;height:34px;min-height:34px;left:${110 + a * cell + cell / 2}px;width:${Math.max(cell / 2, (b - a) * cell - 4)}px;background:${col[x.status]};color:${x.status === 'checked_in' ? '#fff' : '#2B1E16'};border:none;border-radius:8px;font-size:12px;font-weight:700;padding:0 8px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;text-align:left">${esc(x.guest_name)}</button>`; }).join('')}
         </div>`; }).join('') || '<p class="muted" style="padding:16px">Aucune chambre.</p>'}
     </div></div>
     <div class="row" style="margin-top:10px;font-size:12px">${Object.entries(col).map(([k, c]) => `<span><span style="display:inline-block;width:12px;height:12px;border-radius:3px;background:${c};vertical-align:middle"></span> ${RSTATUS[k]}</span>`).join('')}<span class="muted">· Cliquez sur une case vide pour réserver.</span></div>`;
@@ -833,7 +840,7 @@ async function renderCaisse(){
       <form id="kOpen" class="row" style="align-items:flex-end"><div style="flex:0 1 200px"><label for="kFund">Fond de caisse (F)</label><input id="kFund" type="number" min="0" value="0"></div><button class="primary">Ouvrir la caisse</button></form></div>`) + `
     ${byMethod.length ? `<div class="card" style="margin-bottom:16px"><h3 style="font-size:18px;margin-bottom:8px">Solde par moyen de paiement ${sess ? '(session en cours)' : '(aujourd’hui)'}</h3><div class="row">${byMethod.map(([k, v]) => `<span class="pill st-trial">${PMETHOD[k]} : ${money(v)}</span>`).join('')}</div></div>` : ''}
     <div class="card"><h3 style="font-size:18px;margin-bottom:8px">Journal</h3>${(mv || []).length === 0 ? '<p class="muted">Aucun mouvement.</p>' : `<div class="tablewrap"><table class="table"><thead><tr><th>Heure</th><th>Libellé</th><th>Moyen</th><th>Réf.</th><th class="r">Montant</th></tr></thead><tbody>
-      ${mv.map(m => `<tr><td>${new Date(m.created_at).toLocaleTimeString('fr-FR', { hour:'2-digit', minute:'2-digit' })}</td><td>${esc(m.label)}</td><td>${PMETHOD[m.method]}</td><td>${esc(m.reference || '')}</td><td style="text-align:right;font-weight:700;color:${['expense','refund'].includes(m.kind) ? 'var(--red)' : 'var(--green)'}">${['expense','refund'].includes(m.kind) ? '−' : '+'}${money(m.amount)}</td></tr>`).join('')}</tbody></table></div>`}</div>`;
+      ${mv.map(m => `<tr><td>${new Date(m.created_at).toLocaleTimeString('fr-FR', { hour:'2-digit', minute:'2-digit' })}</td><td>${esc(m.label)}</td><td>${PMETHOD[m.method]}</td><td>${esc(m.reference || '')}</td><td style="text-align:right;font-weight:700;color:${['expense','refund'].includes(m.kind) ? 'var(--red)' : 'var(--ok)'}">${['expense','refund'].includes(m.kind) ? '−' : '+'}${money(m.amount)}</td></tr>`).join('')}</tbody></table></div>`}</div>`;
   const o = $('kOpen'); if (o) o.onsubmit = async (e) => { e.preventDefault(); const { error } = await sb.from('cash_sessions').insert({ establishment_id: S.est, opening_balance: +$('kFund').value || 0 }); if (error) return toast(errMsg(error), true); toast('Caisse ouverte.'); renderCaisse(); };
   const mvb = $('kMove'); if (mvb) mvb.onclick = () => {
     modal(`<h2 style="font-size:24px;margin-bottom:12px">Mouvement de caisse</h2><form id="mF">
@@ -980,7 +987,7 @@ async function renderPublicPage(slug){
   const wa = h.whatsapp ? `https://wa.me/${encodeURIComponent(h.whatsapp)}` : null;
   const para = (t) => esc(t || '').replace(/\n/g, '<br>');
   root.innerHTML = `
-  <header style="position:relative;min-height:340px;display:flex;align-items:flex-end;color:#fff;background:${photos[0] ? `#1B2430 url('${esc(photos[0])}') center/cover` : 'linear-gradient(135deg,#0F5E4E,#1B2430)'}">
+  <header style="position:relative;min-height:340px;display:flex;align-items:flex-end;color:#fff;background:${photos[0] ? `#2B1E16 url('${esc(photos[0])}') center/cover` : 'linear-gradient(135deg,#B4532A,#2B1E16)'}">
     <div style="position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,.05),rgba(0,0,0,.65))"></div>
     <div style="position:relative;max-width:1100px;width:100%;margin:0 auto;padding:32px clamp(16px,4vw,32px);display:flex;gap:18px;align-items:flex-end;flex-wrap:wrap">
       ${h.logo ? `<img src="${esc(h.logo)}" alt="Logo ${esc(h.name)}" style="width:84px;height:84px;object-fit:contain;background:#fff;border-radius:14px;padding:6px">` : ''}
