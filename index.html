@@ -89,8 +89,9 @@ main{flex:1;min-width:0;width:100%;max-width:1360px;margin:0 auto;padding:28px c
 .between{justify-content:space-between}
 .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);max-width:92vw;padding:14px 20px;border-radius:12px;background:var(--ink);color:#fff;font-weight:600;z-index:50;box-shadow:0 10px 30px rgba(0,0,0,.25)}
 .toast.err{background:var(--red)}
-.modal{position:fixed;inset:0;background:rgba(27,36,48,.55);display:grid;place-items:center;padding:16px;z-index:40}
-.modal .card{width:100%;max-width:480px}
+.modal{position:fixed;inset:0;background:rgba(27,36,48,.55);display:grid;place-items:center;padding:16px;z-index:40;overflow-y:auto;overscroll-behavior:contain}
+.modal .card{width:100%;max-width:480px;max-height:calc(100vh - 32px);max-height:calc(100dvh - 32px);overflow-y:auto;overscroll-behavior:contain}
+body.modal-open{overflow:hidden}
 .big{font-family:var(--display);font-weight:800;font-size:56px;line-height:1;color:var(--green)}
 @media (max-width:700px){nav.side{max-width:none}}
 </style>
@@ -196,8 +197,8 @@ const FEAT = { reception:'Réception & planning', reservations:'Réservations', 
 
 function toast(msg, err=false){ const t=$('toast'); t.textContent=msg; t.className='toast'+(err?' err':''); clearTimeout(t._h); t._h=setTimeout(()=>t.classList.add('hidden'), 5000); }
 function errMsg(e){ return (e && (e.message || e.error_description)) || 'Une erreur est survenue.'; }
-function modal(html){ $('modalBody').style.maxWidth = ''; $('modalBody').innerHTML = html; $('modal').classList.remove('hidden'); }
-function closeModal(){ $('modal').classList.add('hidden'); }
+function modal(html){ $('modalBody').style.maxWidth = ''; $('modalBody').innerHTML = html; $('modal').classList.remove('hidden'); $('modalBody').scrollTop = 0; document.body.classList.add('modal-open'); }
+function closeModal(){ $('modal').classList.add('hidden'); document.body.classList.remove('modal-open'); }
 $('modal').addEventListener('click', e => { if (e.target.id === 'modal' || e.target.closest('[data-close]')) closeModal(); });
 function show(id){ ['auth','onboard','app','public'].forEach(x => $(x).classList.toggle('hidden', x !== id)); }
 
