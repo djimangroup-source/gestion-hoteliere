@@ -5,7 +5,7 @@ SaaS de gestion d'hôtels et de résidences meublées (Côte d'Ivoire) : réserv
 ## Architecture
 - **Frontend** : `index.html`, application statique en un seul fichier (aucun build). Bibliothèque `@supabase/supabase-js@2.45.4` chargée depuis jsDelivr.
 - **Backend** : Supabase (projet `gestion-hoteliere`) — Postgres, RLS, fonctions `SECURITY DEFINER` contrôlant les droits côté serveur, Storage (`public-media`).
-- **Hébergement actuel** : GitHub Pages (`guyayekkweeli-glitch/gestion-hoteliere`, branche `main`). Vercel prévu ultérieurement.
+- **Hébergement actuel** : GitHub Pages (`guyayekkweeli-glitch/horus-hotel`, branche `main`) — https://guyayekkweeli-glitch.github.io/horus-hotel/. Vercel prévu ultérieurement.
 
 ## Pages publiques de réservation
 - Adresse d'une page : `<adresse de l'application>?h=<identifiant>` (sans nom de domaine pour l'instant).
