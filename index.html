@@ -196,7 +196,7 @@ const FEAT = { reception:'Réception & planning', reservations:'Réservations', 
 
 function toast(msg, err=false){ const t=$('toast'); t.textContent=msg; t.className='toast'+(err?' err':''); clearTimeout(t._h); t._h=setTimeout(()=>t.classList.add('hidden'), 5000); }
 function errMsg(e){ return (e && (e.message || e.error_description)) || 'Une erreur est survenue.'; }
-function modal(html){ $('modalBody').innerHTML = html; $('modal').classList.remove('hidden'); }
+function modal(html){ $('modalBody').style.maxWidth = ''; $('modalBody').innerHTML = html; $('modal').classList.remove('hidden'); }
 function closeModal(){ $('modal').classList.add('hidden'); }
 $('modal').addEventListener('click', e => { if (e.target.id === 'modal' || e.target.closest('[data-close]')) closeModal(); });
 function show(id){ ['auth','onboard','app','public'].forEach(x => $(x).classList.toggle('hidden', x !== id)); }
@@ -472,43 +472,122 @@ function printInvoice(i){
   w.document.close();
 }
 
-/* ---------- Chambres (contrôle des limites) ---------- */
+/* ---------- Chambres : fiches visuelles ---------- */
+const AMENITIES = ['Climatisation','Wi-Fi','Télévision','Eau chaude','Réfrigérateur','Salle de bain privée','Balcon','Coffre-fort','Bureau','Cuisine équipée','Ventilateur','Parking','Petit-déjeuner inclus','Vue piscine'];
+const BEDS = { simple:'Lit simple', double:'Lit double', queen:'Grand lit (160)', king:'Très grand lit (180+)', jumeaux:'Deux lits', familial:'Familial' };
+const natSort = (a, b) => String(a.number).localeCompare(String(b.number), 'fr', { numeric: true });
+async function uploadRoomPhoto(file, roomKey){
+  if (!/^image\/(jpeg|png|webp)$/.test(file.type)) throw new Error('Format accepté : JPEG, PNG ou WebP.');
+  if (file.size > 3 * 1024 * 1024) throw new Error('Image trop lourde (3 Mo maximum).');
+  const path = `${S.org}/${S.est}/rooms/${roomKey}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}.${file.type.split('/')[1]}`;
+  const { error } = await sb.storage.from('public-media').upload(path, file, { contentType: file.type });
+  if (error) throw error;
+  return sb.storage.from('public-media').getPublicUrl(path).data.publicUrl;
+}
 async function renderChambres(){
   const el = $('v-chambres'); el.innerHTML = '<p class="muted">Chargement…</p>';
-  const [est, rooms] = await Promise.all([
-    sb.from('establishments').select('id,name').eq('organization_id', S.org).eq('is_active', true).order('created_at'),
-    sb.from('rooms').select('id,number,room_type,base_rate,housekeeping_status,is_active,establishments(name)').eq('organization_id', S.org).order('number')
-  ]);
+  await loadEst();
+  const { data: all } = await sb.from('rooms').select('*').eq('establishment_id', S.est).order('number');
+  const rooms = (all || []).sort(natSort);
   const u = (S.overview && S.overview.usage) || {};
-  const HK = { clean:'Propre', dirty:'Sale', cleaning:'En nettoyage', ready:'Prête', out_of_service:'Hors service' };
-  const canAdd = ['owner','admin','manager'].includes(S.member.role);
-  el.innerHTML = `
-    <div class="row between" style="margin-bottom:20px"><h1 style="font-size:34px">Chambres</h1><span class="pill st-active">${u.rooms ?? 0} / ${u.max_rooms ?? '∞'} utilisées</span></div>
-    ${canAdd ? `<form class="card row" id="roomForm" style="margin-bottom:16px;align-items:flex-end">
-      <div style="flex:1 1 200px"><label for="rEst">Établissement</label><select id="rEst">${(est.data || []).map(e => `<option value="${esc(e.id)}">${esc(e.name)}</option>`).join('')}</select></div>
-      <div style="flex:1 1 140px"><label for="rNum">Numéro</label><input id="rNum" required></div>
-      <div style="flex:1 1 160px"><label for="rType">Type</label><input id="rType" placeholder="Ex. Double, Studio"></div>
-      <div style="flex:1 1 130px"><label for="rRate">Prix / nuit (F)</label><input id="rRate" type="number" min="0"></div>
-      <button class="primary">Ajouter la chambre</button></form>` : ''}
-    <div class="card">${(rooms.data || []).length === 0 ? '<p class="muted">Aucune chambre enregistrée.</p>' : `<div class="tablewrap"><table class="table"><thead><tr><th>N°</th><th>Type</th><th>Prix / nuit</th><th>État</th><th>Statut</th>${canAdd ? '<th></th>' : ''}</tr></thead><tbody>
-      ${(rooms.data || []).map(r => `<tr><td><strong>${esc(r.number)}</strong></td><td>${esc(r.room_type || '—')}</td><td>${r.base_rate != null ? money(r.base_rate) : '—'}</td><td><select aria-label="État de la chambre ${esc(r.number)}" data-hk="${esc(r.id)}" style="min-height:36px;max-width:160px" ${r.is_active ? '' : 'disabled'}>${opt(HKS, r.housekeeping_status)}</select></td><td><span class="pill ${r.is_active ? 'st-active' : 'st-cancelled'}">${r.is_active ? 'Active' : 'Désactivée'}</span></td>${canAdd ? `<td><button class="small ghost" data-toggle-room="${esc(r.id)}" data-on="${r.is_active}">${r.is_active ? 'Désactiver' : 'Réactiver'}</button></td>` : ''}</tr>`).join('')}
-      </tbody></table></div>`}</div>`;
-  const f = $('roomForm');
-  if (f) f.onsubmit = async (e) => {
-    e.preventDefault();
-    const { error } = await sb.from('rooms').insert({ establishment_id: $('rEst').value, number: $('rNum').value.trim(), room_type: $('rType').value.trim() || null, base_rate: $('rRate').value === '' ? null : +$('rRate').value });
-    if (error) return toast(error.code === '23505' ? 'Ce numéro de chambre existe déjà.' : errMsg(error), true);
-    toast('Chambre ajoutée.'); await loadCommon(); renderChambres();
-  };
+  const canEdit = can(['owner','admin','manager']);
+  const types = [...new Set(rooms.map(r => r.room_type).filter(Boolean))];
+  const f = S._chf || { type: '', st: '' };
+  const shown = rooms.filter(r => (!f.type || r.room_type === f.type) && (!f.st || (f.st === 'inactive' ? !r.is_active : r.is_active && r.housekeeping_status === f.st)));
+  const hkCls = { clean:'st-active', ready:'st-active', dirty:'st-pending', cleaning:'st-trial', out_of_service:'st-expired' };
+  el.innerHTML = head('Chambres', `<span class="pill st-trial" style="align-self:center">${u.rooms ?? rooms.filter(r => r.is_active).length} / ${u.max_rooms ?? '∞'} utilisées</span>${canEdit ? '<button class="primary" id="addRooms">+ Ajouter des chambres</button>' : ''}`) + readOnlyNote() + `
+    <div class="row" style="margin-bottom:16px">
+      <select id="fType" style="width:auto"><option value="">Tous les types</option>${types.map(t => `<option ${t === f.type ? 'selected' : ''}>${esc(t)}</option>`).join('')}</select>
+      <select id="fSt" style="width:auto"><option value="">Tous les états</option>${opt(HKS, f.st)}<option value="inactive" ${f.st === 'inactive' ? 'selected' : ''}>Désactivées</option></select>
+    </div>
+    ${shown.length === 0 ? `<div class="card" style="text-align:center;padding:40px 20px"><h3 style="font-size:22px">Aucune chambre</h3><p class="muted">Ajoutez vos chambres une par une ou plusieurs d’un coup (ex. 101 à 120).</p>${canEdit ? '<button class="primary" id="addRooms2">Ajouter des chambres</button>' : ''}</div>` : `
+    <div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:16px">
+      ${shown.map(r => { const ph = (r.photos || [])[0];
+        return `<article class="card" style="padding:0;overflow:hidden;display:flex;flex-direction:column;${r.is_active ? '' : 'opacity:.55'}">
+          <div style="position:relative;height:160px;background:${ph ? `#2B1E16 url('${esc(ph)}') center/cover` : 'repeating-linear-gradient(135deg,#EADCC6 0 12px,#F1E6D4 12px 24px)'}">
+            ${ph ? '' : '<span style="position:absolute;inset:0;display:grid;place-items:center;color:var(--muted);font-size:13px;font-weight:600">Aucune photo</span>'}
+            <span style="position:absolute;top:10px;left:10px;background:var(--card);color:var(--ink);font-family:var(--display);font-weight:800;font-size:20px;padding:4px 12px;border-radius:999px">${esc(r.number)}</span>
+            ${(r.photos || []).length > 1 ? `<span style="position:absolute;bottom:10px;right:10px;background:rgba(43,30,22,.75);color:#fff;font-size:12px;font-weight:700;padding:3px 9px;border-radius:999px">${r.photos.length} photos</span>` : ''}
+          </div>
+          <div style="padding:14px 16px 16px;display:flex;flex-direction:column;gap:8px;flex:1">
+            <div class="row between" style="flex-wrap:nowrap"><strong style="font-size:16px">${esc(r.room_type || 'Chambre')}</strong><strong style="color:var(--green)">${r.base_rate != null ? money(r.base_rate) : '—'}</strong></div>
+            <div class="muted" style="font-size:13px">${[r.capacity ? r.capacity + ' pers.' : '', BEDS[r.bed_type] || '', r.size_m2 ? r.size_m2 + ' m²' : '', r.floor ? 'Étage ' + esc(r.floor) : ''].filter(Boolean).join(' · ') || '&nbsp;'}</div>
+            ${(r.amenities || []).length ? `<div class="row" style="gap:4px">${r.amenities.slice(0, 4).map(a => `<span class="pill" style="background:var(--bg);color:var(--muted);font-weight:600">${esc(a)}</span>`).join('')}${r.amenities.length > 4 ? `<span class="pill" style="background:var(--bg);color:var(--muted)">+${r.amenities.length - 4}</span>` : ''}</div>` : ''}
+            <div class="row between" style="margin-top:auto;padding-top:6px;flex-wrap:nowrap">
+              ${r.is_active ? `<select data-hk="${r.id}" aria-label="État de la chambre ${esc(r.number)}" class="${hkCls[r.housekeeping_status]}" style="min-height:36px;width:auto;border:none;font-weight:700;font-size:13px;border-radius:999px;padding:0 10px">${opt(HKS, r.housekeeping_status)}</select>` : '<span class="pill st-cancelled">Désactivée</span>'}
+              ${canEdit ? `<button class="small ghost" data-edit="${r.id}">Modifier</button>` : ''}
+            </div>
+          </div></article>`; }).join('')}
+    </div>`}`;
+  $('fType').onchange = (e) => { S._chf = { ...f, type: e.target.value }; renderChambres(); };
+  $('fSt').onchange = (e) => { S._chf = { ...f, st: e.target.value }; renderChambres(); };
+  [$('addRooms'), $('addRooms2')].forEach(b => { if (b) b.onclick = () => openRoomForm(null, renderChambres, types); });
+  el.querySelectorAll('[data-edit]').forEach(b => b.onclick = () => openRoomForm(rooms.find(r => r.id === b.dataset.edit), renderChambres, types));
   el.querySelectorAll('[data-hk]').forEach(sel => sel.onchange = async () => {
     const { error } = await sb.from('rooms').update({ housekeeping_status: sel.value }).eq('id', sel.dataset.hk);
-    if (error) { toast(errMsg(error), true); return renderChambres(); } toast('État mis à jour.');
+    if (error) toast(errMsg(error), true); else toast('État mis à jour.');
+    renderChambres();
   });
-  el.querySelectorAll('[data-toggle-room]').forEach(b => b.onclick = async () => {
-    const { error } = await sb.from('rooms').update({ is_active: b.dataset.on !== 'true' }).eq('id', b.dataset.toggleRoom);
-    if (error) return toast(errMsg(error), true);
-    await loadCommon(); renderChambres();
-  });
+}
+
+async function openRoomForm(room, refresh, types){
+  if (!room && !can(['owner','admin','manager'])) return;
+  if (room && !can(['owner','admin','manager'])) return toast('Modification réservée au gérant ou au propriétaire.', true);
+  types = types || [...new Set(S.rooms.map(r => r.room_type).filter(Boolean))];
+  const r = room || { amenities: [], photos: [], capacity: 2 };
+  let photos = [...(r.photos || [])];
+  const pending = [];
+  modal(`<h2 style="font-size:24px;margin-bottom:12px">${room ? 'Chambre ' + esc(room.number) : 'Ajouter des chambres'}</h2>
+    <form id="rmF" style="max-height:72vh;overflow-y:auto;padding-right:4px">
+      ${room ? '' : `<div class="toggle" role="group" aria-label="Mode d'ajout" style="margin-bottom:14px"><button type="button" class="on" data-mode="one">Une chambre</button><button type="button" data-mode="many">Plusieurs d’un coup</button></div>`}
+      <div class="row" id="numOne"><div class="field" style="flex:1 1 140px"><label for="rNum">Numéro ou nom</label><input id="rNum" required value="${esc(r.number || '')}" placeholder="Ex. 101, Villa Bambou"></div>
+        <div class="field" style="flex:1 1 100px"><label for="rFloor">Étage</label><input id="rFloor" value="${esc(r.floor || '')}" placeholder="Ex. 1"></div></div>
+      <div class="row hidden" id="numMany"><div class="field" style="flex:1 1 90px"><label for="rFrom">Du n°</label><input id="rFrom" type="number" min="0" value="101"></div><div class="field" style="flex:1 1 90px"><label for="rTo">Au n°</label><input id="rTo" type="number" min="0" value="110"></div><div class="field" style="flex:1 1 90px"><label for="rPre">Préfixe (option)</label><input id="rPre" maxlength="10" placeholder="Ex. A-"></div></div>
+      <div class="row"><div class="field" style="flex:2 1 180px"><label for="rType">Type de chambre</label><input id="rType" list="rTypes" value="${esc(r.room_type || '')}" placeholder="Ex. Double, Suite, Studio"><datalist id="rTypes">${types.map(t => `<option value="${esc(t)}"></option>`).join('')}</datalist></div>
+        <div class="field" style="flex:1 1 130px"><label for="rRate">Prix par nuit (F)</label><input id="rRate" type="number" min="0" required value="${r.base_rate ?? ''}"></div></div>
+      <div class="row"><div class="field" style="flex:1 1 100px"><label for="rCap">Personnes max</label><input id="rCap" type="number" min="1" max="20" value="${r.capacity ?? 2}"></div>
+        <div class="field" style="flex:1 1 150px"><label for="rBed">Literie</label><select id="rBed"><option value="">—</option>${opt(BEDS, r.bed_type)}</select></div>
+        <div class="field" style="flex:1 1 90px"><label for="rSize">Surface (m²)</label><input id="rSize" type="number" min="1" max="1000" value="${r.size_m2 ?? ''}"></div></div>
+      <fieldset style="border:1px solid var(--line);border-radius:14px;padding:12px;margin:0 0 14px"><legend style="font-size:13px;font-weight:700;color:var(--muted);padding:0 6px">Équipements</legend>
+        <div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:6px">${AMENITIES.map(a => `<label style="display:flex;align-items:center;gap:8px;margin:0;font-weight:500;color:var(--ink);font-size:14px;min-height:32px"><input type="checkbox" value="${esc(a)}" class="amen" ${(r.amenities || []).includes(a) ? 'checked' : ''} style="width:18px;min-height:18px"> ${esc(a)}</label>`).join('')}</div></fieldset>
+      <div class="field"><label for="rDesc">Description (visible sur votre page publique)</label><textarea id="rDesc" rows="3" maxlength="1000" style="width:100%;border:1px solid #D9C8AE;border-radius:12px;padding:10px;font:inherit">${esc(r.description || '')}</textarea></div>
+      <div class="field"><label>Photos (8 maximum, la première sert de couverture)</label>
+        <div id="phList" class="row" style="gap:8px;align-items:flex-start"></div>
+        <label style="display:inline-flex;align-items:center;gap:8px;margin-top:8px;cursor:pointer"><span class="pill st-active" style="padding:8px 14px">+ Ajouter des photos</span><input type="file" id="rPh" accept="image/jpeg,image/png,image/webp" multiple class="hidden"></label></div>
+      <div class="row" style="margin-top:8px"><button class="primary" id="rmSave">${room ? 'Enregistrer' : 'Ajouter'}</button><button type="button" class="ghost" data-close>Annuler</button>
+        ${room ? `<button type="button" class="ghost" id="rmToggle" style="margin-left:auto">${room.is_active ? 'Désactiver' : 'Réactiver'}</button>` : ''}</div>
+    </form>`);
+  $('modalBody').style.maxWidth = '660px';
+  let mode = 'one';
+  document.querySelectorAll('#rmF [data-mode]').forEach(b => b.onclick = () => { mode = b.dataset.mode; document.querySelectorAll('#rmF [data-mode]').forEach(x => x.classList.toggle('on', x === b)); $('numOne').classList.toggle('hidden', mode !== 'one'); $('numMany').classList.toggle('hidden', mode !== 'many'); $('rNum').required = mode === 'one'; });
+  const drawPhotos = () => { $('phList').innerHTML = photos.map((u, i) => `<div style="position:relative"><img src="${esc(u)}" alt="Photo ${i + 1}" style="width:96px;height:72px;object-fit:cover;border-radius:10px;${i === 0 ? 'outline:3px solid var(--green)' : ''}"><button type="button" data-delp="${i}" aria-label="Retirer la photo ${i + 1}" style="position:absolute;top:2px;right:2px;min-height:24px;width:24px;padding:0;border-radius:50%;border:none;background:rgba(43,30,22,.8);color:#fff;font-size:12px">✕</button>${i > 0 ? `<button type="button" data-cover="${i}" style="position:absolute;bottom:2px;left:2px;min-height:22px;padding:0 6px;border:none;border-radius:999px;background:rgba(251,246,238,.92);font-size:10px">Couverture</button>` : ''}</div>`).join('') + pending.map(() => '<div style="width:96px;height:72px;border-radius:10px;background:var(--bg);display:grid;place-items:center;font-size:11px" class="muted">Envoi…</div>').join('') || '<span class="muted" style="font-size:13px">Aucune photo pour l’instant.</span>';
+    $('phList').querySelectorAll('[data-delp]').forEach(b => b.onclick = () => { photos.splice(+b.dataset.delp, 1); drawPhotos(); });
+    $('phList').querySelectorAll('[data-cover]').forEach(b => b.onclick = () => { const [p] = photos.splice(+b.dataset.cover, 1); photos.unshift(p); drawPhotos(); }); };
+  drawPhotos();
+  $('rPh').onchange = async (e) => {
+    const files = [...e.target.files].slice(0, 8 - photos.length); e.target.value = '';
+    if (!files.length) return toast('8 photos maximum par chambre.', true);
+    for (const file of files) { pending.push(1); drawPhotos(); try { photos.push(await uploadRoomPhoto(file, room ? room.id : 'new')); } catch (er) { toast(errMsg(er), true); } pending.pop(); drawPhotos(); }
+  };
+  const tg = $('rmToggle'); if (tg) tg.onclick = async () => { const { error } = await sb.from('rooms').update({ is_active: !room.is_active }).eq('id', room.id); if (error) return toast(errMsg(error), true); closeModal(); await loadCommon(); refresh(); };
+  $('rmF').onsubmit = async (e) => {
+    e.preventDefault(); if (pending.length) return toast('Patientez, envoi des photos en cours…', true);
+    const base = { establishment_id: S.est, room_type: $('rType').value.trim() || null, base_rate: $('rRate').value === '' ? null : +$('rRate').value,
+      capacity: +$('rCap').value || null, bed_type: $('rBed').value || null, size_m2: $('rSize').value ? +$('rSize').value : null,
+      amenities: [...document.querySelectorAll('#rmF .amen:checked')].map(c => c.value), description: $('rDesc').value.trim() || null, photos };
+    let rows;
+    if (room) rows = null;
+    else if (mode === 'many') {
+      const a = +$('rFrom').value, b = +$('rTo').value, pre = $('rPre').value.trim();
+      if (!(b >= a) || b - a > 199) return toast('Plage invalide (200 chambres maximum à la fois).', true);
+      rows = [...Array(b - a + 1)].map((_, i) => ({ ...base, number: pre + (a + i), floor: null }));
+    } else rows = [{ ...base, number: $('rNum').value.trim(), floor: $('rFloor').value.trim() || null }];
+    $('rmSave').disabled = true;
+    const { error } = room ? await sb.from('rooms').update({ ...base, number: $('rNum').value.trim(), floor: $('rFloor').value.trim() || null }).eq('id', room.id) : await sb.from('rooms').insert(rows);
+    $('rmSave').disabled = false;
+    if (error) return toast(error.code === '23505' ? 'Un de ces numéros de chambre existe déjà.' : errMsg(error), true);
+    closeModal(); toast(room ? 'Chambre enregistrée.' : `${rows.length} chambre(s) ajoutée(s).`); await loadCommon(); refresh();
+  };
 }
 
 /* ---------- Administration plateforme ---------- */
@@ -602,49 +681,97 @@ const can = (roles) => S.member && roles.includes(S.member.role);
 async function loadEst(){
   const [e, r] = await Promise.all([
     sb.from('establishments').select('id,name,city').eq('organization_id', S.org).eq('is_active', true).order('created_at'),
-    sb.from('rooms').select('id,number,room_type,base_rate,housekeeping_status,is_active,establishment_id').eq('organization_id', S.org).eq('is_active', true).order('number')
+    sb.from('rooms').select('id,number,room_type,base_rate,capacity,photos,housekeeping_status,is_active,establishment_id').eq('organization_id', S.org).eq('is_active', true).order('number')
   ]);
   S.ests = e.data || []; if (!S.est || !S.ests.find(x => x.id === S.est)) S.est = S.ests[0] && S.ests[0].id;
-  S.rooms = (r.data || []).filter(x => x.establishment_id === S.est);
+  S.rooms = (r.data || []).filter(x => x.establishment_id === S.est).sort((a, b) => String(a.number).localeCompare(String(b.number), 'fr', { numeric: true }));
 }
 const head = (title, right='') => `<div class="row between" style="margin-bottom:20px"><h1 style="font-size:32px">${title}</h1><div class="row">${right}</div></div>`;
 function readOnlyNote(){ return S.overview && !S.overview.can_write ? `<p class="muted" style="margin:-8px 0 16px">Consultation seule : réactivez votre abonnement pour enregistrer de nouvelles opérations.</p>` : ''; }
 
 /* ---------- Tableau de bord ---------- */
+const LIVE = {
+  occupied:  ['Occupée',        '#B4532A', '#FFFFFF'],
+  arriving:  ['Arrivée prévue', '#F2DCA8', '#5E4510'],
+  departing: ['Départ du jour', '#2B1E16', '#FBF6EE'],
+  free:      ['Libre',          '#E6EEDC', '#2F5A1E'],
+  dirty:     ['À nettoyer',     '#F7D9C4', '#7A3216'],
+  oos:       ['Hors service',   '#E3DCD2', '#6E5A4A']
+};
+function donut(pct, size = 92){
+  const r = 38, c = 2 * Math.PI * r, v = Math.max(0, Math.min(100, pct));
+  return `<svg width="${size}" height="${size}" viewBox="0 0 100 100" role="img" aria-label="Occupation ${v} %"><circle cx="50" cy="50" r="${r}" fill="none" stroke="#EADCC6" stroke-width="12"></circle><circle cx="50" cy="50" r="${r}" fill="none" stroke="var(--green)" stroke-width="12" stroke-linecap="round" stroke-dasharray="${c * v / 100} ${c}" transform="rotate(-90 50 50)"></circle><text x="50" y="56" text-anchor="middle" font-family="Bricolage Grotesque, sans-serif" font-weight="800" font-size="22" fill="var(--ink)">${v}%</text></svg>`;
+}
 async function renderDashboard(){
   const el = $('v-dashboard'); el.innerHTML = '<p class="muted">Chargement…</p>';
   await loadEst();
-  const t = today();
-  const [arr, dep, inh, pay] = await Promise.all([
-    sb.from('reservation_balances').select('*').eq('establishment_id', S.est).eq('check_in', t).in('status', ['pending','confirmed']),
-    sb.from('reservation_balances').select('*').eq('establishment_id', S.est).eq('check_out', t).eq('status', 'checked_in'),
-    sb.from('reservation_balances').select('id').eq('establishment_id', S.est).eq('status', 'checked_in'),
-    can(['owner','admin','manager','receptionist','accountant']) ? sb.from('cash_movements').select('amount,kind').eq('establishment_id', S.est).gte('created_at', t + 'T00:00:00') : { data: [] }
+  const t = today(), t7 = addDays(t, 7);
+  const [resas, pay, pend] = await Promise.all([
+    sb.from('reservation_balances').select('*').eq('establishment_id', S.est).not('status', 'in', '(cancelled,no_show)').lte('check_in', t7).gte('check_out', t).order('check_in'),
+    can(['owner','admin','manager','receptionist','accountant']) ? sb.from('cash_movements').select('amount,kind').eq('establishment_id', S.est).gte('created_at', t + 'T00:00:00') : { data: [] },
+    sb.from('reservation_balances').select('id,guest_name,room_number,check_in,check_out,total_amount,created_at').eq('establishment_id', S.est).eq('status', 'pending').order('created_at', { ascending: false }).limit(5)
   ]);
-  const { data: pend } = await sb.from('reservation_balances').select('id').eq('establishment_id', S.est).eq('status', 'pending');
-  let alertBanner = '';
-  if (can(['owner','admin'])) { const { count } = await sb.from('owner_alerts').select('id', { count: 'exact', head: true }).eq('organization_id', S.org).is('read_at', null);
-    if (count) alertBanner = `<div class="banner b-danger"><span>${count} alerte(s) de contrôle non lue(s).</span><button class="small primary" data-go="controle">Voir</button></div>`; }
-  const pendBanner = alertBanner + ((pend || []).length ? `<div class="banner b-warn"><span>${pend.length} demande(s) de réservation en attente de confirmation.</span><button class="small primary" data-go="reservations">Voir les demandes</button></div>` : '');
-  const total = S.rooms.length, occ = (inh.data || []).length;
+  let alertCount = 0;
+  if (can(['owner','admin'])) { const { count } = await sb.from('owner_alerts').select('id', { count: 'exact', head: true }).eq('organization_id', S.org).is('read_at', null); alertCount = count || 0; }
+  const R = resas.data || [];
+  const arrivals = R.filter(r => r.check_in === t && ['pending','confirmed'].includes(r.status));
+  const departures = R.filter(r => r.check_out === t && r.status === 'checked_in');
+  const inHouse = R.filter(r => r.status === 'checked_in');
   const cashIn = (pay.data || []).filter(m => m.kind === 'payment' || m.kind === 'income').reduce((a, m) => a + Number(m.amount), 0);
-  const hk = (s) => S.rooms.filter(r => r.housekeeping_status === s).length;
-  const k = (l, v, sub='') => `<div class="card kpi"><div class="l">${l}</div><div class="v">${v}</div>${sub ? `<div class="muted" style="font-size:12px">${sub}</div>` : ''}</div>`;
-  const list = (rows, action, label) => (rows || []).length === 0 ? '<p class="muted">Aucun.</p>' : `<div class="tablewrap"><table class="table"><tbody>${rows.map(r => `<tr><td><strong>${esc(r.guest_name)}</strong><div class="muted" style="font-size:12px">Ch. ${esc(r.room_number)} · ${r.nights} nuit(s)</div></td><td>${r.balance > 0 ? `<span class="pill st-pending">Solde ${money(r.balance)}</span>` : '<span class="pill st-active">Réglé</span>'}</td><td style="text-align:right"><button class="small primary" data-${action}="${r.id}">${label}</button></td></tr>`).join('')}</tbody></table></div>`;
-  el.innerHTML = head(`Tableau de bord <span class="muted" style="font-size:16px;font-family:DM Sans">· ${new Date().toLocaleDateString('fr-FR', { weekday:'long', day:'numeric', month:'long' })}</span>`,
-      `<button class="primary" data-newresa>Nouvelle réservation</button><button data-walkin>Walk-in</button>`) + readOnlyNote() + pendBanner + `
-    <div class="grid g4" style="margin-bottom:16px">
-      ${k("Taux d'occupation", total ? Math.round(occ / total * 100) + ' %' : '—', `${occ} / ${total} chambres occupées`)}
-      ${k('Arrivées du jour', (arr.data || []).length)}${k('Départs du jour', (dep.data || []).length)}
-      ${k('Encaissé aujourd’hui', money(cashIn))}
+  const total = S.rooms.length, occPct = total ? Math.round(inHouse.length / total * 100) : 0;
+  // statut en direct de chaque chambre
+  const live = S.rooms.map(rm => {
+    const stay = inHouse.find(r => r.room_id === rm.id);
+    const arr = arrivals.find(r => r.room_id === rm.id);
+    let st = 'free', resa = null;
+    if (rm.housekeeping_status === 'out_of_service') st = 'oos';
+    else if (stay) { st = stay.check_out === t ? 'departing' : 'occupied'; resa = stay; }
+    else if (arr) { st = 'arriving'; resa = arr; }
+    else if (['dirty','cleaning'].includes(rm.housekeeping_status)) st = 'dirty';
+    return { rm, st, resa };
+  });
+  const countSt = (s) => live.filter(x => x.st === s).length;
+  // prévision 7 jours
+  const week = [...Array(7)].map((_, i) => { const d = addDays(t, i); const n = R.filter(r => r.check_in <= d && r.check_out > d && r.status !== 'pending').length; const p = R.filter(r => r.check_in <= d && r.check_out > d && r.status === 'pending').length; return { d, n, p, pct: total ? Math.round(n / total * 100) : 0 }; });
+  const hello = (() => { const h = new Date().getHours(); return h < 12 ? 'Bonjour' : h < 18 ? 'Bon après-midi' : 'Bonsoir'; })();
+  const kpi = (l, v, sub, accent) => `<div class="card" style="display:flex;flex-direction:column;gap:2px;${accent ? 'background:var(--ink);color:var(--card);border-color:var(--ink)' : ''}"><div style="font-size:13px;font-weight:600;opacity:.75">${l}</div><div style="font-family:var(--display);font-weight:800;font-size:34px;letter-spacing:-.5px">${v}</div><div style="font-size:12px;opacity:.75">${sub}</div></div>`;
+  const person = (r, action, label) => `<div class="row" style="padding:12px 0;border-bottom:1px dashed var(--line);flex-wrap:nowrap"><div style="width:40px;height:40px;flex-shrink:0;border-radius:50%;background:var(--green-l);color:var(--green-d);display:grid;place-items:center;font-weight:800">${esc((r.guest_name || '?').split(/\s+/).map(w => w[0]).slice(0, 2).join('').toUpperCase())}</div><div style="flex:1;min-width:0"><div style="font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(r.guest_name)}</div><div class="muted" style="font-size:12px">Ch. ${esc(r.room_number)} · ${r.nights} nuit(s)${r.source === 'en_ligne' ? ' · en ligne' : ''}</div></div>${r.balance > 0 ? `<span class="pill st-pending">${money(r.balance)}</span>` : '<span class="pill st-active">Réglé</span>'}<button class="small primary" data-${action}="${r.id}">${label}</button></div>`;
+  el.innerHTML = `
+    <div class="row between" style="margin-bottom:20px;align-items:flex-end">
+      <div><div class="muted" style="font-size:14px">${new Date().toLocaleDateString('fr-FR', { weekday:'long', day:'numeric', month:'long' })}</div><h1 style="font-size:clamp(28px,4vw,40px)">${hello}</h1></div>
+      <div class="row"><button data-walkin>Walk-in</button><button class="primary" data-newresa>Nouvelle réservation</button></div>
     </div>
-    <div class="grid g2" style="margin-bottom:16px">
-      <div class="card"><h3 style="font-size:20px;margin-bottom:8px">Arrivées</h3>${list(arr.data, 'checkin', 'Check-in')}</div>
-      <div class="card"><h3 style="font-size:20px;margin-bottom:8px">Départs</h3>${list(dep.data, 'checkout', 'Check-out')}</div>
+    ${readOnlyNote()}
+    ${alertCount ? `<div class="banner b-danger"><span>${alertCount} alerte(s) de contrôle non lue(s).</span><button class="small primary" data-go="controle">Voir</button></div>` : ''}
+    ${total === 0 ? `<div class="card" style="margin-bottom:16px;background:var(--green-l);border-color:#EBC0A5"><h3 style="font-size:20px">Bienvenue sur Horus Hotel</h3><p style="margin:6px 0 12px">Commencez par enregistrer vos chambres avec leurs photos et leurs prix.</p><button class="primary" data-go="chambres">Ajouter mes chambres</button></div>` : ''}
+    <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;margin-bottom:16px">
+      <div class="card row" style="gap:14px;flex-wrap:nowrap">${donut(occPct)}<div><div style="font-size:13px;font-weight:600;color:var(--muted)">Occupation</div><div style="font-weight:700">${inHouse.length} / ${total} chambres</div></div></div>
+      ${kpi('Arrivées', arrivals.length, arrivals.length ? 'à accueillir aujourd’hui' : 'aucune aujourd’hui')}
+      ${kpi('Départs', departures.length, departures.length ? 'à libérer aujourd’hui' : 'aucun aujourd’hui')}
+      ${kpi('Encaissé aujourd’hui', money(cashIn), 'toutes méthodes', true)}
     </div>
-    <div class="card"><h3 style="font-size:20px;margin-bottom:10px">État des chambres</h3>
-      <div class="row">${Object.entries(HKS).map(([kk, v]) => `<span class="pill ${kk === 'clean' || kk === 'ready' ? 'st-active' : kk === 'dirty' ? 'st-pending' : kk === 'out_of_service' ? 'st-expired' : 'st-trial'}">${v} : ${hk(kk)}</span>`).join('')}</div></div>`;
+    <div class="card" style="margin-bottom:16px">
+      <div class="row between" style="margin-bottom:12px"><h3 style="font-size:22px">Chambres en direct</h3><div class="row" style="gap:6px">${Object.entries(LIVE).map(([k, v]) => `<span class="pill" style="background:${v[1]};color:${v[2]}">${v[0]} · ${countSt(k)}</span>`).join('')}</div></div>
+      ${total ? `<div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(112px,1fr));gap:10px">${live.map(x => { const c = LIVE[x.st];
+        return `<button type="button" data-room="${x.rm.id}" ${x.resa ? `data-open="${x.resa.id}"` : ''} style="cursor:pointer;border:none;font:inherit;text-align:left;width:100%;border-radius:16px;padding:12px;min-height:96px;background:${c[1]};color:${c[2]};display:flex;flex-direction:column;justify-content:space-between;gap:6px;outline-offset:2px" aria-label="Chambre ${esc(x.rm.number)} : ${c[0]}">
+          <span style="font-family:var(--display);font-weight:800;font-size:24px;line-height:1">${esc(x.rm.number)}</span>
+          <span style="font-size:12px;font-weight:600;opacity:.9;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${x.resa ? esc(x.resa.guest_name) : esc(x.rm.room_type || c[0])}</span>
+          <span style="font-size:11px;opacity:.8">${c[0]}</span></button>`; }).join('')}</div>` : '<p class="muted">Aucune chambre.</p>'}
+    </div>
+    <div class="grid g2" style="margin-bottom:16px;align-items:start">
+      <div class="card"><h3 style="font-size:20px;margin-bottom:4px">Arrivées du jour</h3>${arrivals.length ? arrivals.map(r => person(r, 'checkin', 'Check-in')).join('') : '<p class="muted">Aucune arrivée prévue.</p>'}</div>
+      <div class="card"><h3 style="font-size:20px;margin-bottom:4px">Départs du jour</h3>${departures.length ? departures.map(r => person(r, 'checkout', 'Check-out')).join('') : '<p class="muted">Aucun départ prévu.</p>'}</div>
+    </div>
+    <div class="grid g2" style="align-items:start">
+      <div class="card"><h3 style="font-size:20px;margin-bottom:14px">Occupation des 7 prochains jours</h3>
+        <div style="display:flex;align-items:flex-end;gap:10px;height:150px">${week.map((w, i) => `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;height:100%;justify-content:flex-end" title="${w.n} chambre(s) réservée(s)${w.p ? ', ' + w.p + ' en attente' : ''}"><span style="font-size:12px;font-weight:700">${w.pct}%</span><div style="width:100%;height:${Math.max(4, w.pct)}%;border-radius:10px 10px 4px 4px;background:${i === 0 ? 'var(--green)' : '#D9A184'}"></div><span class="muted" style="font-size:12px">${new Date(w.d + 'T00:00:00').toLocaleDateString('fr-FR', { weekday:'short' })}</span></div>`).join('')}</div>
+      </div>
+      <div class="card"><div class="row between" style="margin-bottom:4px"><h3 style="font-size:20px">Demandes en ligne</h3>${(pend.data || []).length ? `<span class="pill st-pending">${pend.data.length} en attente</span>` : ''}</div>
+        ${(pend.data || []).length ? pend.data.map(p => `<div class="row" style="padding:10px 0;border-bottom:1px dashed var(--line);flex-wrap:nowrap"><div style="flex:1;min-width:0"><div style="font-weight:700">${esc(p.guest_name)}</div><div class="muted" style="font-size:12px">Ch. ${esc(p.room_number)} · ${dfr(p.check_in)} → ${dfr(p.check_out)} · ${money(p.total_amount)}</div></div><button class="small" data-open="${p.id}">Traiter</button></div>`).join('') : '<p class="muted">Aucune demande en attente.</p>'}
+      </div>
+    </div>`;
   bindResaActions(el, renderDashboard);
+  el.querySelectorAll('[data-room]:not([data-open])').forEach(b => b.onclick = () => openRoomForm(S.rooms.find(r => r.id === b.dataset.room), renderDashboard));
 }
 
 /* ---------- Réservations ---------- */
@@ -1228,7 +1355,13 @@ async function renderPublicPage(slug){
       ${h.description ? `<section class="card"><h2 style="font-size:24px;margin-bottom:8px">Présentation</h2><p style="margin:0">${para(h.description)}</p></section>` : ''}
       ${photos.length > 1 ? `<section class="grid" style="grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px">${photos.slice(1).map((u, i) => `<img src="${esc(u)}" alt="Photo ${i + 2} de ${esc(h.name)}" loading="lazy" style="width:100%;height:130px;object-fit:cover;border-radius:12px">`).join('')}</section>` : ''}
       <section class="card"><h2 style="font-size:24px;margin-bottom:12px">Hébergements</h2>
-        ${types.length ? `<div class="grid g2">${types.map(t => `<div style="border:1px solid var(--line);border-radius:12px;padding:16px"><h3 style="font-size:19px">${esc(t.type)}</h3><p class="muted" style="margin:4px 0 8px;font-size:13px">${t.capacity ? `Jusqu’à ${t.capacity} pers. · ` : ''}${t.count} unité(s)</p><p style="margin:0">À partir de <strong style="font-size:20px">${money(t.from_rate)}</strong> / nuit</p></div>`).join('')}</div>` : '<p class="muted">Aucun hébergement réservable en ligne pour le moment.</p>'}
+        ${types.length ? `<div class="grid g2">${types.map(t => `<div style="border:1px solid var(--line);border-radius:18px;overflow:hidden;background:var(--card)">
+          ${(t.photos || []).length ? `<div style="display:flex;overflow-x:auto;scroll-snap-type:x mandatory;gap:2px">${t.photos.map((u, i) => `<img src="${esc(u)}" alt="${esc(t.type)}, photo ${i + 1}" loading="lazy" style="flex:0 0 100%;height:190px;object-fit:cover;scroll-snap-align:start">`).join('')}</div>` : ''}
+          <div style="padding:16px"><div class="row between" style="flex-wrap:nowrap"><h3 style="font-size:19px">${esc(t.type)}</h3>${(t.photos || []).length > 1 ? `<span class="muted" style="font-size:12px">${t.photos.length} photos ↔</span>` : ''}</div>
+          <p class="muted" style="margin:4px 0 8px;font-size:13px">${[t.capacity ? `Jusqu’à ${t.capacity} pers.` : '', BEDS[t.bed_type] || '', t.size_m2 ? t.size_m2 + ' m²' : ''].filter(Boolean).join(' · ')}</p>
+          ${t.description ? `<p style="margin:0 0 8px;font-size:14px">${esc(t.description)}</p>` : ''}
+          ${(t.amenities || []).length ? `<div class="row" style="gap:4px;margin-bottom:10px">${t.amenities.map(a => `<span class="pill" style="background:var(--bg);color:var(--muted);font-weight:600">${esc(a)}</span>`).join('')}</div>` : ''}
+          <p style="margin:0">À partir de <strong style="font-size:20px">${money(t.from_rate)}</strong> / nuit</p></div></div>`).join('')}</div>` : '<p class="muted">Aucun hébergement réservable en ligne pour le moment.</p>'}
       </section>
       <section class="card"><h2 style="font-size:24px;margin-bottom:8px">Bon à savoir</h2>
         <p style="margin:0 0 6px">Arrivée à partir de <strong>${esc(h.checkin_time)}</strong> · Départ avant <strong>${esc(h.checkout_time)}</strong></p>
