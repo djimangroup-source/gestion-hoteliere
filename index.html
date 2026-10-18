@@ -126,9 +126,10 @@ body.modal-open{overflow:hidden}
   <div class="card">
     <div class="eyebrow">Horus Hotel · Gestion hôtelière &amp; résidences</div>
     <h1 id="authTitle" style="font-size:30px;margin:6px 0 18px">Connexion</h1>
-    <form id="authForm">
-      <div class="field"><label for="email">Adresse e-mail</label><input id="email" type="email" required autocomplete="email"></div>
-      <div class="field"><label for="password">Mot de passe</label><input id="password" type="password" required minlength="8" autocomplete="current-password"></div>
+    <form id="authForm" method="post" action="#" name="login">
+      <div class="field"><label for="email">Adresse e-mail</label><input id="email" name="username" type="email" required autocomplete="username" inputmode="email" autocapitalize="none" spellcheck="false"></div>
+      <div class="field"><label for="password">Mot de passe</label><div style="position:relative"><input id="password" name="password" type="password" required minlength="8" autocomplete="current-password" style="padding-right:96px"><button type="button" id="pwToggle" class="small ghost" style="position:absolute;right:4px;top:4px;min-height:36px;border:0" aria-label="Afficher le mot de passe">Afficher</button></div></div>
+      <label class="row" style="gap:8px;margin:-4px 0 14px;font-weight:600;color:var(--ink);flex-wrap:nowrap"><input type="checkbox" id="remember" checked style="width:20px;min-height:20px"> Rester connecté sur cet appareil</label>
       <button class="primary" style="width:100%" id="authBtn">Se connecter</button>
     </form>
     <div class="row" style="margin-top:12px"><button type="button" class="ghost" id="magicBtn" style="flex:1 1 200px">Recevoir un lien de connexion par e-mail</button></div>
@@ -210,7 +211,14 @@ body.modal-open{overflow:hidden}
 <script>
 const SUPABASE_URL = 'https://kuuyhtvdnoqyikrcbpot.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_0AT6IoJyfnTlANz0Lf-erg_Sj85F1yT';
-const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+const authStore = {
+  remember(){ try { return localStorage.getItem('hh_remember') !== '0'; } catch (_) { return true; } },
+  area(){ try { return this.remember() ? localStorage : sessionStorage; } catch (_) { return null; } },
+  getItem(k){ try { return localStorage.getItem(k) ?? sessionStorage.getItem(k); } catch (_) { return null; } },
+  setItem(k, v){ try { const a = this.area(); (a === localStorage ? sessionStorage : localStorage).removeItem(k); a && a.setItem(k, v); } catch (_) {} },
+  removeItem(k){ try { localStorage.removeItem(k); sessionStorage.removeItem(k); } catch (_) {} }
+};
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true, storage: authStore } });
 
 const S = { session:null, member:null, org:null, overview:null, plans:[], providers:[], isAdmin:false, cycle:'monthly', view:'dashboard', signup:false, est:null, ests:[], rooms:[] };
 const VIEWS = ['rapports','controle','equipe','mapage','dashboard','reservations','planning','clients','caisse','depenses','factures','tarifs','abonnement','chambres','admin'];
@@ -238,7 +246,10 @@ function renderAuth(){
   $('authSwitchTxt').textContent = S.signup ? 'Déjà inscrit ?' : 'Pas encore de compte ?';
   $('authSwitch').textContent = S.signup ? 'Se connecter' : 'Créer un compte – 30 jours gratuits';
   $('password').autocomplete = S.signup ? 'new-password' : 'current-password';
+  try { const last = localStorage.getItem('hh_last_email'); if (last && !$('email').value) { $('email').value = last; } $('remember').checked = authStore.remember(); } catch (_) {}
 }
+$('pwToggle').addEventListener('click', () => { const p = $('password'), on = p.type === 'password'; p.type = on ? 'text' : 'password'; $('pwToggle').textContent = on ? 'Masquer' : 'Afficher'; $('pwToggle').setAttribute('aria-label', on ? 'Masquer le mot de passe' : 'Afficher le mot de passe'); p.focus(); });
+$('remember').addEventListener('change', () => { try { localStorage.setItem('hh_remember', $('remember').checked ? '1' : '0'); } catch (_) {} });
 const appUrl = () => location.origin + location.pathname;
 $('magicBtn').addEventListener('click', async () => {
   const email = $('email').value.trim();
@@ -248,6 +259,7 @@ $('magicBtn').addEventListener('click', async () => {
   const { error } = await sb.auth.signInWithOtp({ email, options: { shouldCreateUser: false, emailRedirectTo: appUrl() } });
   $('magicBtn').disabled = false;
   if (error) return toast(/rate|limit/i.test(error.message) ? 'Trop de demandes : réessayez dans quelques minutes.' : 'Envoi impossible. Vérifiez l\u2019adresse ou créez un compte.', true);
+  try { localStorage.setItem('hh_last_email', email); } catch (_) {}
   toast('Lien envoyé : ouvrez l\u2019e-mail reçu sur cet appareil pour vous connecter.');
 });
 $('forgotLink').addEventListener('click', async (e) => {
@@ -269,8 +281,11 @@ $('authForm').addEventListener('submit', async e => {
       if (error) throw error;
       if (!data.session) { toast('Compte créé. Confirmez votre adresse e-mail puis connectez-vous.'); S.signup = false; renderAuth(); }
     } else {
+      try { localStorage.setItem('hh_remember', $('remember').checked ? '1' : '0'); } catch (_) {}
       const { error } = await sb.auth.signInWithPassword({ email, password });
       if (error) throw error;
+      try { localStorage.setItem('hh_last_email', email); } catch (_) {}
+      try { if (window.PasswordCredential && navigator.credentials) await navigator.credentials.store(new PasswordCredential({ id: email, password, name: email })); } catch (_) {}
     }
   } catch (err) { toast(err.message === 'Invalid login credentials' ? 'Identifiants incorrects.' : errMsg(err), true); }
   finally { btn.disabled = false; }
@@ -294,7 +309,7 @@ async function boot(){
   if (PUBLIC_SLUG) return renderPublicPage(PUBLIC_SLUG);
   const { data: { session } } = await sb.auth.getSession();
   S.session = session;
-  if (!session) { renderAuth(); return show('auth'); }
+  if (!session) { renderAuth(); show('auth'); setTimeout(() => { const f = $('email').value ? $('password') : $('email'); if (f) f.focus(); }, 50); return; }
   const [mem, adm] = await Promise.all([
     sb.from('organization_members').select('organization_id, role, organizations(name)').eq('user_id', session.user.id).eq('is_active', true).limit(1),
     sb.rpc('is_platform_admin')
