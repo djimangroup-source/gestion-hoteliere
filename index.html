@@ -48,6 +48,8 @@ nav.side details.more .menu{position:absolute;right:0;top:46px;min-width:220px;b
 nav.side details.more .menu button{text-align:left;width:100%;border-radius:10px}
 nav.side details.more .menu button[data-logout]{border-top:1px solid var(--line);border-radius:0 0 10px 10px;margin-top:4px}
 main{flex:1;min-width:0;width:100%;max-width:1360px;margin:0 auto;padding:28px clamp(16px,3vw,36px)}
+@media (max-width:1000px){#mpGrid{grid-template-columns:1fr!important}#mpGrid aside{position:static!important}}
+@media (max-width:640px){.pubnav{display:none}}
 nav.side button.navsearch{display:flex;align-items:center;gap:8px;justify-content:space-between;border:1px solid var(--line);background:var(--card);color:var(--muted);font-weight:500;border-radius:12px;margin:0 0 10px}
 nav.side button.navsearch kbd{font:600 11px/1 var(--body,inherit);border:1px solid var(--line);border-radius:6px;padding:3px 6px;color:var(--muted)}
 @media (max-width:899px){nav.side button.navsearch kbd{display:none}nav.side button.navsearch{margin:0}}
@@ -164,10 +166,10 @@ body.modal-open{overflow:hidden}
     <button data-view="depenses">Dépenses</button>
     <button data-view="factures">Factures</button>
     <button data-view="rapports">Rapports</button>
+    <button data-view="mapage">Ma page de présentation</button>
     <details class="more" id="navMore">
       <summary>Réglages</summary>
       <div class="menu">
-        <button data-view="mapage">Ma page publique</button>
         <button data-view="equipe">Équipe</button>
         <button data-view="abonnement">Mon abonnement</button>
         <button data-view="tarifs">Tarifs</button>
@@ -858,7 +860,7 @@ const ACTIONS = [
   ['Rapports financiers', 'Rapports', () => go('rapports'), ['rapport', 'chiffre', 'ca', 'statistique']],
   ['Alertes du propriétaire', 'Contrôle', () => go('controle'), ['alerte', 'controle', 'journal']],
   ['Inviter un membre de l’équipe', 'Équipe', () => go('equipe'), ['equipe', 'inviter', 'gerant', 'personnel']],
-  ['Ma page de réservation en ligne', 'Réglages', () => go('mapage'), ['page', 'publique', 'site', 'lien']]
+  ['Ma page de présentation (logo, couverture, photos)', 'Réglages', () => go('mapage'), ['page', 'publique', 'site', 'lien']]
 ];
 const norm = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
 async function openPalette(){
@@ -1862,77 +1864,113 @@ async function renderEquipe(){
 const publicUrl = (slug) => location.origin + location.pathname + '?h=' + encodeURIComponent(slug);
 const slugify = (t) => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 48);
 
+const THEMES = {
+  terracotta: ['Terracotta', '#B4532A', '#8A3E1E', '#F6E1D3'],
+  ocean: ['Océan', '#1F6F8B', '#164F63', '#DCEFF5'],
+  foret: ['Forêt', '#2F6B3A', '#214D29', '#E0EEDC'],
+  nuit: ['Nuit', '#2B3A55', '#1C273A', '#E2E6EF'],
+  or: ['Or', '#A87B1E', '#7E5B12', '#F5EBD3']
+};
+const HIGHLIGHTS = ['Wi-Fi gratuit','Climatisation','Parking gratuit','Piscine','Petit-déjeuner','Restaurant','Bar','Groupe électrogène','Sécurité 24h/24','Navette aéroport','Vue mer','Jardin','Salle de réunion','Ménage quotidien','Cuisine équipée','Proche plage'];
+const themeVars = (k) => { const t = THEMES[k] || THEMES.terracotta; return `--green:${t[1]};--green-d:${t[2]};--green-l:${t[3]}`; };
+
 async function renderMaPage(){
   const el = $('v-mapage'); el.innerHTML = '<p class="muted">Chargement…</p>';
   await loadEst();
   const { data: e, error } = await sb.from('establishments').select('*').eq('id', S.est).single();
-  if (error || !e) { el.innerHTML = head('Ma page publique') + `<p class="muted">${esc(errMsg(error))}</p>`; return; }
+  if (error || !e) { el.innerHTML = head('Ma page de présentation') + `<p class="muted">${esc(errMsg(error))}</p>`; return; }
   const canEdit = can(['owner','admin']);
   const priced = S.rooms.filter(r => Number(r.base_rate) > 0).length;
   const live = e.public_enabled && e.slug && S.overview && S.overview.can_write;
   const photos = Array.isArray(e.public_photos) ? e.public_photos : [];
-  const step = (ok, label) => `<div class="row" style="gap:8px;font-size:14px"><span class="pill ${ok ? 'st-active' : 'st-pending'}">${ok ? 'Fait' : 'À faire'}</span>${label}</div>`;
-  el.innerHTML = head('Ma page publique', e.slug ? `<a class="small" href="${esc(publicUrl(e.slug))}" target="_blank" rel="noopener" style="align-self:center;font-weight:700">Prévisualiser ↗</a>` : '') + readOnlyNote() + `
-    <div class="grid g2" style="margin-bottom:16px">
-      <div class="card">
-        <div class="row between"><h3 style="font-size:20px">Statut</h3><span class="pill ${live ? 'st-active' : 'st-cancelled'}">${live ? 'En ligne' : 'Hors ligne'}</span></div>
-        <div style="display:flex;flex-direction:column;gap:8px;margin:14px 0">
-          ${step(!!e.slug, 'Choisir l’adresse de la page')}
-          ${step(priced > 0, `Fixer un prix par nuit et un type sur vos chambres (${priced} / ${S.rooms.length})`)}
-          ${step(!!(e.public_description && e.public_phone), 'Rédiger la description et le téléphone public')}
-          ${step(photos.length > 0, 'Ajouter des photos')}
-          ${step(e.public_enabled, 'Publier la page')}
+  const hl = e.public_highlights || [];
+  const cover = e.public_cover_url || photos[0] || '';
+  const steps = [[!!e.slug, 'Adresse de la page'], [!!e.public_logo_url, 'Logo'], [!!cover, 'Photo de couverture'], [!!(e.public_description && e.public_description.length > 40), 'Description'], [hl.length > 0, 'Atouts'], [photos.length >= 3, '3 photos ou plus'], [priced > 0, 'Prix des chambres'], [!!(e.public_phone || e.public_whatsapp), 'Téléphone ou WhatsApp'], [!!e.public_enabled, 'Page publiée']];
+  const score = Math.round(steps.filter(s => s[0]).length * 100 / steps.length);
+  const ta = 'width:100%;border:1px solid #D9C8AE;border-radius:12px;padding:10px 12px;font:inherit;background:#fff';
+  const sec = (title, sub, body) => `<section class="card" style="margin-bottom:16px"><h3 style="font-size:20px">${title}</h3>${sub ? `<p class="muted" style="font-size:13px;margin:2px 0 12px">${sub}</p>` : '<div style="height:10px"></div>'}${body}</section>`;
+  el.innerHTML = head('Ma page de présentation', e.slug ? `<a class="btn" href="${esc(publicUrl(e.slug))}" target="_blank" rel="noopener">Voir ma page ↗</a>` : '') + readOnlyNote() + `
+  <div class="grid" style="grid-template-columns:minmax(0,1fr) minmax(0,380px);gap:20px;align-items:start" id="mpGrid">
+    <form id="pubForm" ${canEdit ? '' : 'inert'}>
+      ${sec('Identité visuelle', 'Votre logo et votre photo de couverture sont la première chose que voient vos clients.', `
+        <div class="row" style="gap:16px;align-items:flex-start;flex-wrap:wrap">
+          <div style="flex:0 0 120px;text-align:center"><div style="width:120px;height:120px;border-radius:20px;border:1.5px dashed #C9B596;background:#fff;display:grid;place-items:center;overflow:hidden">${e.public_logo_url ? `<img src="${esc(e.public_logo_url)}" alt="Logo" style="width:100%;height:100%;object-fit:contain;padding:8px">` : '<span class="muted" style="font-size:13px">Logo</span>'}</div>
+            ${canEdit ? `<label class="btn" style="margin-top:8px;min-height:36px;padding:0 12px;font-size:13px;cursor:pointer;justify-content:center">${e.public_logo_url ? 'Changer' : 'Ajouter'}<input type="file" id="logoFile" accept="image/jpeg,image/png,image/webp" class="hidden"></label>${e.public_logo_url ? '<button type="button" class="small ghost" id="logoDel" style="margin-top:4px">Retirer</button>' : ''}` : ''}</div>
+          <div style="flex:1 1 280px;min-width:0"><div style="height:150px;border-radius:18px;border:1.5px dashed #C9B596;${cover ? `background:#2B1E16 url('${esc(cover)}') center/cover` : 'background:#fff'};display:grid;place-items:center">${cover ? '' : '<span class="muted" style="font-size:13px">Photo de couverture (format paysage)</span>'}</div>
+            ${canEdit ? `<div class="row" style="margin-top:8px"><label class="btn" style="min-height:36px;padding:0 12px;font-size:13px;cursor:pointer">${e.public_cover_url ? 'Changer la couverture' : 'Ajouter une couverture'}<input type="file" id="coverFile" accept="image/jpeg,image/png,image/webp" class="hidden"></label>${e.public_cover_url ? '<button type="button" class="small ghost" id="coverDel">Retirer</button>' : ''}</div>` : ''}
+            <p class="muted" style="font-size:12px;margin:6px 0 0">JPEG, PNG ou WebP, 3 Mo maximum. Idéal : 1600 × 900 pixels.</p></div>
         </div>
-        ${!S.overview || S.overview.can_write ? '' : '<p class="muted" style="font-size:13px">Abonnement inactif : la page est automatiquement hors ligne.</p>'}
-        ${e.slug ? `<label for="pubUrl">Adresse de votre page</label><div class="row"><input id="pubUrl" readonly value="${esc(publicUrl(e.slug))}" style="flex:1 1 220px"><button class="small" id="copyUrl" type="button">Copier</button></div>` : ''}
-        ${canEdit ? `<div class="row" style="margin-top:14px"><button class="${e.public_enabled ? 'ghost' : 'primary'}" id="togglePub" type="button">${e.public_enabled ? 'Dépublier la page' : 'Publier la page'}</button></div>` : ''}
-      </div>
-      <div class="card">
-        <h3 style="font-size:20px;margin-bottom:8px">Demandes en ligne</h3>
-        <p class="muted" style="margin:0 0 10px;font-size:14px">Les demandes arrivent dans <strong>Réservations</strong> et le <strong>Planning</strong> avec le statut « En attente ». La chambre est bloquée jusqu’à votre confirmation ou annulation.</p>
-        <label class="row" style="gap:10px;font-weight:600;color:var(--ink)"><input type="checkbox" id="autoConf" ${e.public_auto_confirm ? 'checked' : ''} ${canEdit ? '' : 'disabled'} style="width:22px;min-height:22px"> Confirmer automatiquement les demandes</label>
-        <p class="muted" style="font-size:12px;margin:6px 0 0">Recommandé : laisser décoché pour valider chaque demande.</p>
-        <p class="muted" style="font-size:13px;margin:12px 0 0">Nom de domaine personnalisé : disponible ultérieurement.</p>
-      </div>
-    </div>
-    <form class="card" id="pubForm" ${canEdit ? '' : 'inert'}>
-      <h3 style="font-size:20px;margin-bottom:12px">Informations publiques</h3>
-      <div class="row"><div class="field" style="flex:1 1 220px"><label for="pSlug">Identifiant de la page</label><input id="pSlug" value="${esc(e.slug || slugify(e.name))}" required pattern="[a-z0-9][a-z0-9\\-]{1,46}[a-z0-9]"><div class="muted" style="font-size:12px;margin-top:4px" id="slugHint">Lettres minuscules, chiffres et tirets.</div></div>
-        <div class="field" style="flex:1 1 220px"><label for="pName">Nom commercial</label><input id="pName" value="${esc(e.public_name || e.name)}"></div></div>
-      <div class="field"><label for="pTag">Accroche</label><input id="pTag" maxlength="120" value="${esc(e.public_tagline || '')}" placeholder="Ex. Calme et confort au cœur de Cocody"></div>
-      <div class="field"><label for="pDesc">Description</label><textarea id="pDesc" rows="4" maxlength="2000" style="width:100%;border:1px solid #CFC9BC;border-radius:10px;padding:10px;font:inherit">${esc(e.public_description || '')}</textarea></div>
-      <div class="row"><div class="field" style="flex:2 1 240px"><label for="pAddr">Adresse publique</label><input id="pAddr" value="${esc(e.public_address || '')}"></div><div class="field" style="flex:1 1 140px"><label for="pCity">Ville</label><input id="pCity" value="${esc(e.city || '')}"></div></div>
-      <div class="row"><div class="field" style="flex:1 1 150px"><label for="pPhone">Téléphone public</label><input id="pPhone" value="${esc(e.public_phone || '')}"></div><div class="field" style="flex:1 1 150px"><label for="pWa">WhatsApp</label><input id="pWa" value="${esc(e.public_whatsapp || '')}" placeholder="Ex. 2250700000000"></div><div class="field" style="flex:1 1 180px"><label for="pMail">E-mail public</label><input id="pMail" type="email" value="${esc(e.public_email || '')}"></div></div>
-      <div class="row"><div class="field" style="flex:1 1 110px"><label for="pIn">Arrivée dès</label><input id="pIn" type="time" value="${esc(e.checkin_time)}"></div><div class="field" style="flex:1 1 110px"><label for="pOut">Départ avant</label><input id="pOut" type="time" value="${esc(e.checkout_time)}"></div><div class="field" style="flex:1 1 130px"><label for="pMax">Nuits max en ligne</label><input id="pMax" type="number" min="1" max="365" value="${e.public_max_nights}"></div></div>
-      <div class="field"><label for="pCond">Conditions de séjour</label><textarea id="pCond" rows="3" maxlength="2000" style="width:100%;border:1px solid #CFC9BC;border-radius:10px;padding:10px;font:inherit" placeholder="Acompte, annulation, pièce d'identité exigée…">${esc(e.public_conditions || '')}</textarea></div>
-      <div class="field"><label for="pInfo">Informations utiles</label><textarea id="pInfo" rows="3" maxlength="2000" style="width:100%;border:1px solid #CFC9BC;border-radius:10px;padding:10px;font:inherit" placeholder="Wi-Fi, parking, climatisation, petit-déjeuner…">${esc(e.public_info || '')}</textarea></div>
-      <button class="primary">Enregistrer</button>
+        <div style="margin-top:14px"><div style="font-weight:600;font-size:13px;color:var(--muted);margin-bottom:6px">Couleur de la page</div><div class="row" style="gap:8px">${Object.entries(THEMES).map(([k, t]) => `<button type="button" data-theme="${k}" class="small ${ (e.public_theme || 'terracotta') === k ? 'primary' : 'ghost'}" style="${(e.public_theme || 'terracotta') === k ? `background:${t[1]};border-color:${t[1]}` : ''}"><span style="display:inline-block;width:14px;height:14px;border-radius:50%;background:${t[1]};margin-right:6px;vertical-align:-2px;border:2px solid #fff"></span>${t[0]}</button>`).join('')}</div></div>`)}
+      ${sec('Présentation', 'Donnez envie : ce qui rend votre établissement unique.', `
+        <div class="row"><div class="field" style="flex:1 1 220px"><label for="pName">Nom commercial</label><input id="pName" value="${esc(e.public_name || e.name)}"></div>
+          <div class="field" style="flex:1 1 220px"><label for="pSlug">Adresse de la page</label><input id="pSlug" value="${esc(e.slug || slugify(e.name))}" required pattern="[a-z0-9][a-z0-9\\-]{1,46}[a-z0-9]"><div class="muted" style="font-size:12px;margin-top:4px" id="slugHint">Lettres minuscules, chiffres et tirets.</div></div></div>
+        <div class="field"><label for="pTag">Accroche <span class="muted" style="font-weight:400" id="tagN"></span></label><input id="pTag" maxlength="120" value="${esc(e.public_tagline || '')}" placeholder="Ex. : Calme et confort au cœur de Cocody"></div>
+        <div class="field"><label for="pDesc">Description</label><textarea id="pDesc" rows="5" maxlength="2000" style="${ta}" placeholder="Présentez le cadre, le quartier, l’accueil, ce qui est inclus…">${esc(e.public_description || '')}</textarea></div>
+        <div style="font-weight:600;font-size:13px;color:var(--muted);margin-bottom:6px">Atouts affichés en haut de la page (12 au plus)</div>
+        <div class="row" style="gap:6px" id="hlBox">${[...new Set(HIGHLIGHTS.concat(hl))].map(x => `<button type="button" class="small ${hl.includes(x) ? 'primary' : 'ghost'}" data-hl="${esc(x)}">${hl.includes(x) ? '✓ ' : ''}${esc(x)}</button>`).join('')}</div>
+        <div class="row" style="margin-top:8px"><input id="hlNew" maxlength="40" placeholder="Autre atout…" style="flex:1 1 200px"><button type="button" class="small ghost" id="hlAdd">Ajouter</button></div>`)}
+      ${sec('Galerie photos', 'Montrez l’extérieur, l’accueil, les espaces communs. Les photos des chambres viennent du menu Chambres.', `
+        <div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px">${photos.map((u, i) => `<div style="position:relative"><img src="${esc(u)}" alt="Photo ${i + 1}" style="width:100%;height:100px;object-fit:cover;border-radius:12px">${canEdit ? `<div class="row" style="position:absolute;top:4px;right:4px;gap:4px">${i > 0 ? `<button type="button" class="small" data-first="${i}" title="Mettre en premier" style="min-height:28px;padding:0 8px;background:#fff;border:0">↑</button>` : ''}<button type="button" class="small" data-delphoto="${i}" aria-label="Retirer la photo ${i + 1}" style="min-height:28px;padding:0 8px;background:#fff;border:0">✕</button></div>` : ''}</div>`).join('')}
+          ${canEdit && photos.length < 12 ? `<label style="height:100px;border-radius:12px;border:1.5px dashed #C9B596;display:grid;place-items:center;cursor:pointer;margin:0;color:var(--green);font-weight:700">+ Photos<input type="file" id="photoFiles" accept="image/jpeg,image/png,image/webp" multiple class="hidden"></label>` : ''}</div>
+        <p class="muted" style="font-size:12px;margin:8px 0 0">${photos.length} / 12 photos.</p>`)}
+      ${sec('Contact et réseaux', 'Facilitez la prise de contact : chaque champ rempli devient un bouton sur votre page.', `
+        <div class="row"><div class="field" style="flex:1 1 150px"><label for="pPhone">Téléphone</label><input id="pPhone" type="tel" value="${esc(e.public_phone || '')}"></div><div class="field" style="flex:1 1 150px"><label for="pWa">WhatsApp</label><input id="pWa" value="${esc(e.public_whatsapp || '')}" placeholder="Ex. : 2250700000000"></div><div class="field" style="flex:1 1 180px"><label for="pMail">E-mail</label><input id="pMail" type="email" value="${esc(e.public_email || '')}"></div></div>
+        <div class="row"><div class="field" style="flex:2 1 240px"><label for="pAddr">Adresse</label><input id="pAddr" value="${esc(e.public_address || '')}" placeholder="Rue, quartier, repère"></div><div class="field" style="flex:1 1 140px"><label for="pCity">Ville</label><input id="pCity" value="${esc(e.city || '')}"></div></div>
+        <div class="field"><label for="pMap">Lien Google Maps (itinéraire)</label><input id="pMap" value="${esc(e.public_map_url || '')}" placeholder="https://maps.app.goo.gl/…"></div>
+        <div class="row"><div class="field" style="flex:1 1 200px"><label for="pFb">Page Facebook</label><input id="pFb" value="${esc(e.public_facebook || '')}" placeholder="https://facebook.com/…"></div><div class="field" style="flex:1 1 200px"><label for="pIg">Instagram</label><input id="pIg" value="${esc(e.public_instagram || '')}" placeholder="https://instagram.com/…"></div></div>`)}
+      ${sec('Séjour et conditions', '', `
+        <div class="row"><div class="field" style="flex:1 1 110px"><label for="pIn">Arrivée dès</label><input id="pIn" type="time" value="${esc(e.checkin_time)}"></div><div class="field" style="flex:1 1 110px"><label for="pOut">Départ avant</label><input id="pOut" type="time" value="${esc(e.checkout_time)}"></div><div class="field" style="flex:1 1 130px"><label for="pMax">Nuits max en ligne</label><input id="pMax" type="number" min="1" max="365" value="${e.public_max_nights}"></div></div>
+        <div class="field"><label for="pInfo">Informations utiles</label><textarea id="pInfo" rows="3" maxlength="2000" style="${ta}" placeholder="Petit-déjeuner, parking, horaires de la réception…">${esc(e.public_info || '')}</textarea></div>
+        <div class="field"><label for="pCond">Conditions</label><textarea id="pCond" rows="3" maxlength="2000" style="${ta}" placeholder="Acompte, annulation, pièce d’identité exigée…">${esc(e.public_conditions || '')}</textarea></div>`)}
+      ${canEdit ? `<div style="position:sticky;bottom:12px;z-index:5;background:var(--card);border:1px solid var(--line);border-radius:18px;padding:10px 12px;box-shadow:0 10px 30px rgba(43,30,22,.12)" class="row between"><span class="muted" style="font-size:13px" id="dirty">Toutes les modifications sont enregistrées.</span><button class="primary">Enregistrer</button></div>` : ''}
     </form>
-    <div class="card" style="margin-top:16px">
-      <div class="row between"><h3 style="font-size:20px">Logo et photos</h3>${canEdit ? `<div class="row"><label class="small" style="margin:0"><span class="pill st-trial" style="cursor:pointer">Changer le logo</span><input type="file" id="logoFile" accept="image/jpeg,image/png,image/webp" class="hidden"></label><label style="margin:0"><span class="pill st-active" style="cursor:pointer">+ Ajouter des photos</span><input type="file" id="photoFiles" accept="image/jpeg,image/png,image/webp" multiple class="hidden"></label></div>` : ''}</div>
-      <p class="muted" style="font-size:13px">JPEG, PNG ou WebP, 3 Mo maximum par image, 12 photos au plus. La première photo sert d’image principale.</p>
-      <div class="row" style="align-items:flex-start">
-        ${e.public_logo_url ? `<img src="${esc(e.public_logo_url)}" alt="Logo" style="width:84px;height:84px;object-fit:contain;border:1px solid var(--line);border-radius:12px;background:#fff">` : ''}
-        ${photos.map((u, i) => `<div style="position:relative"><img src="${esc(u)}" alt="Photo ${i + 1}" style="width:150px;height:100px;object-fit:cover;border-radius:10px">${canEdit ? `<button type="button" class="small ghost" data-delphoto="${i}" aria-label="Retirer la photo ${i + 1}" style="position:absolute;top:4px;right:4px;min-height:30px;padding:0 8px;background:#fff">✕</button>` : ''}</div>`).join('') || '<p class="muted">Aucune photo.</p>'}
-      </div>
-    </div>`;
+    <aside style="position:sticky;top:16px;display:flex;flex-direction:column;gap:16px">
+      <section class="card"><div class="row between"><h3 style="font-size:20px">Publication</h3><span class="pill ${live ? 'st-active' : 'st-cancelled'}">${live ? 'En ligne' : 'Hors ligne'}</span></div>
+        <div style="margin:12px 0 6px;font-weight:700">Page complète à ${score} %</div><div style="height:8px;border-radius:4px;background:#E9DCC8"><div style="width:${score}%;height:8px;border-radius:4px;background:var(--green)"></div></div>
+        <div style="display:flex;flex-direction:column;gap:4px;margin:12px 0;font-size:13.5px">${steps.map(s => `<span style="color:${s[0] ? 'var(--ok)' : 'var(--muted)'}">${s[0] ? '✓' : '○'} ${s[1]}</span>`).join('')}</div>
+        ${!S.overview || S.overview.can_write ? '' : '<p class="muted" style="font-size:13px">Abonnement inactif : la page est automatiquement hors ligne.</p>'}
+        ${e.slug ? `<div class="row" style="gap:6px;flex-wrap:nowrap"><input id="pubUrl" readonly value="${esc(publicUrl(e.slug))}" style="flex:1;min-width:0;font-size:13px"><button class="small" id="copyUrl" type="button">Copier</button></div>
+          <div class="row" style="margin-top:8px"><a class="btn" style="min-height:36px;padding:0 12px;font-size:13px" target="_blank" rel="noopener" href="https://wa.me/?text=${encodeURIComponent('Réservez votre séjour chez ' + (e.public_name || e.name) + ' : ' + publicUrl(e.slug))}">Partager sur WhatsApp</a></div>` : ''}
+        ${canEdit ? `<button class="${e.public_enabled ? 'ghost' : 'primary'}" id="togglePub" type="button" style="width:100%;margin-top:12px">${e.public_enabled ? 'Dépublier la page' : 'Publier la page'}</button>
+        <label class="row" style="gap:10px;font-weight:600;color:var(--ink);margin-top:12px;flex-wrap:nowrap"><input type="checkbox" id="autoConf" ${e.public_auto_confirm ? 'checked' : ''} style="width:20px;min-height:20px"> Confirmer automatiquement les demandes</label>` : ''}
+      </section>
+      <section class="card" style="padding:0;overflow:hidden" id="pvCard"></section>
+    </aside>
+  </div>`;
+  const st = { theme: e.public_theme || 'terracotta', hl: hl.slice() };
+  const preview = () => { const name = ($('pName') || {}).value || e.name, tag = ($('pTag') || {}).value || '';
+    $('pvCard').innerHTML = `<div style="${themeVars(st.theme)}"><div style="padding:10px 14px;font-size:12px;font-weight:700;color:var(--muted);border-bottom:1px solid var(--line)">Aperçu</div>
+      <div style="position:relative;height:190px;${cover ? `background:#2B1E16 url('${esc(cover)}') center/cover` : 'background:linear-gradient(135deg,var(--green),#2B1E16)'}"><div style="position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,.05),rgba(0,0,0,.7))"></div>
+        <div style="position:absolute;left:14px;right:14px;bottom:12px;color:#fff;display:flex;gap:10px;align-items:flex-end">${e.public_logo_url ? `<img src="${esc(e.public_logo_url)}" alt="" style="width:52px;height:52px;object-fit:contain;background:#fff;border-radius:12px;padding:4px">` : ''}<div style="min-width:0"><div style="font-family:var(--display);font-weight:800;font-size:22px;line-height:1.1">${esc(name)}</div>${tag ? `<div style="font-size:13px;opacity:.9">${esc(tag)}</div>` : ''}</div></div></div>
+      <div style="padding:12px 14px"><div class="row" style="gap:4px">${st.hl.slice(0, 6).map(x => `<span class="pill" style="background:var(--green-l);color:var(--green-d)">${esc(x)}</span>`).join('')}</div>
+      <button type="button" style="width:100%;margin-top:10px;background:var(--green);border-color:var(--green);color:#fff">Réserver</button></div></div>`; };
+  preview();
   const cp = $('copyUrl'); if (cp) cp.onclick = async () => { try { await navigator.clipboard.writeText($('pubUrl').value); toast('Adresse copiée.'); } catch (_) { $('pubUrl').select(); toast('Sélectionnez puis copiez l’adresse.'); } };
   if (!canEdit) return;
-  const save = async (patch, msg) => { const { error: er } = await sb.from('establishments').update(patch).eq('id', e.id); if (er) { toast(er.code === '23505' ? 'Cet identifiant est déjà pris.' : errMsg(er), true); return false; } if (msg) toast(msg); renderMaPage(); return true; };
+  const markDirty = () => { const d = $('dirty'); if (d) { d.textContent = 'Modifications non enregistrées.'; d.style.color = '#8A3E1E'; } };
+  $('pubForm').addEventListener('input', () => { markDirty(); preview(); const n = $('pTag').value.length; $('tagN').textContent = n ? `(${n}/120)` : ''; });
+  const save = async (patch, msg) => { const { error: er } = await sb.from('establishments').update(patch).eq('id', e.id); if (er) { toast(er.code === '23505' ? 'Cette adresse est déjà prise.' : /check/.test(er.message || '') ? 'Vérifiez les liens : ils doivent commencer par https://' : errMsg(er), true); return false; } if (msg) toast(msg); renderMaPage(); return true; };
   $('pSlug').oninput = async () => { const v = slugify($('pSlug').value); if (v !== $('pSlug').value) $('pSlug').value = v;
     if (v.length < 3) { $('slugHint').textContent = '3 caractères minimum.'; return; }
     const { data: okSlug } = await sb.rpc('slug_available', { p_slug: v, p_establishment: e.id });
     $('slugHint').textContent = okSlug ? `Disponible : ${publicUrl(v)}` : 'Indisponible : déjà utilisé ou réservé.'; };
+  const url = (id) => { const v = $(id).value.trim(); return v ? (/^https?:\/\//i.test(v) ? v.replace(/^http:/i, 'https:') : 'https://' + v) : null; };
   $('pubForm').onsubmit = (ev) => { ev.preventDefault(); save({
     slug: slugify($('pSlug').value) || null, public_name: $('pName').value.trim() || null, public_tagline: $('pTag').value.trim() || null,
     public_description: $('pDesc').value.trim() || null, public_address: $('pAddr').value.trim() || null, city: $('pCity').value.trim() || null,
     public_phone: $('pPhone').value.trim() || null, public_whatsapp: $('pWa').value.replace(/[^0-9]/g, '') || null, public_email: $('pMail').value.trim() || null,
+    public_map_url: url('pMap'), public_facebook: url('pFb'), public_instagram: url('pIg'), public_theme: st.theme, public_highlights: st.hl.slice(0, 12),
     checkin_time: $('pIn').value || '14:00', checkout_time: $('pOut').value || '12:00', public_max_nights: Math.min(365, Math.max(1, +$('pMax').value || 30)),
     public_conditions: $('pCond').value.trim() || null, public_info: $('pInfo').value.trim() || null }, 'Page enregistrée.'); };
+  el.querySelectorAll('[data-theme]').forEach(b => b.onclick = () => { st.theme = b.dataset.theme; el.querySelectorAll('[data-theme]').forEach(x => { const on = x.dataset.theme === st.theme, t = THEMES[x.dataset.theme]; x.className = 'small ' + (on ? 'primary' : 'ghost'); x.style.background = on ? t[1] : ''; x.style.borderColor = on ? t[1] : ''; }); markDirty(); preview(); });
+  const drawHl = () => el.querySelectorAll('[data-hl]').forEach(b => { const on = st.hl.includes(b.dataset.hl); b.className = 'small ' + (on ? 'primary' : 'ghost'); b.textContent = (on ? '✓ ' : '') + b.dataset.hl; });
+  el.querySelectorAll('[data-hl]').forEach(b => b.onclick = () => { const v = b.dataset.hl; if (st.hl.includes(v)) st.hl = st.hl.filter(x => x !== v); else if (st.hl.length >= 12) return toast('12 atouts maximum.', true); else st.hl.push(v); drawHl(); markDirty(); preview(); });
+  $('hlAdd').onclick = () => { const v = $('hlNew').value.trim(); if (!v) return; if (st.hl.length >= 12) return toast('12 atouts maximum.', true);
+    if (!st.hl.includes(v)) st.hl.push(v); const b = document.createElement('button'); b.type = 'button'; b.dataset.hl = v; b.onclick = () => { st.hl = st.hl.filter(x => x !== v); b.remove(); markDirty(); preview(); }; $('hlBox').appendChild(b); $('hlNew').value = ''; drawHl(); markDirty(); preview(); };
   $('togglePub').onclick = () => {
-    if (!e.public_enabled && !e.slug) return toast('Enregistrez d’abord l’identifiant de la page.', true);
+    if (!e.public_enabled && !e.slug) return toast('Enregistrez d’abord l’adresse de la page.', true);
     if (!e.public_enabled && priced === 0) return toast('Fixez un prix par nuit sur au moins une chambre (menu Chambres).', true);
-    save({ public_enabled: !e.public_enabled }, e.public_enabled ? 'Page dépubliée.' : 'Page publiée.');
+    save({ public_enabled: !e.public_enabled }, e.public_enabled ? 'Page dépubliée.' : 'Page publiée. Partagez son adresse !');
   };
   $('autoConf').onchange = () => save({ public_auto_confirm: $('autoConf').checked }, 'Réglage enregistré.');
   const upload = async (file) => {
@@ -1943,14 +1981,18 @@ async function renderMaPage(){
     if (up) throw up;
     return sb.storage.from('public-media').getPublicUrl(path).data.publicUrl;
   };
-  $('logoFile').onchange = async (ev) => { const f = ev.target.files[0]; if (!f) return; try { const u = await upload(f); save({ public_logo_url: u }, 'Logo mis à jour.'); } catch (er) { toast(errMsg(er), true); } };
-  $('photoFiles').onchange = async (ev) => {
+  const one = (id, field, msg) => { const i = $(id); if (i) i.onchange = async (ev) => { const f = ev.target.files[0]; if (!f) return; toast('Envoi de l’image…'); try { const u = await upload(f); save({ [field]: u }, msg); } catch (er) { toast(errMsg(er), true); } }; };
+  one('logoFile', 'public_logo_url', 'Logo mis à jour.'); one('coverFile', 'public_cover_url', 'Photo de couverture mise à jour.');
+  const ld = $('logoDel'); if (ld) ld.onclick = () => save({ public_logo_url: null }, 'Logo retiré.');
+  const cd = $('coverDel'); if (cd) cd.onclick = () => save({ public_cover_url: null }, 'Couverture retirée.');
+  const pf = $('photoFiles'); if (pf) pf.onchange = async (ev) => {
     const files = [...ev.target.files].slice(0, 12 - photos.length);
     if (!files.length) return toast('12 photos maximum.', true);
     toast('Envoi des photos…');
     try { const urls = []; for (const f of files) urls.push(await upload(f)); save({ public_photos: photos.concat(urls) }, `${urls.length} photo(s) ajoutée(s).`); } catch (er) { toast(errMsg(er), true); }
   };
   el.querySelectorAll('[data-delphoto]').forEach(b => b.onclick = () => save({ public_photos: photos.filter((_, i) => i !== +b.dataset.delphoto) }, 'Photo retirée.'));
+  el.querySelectorAll('[data-first]').forEach(b => b.onclick = () => { const i = +b.dataset.first; save({ public_photos: [photos[i]].concat(photos.filter((_, j) => j !== i)) }, 'Ordre des photos mis à jour.'); });
 }
 
 /* ================= Page publique de réservation (visiteurs) ================= */
@@ -1966,45 +2008,58 @@ async function renderPublicPage(slug){
   }
   if (h.slug !== slug) history.replaceState(null, '', '?h=' + encodeURIComponent(h.slug));
   document.title = `${h.name} – Réservation en ligne`;
+  root.setAttribute('style', themeVars(h.theme));
   const photos = Array.isArray(h.photos) ? h.photos : [];
-  const types = h.room_types || [];
+  const cover = h.cover || photos[0] || '';
+  const gallery = h.cover ? photos : photos.slice(1);
+  const types = h.room_types || [], hl = h.highlights || [];
   const t0 = today(), t1 = addDays(t0, 1);
   const wa = h.whatsapp ? `https://wa.me/${encodeURIComponent(h.whatsapp)}` : null;
   const para = (t) => esc(t || '').replace(/\n/g, '<br>');
+  const ico = (p) => `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">${p}</svg>`;
+  const IC = { phone: '<path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2"></path>', wa: '<path d="M3 21l1.6-4.6A9 9 0 1 1 8 20z"></path>', map: '<path d="M12 21s-7-6.3-7-11a7 7 0 0 1 14 0c0 4.7-7 11-7 11z"></path><circle cx="12" cy="10" r="2.5"></circle>', mail: '<rect x="3" y="5" width="18" height="14" rx="2"></rect><path d="M3 7l9 6 9-6"></path>', fb: '<path d="M14 9h3V5h-3a4 4 0 0 0-4 4v3H7v4h3v6h4v-6h3l1-4h-4V9z"></path>', ig: '<rect x="3" y="3" width="18" height="18" rx="5"></rect><circle cx="12" cy="12" r="4"></circle>' };
+  const cbtn = (href, icon, label, primary) => `<a href="${esc(href)}" ${/^https/.test(href) ? 'target="_blank" rel="noopener"' : ''} style="display:inline-flex;align-items:center;gap:8px;min-height:44px;padding:0 16px;border-radius:999px;text-decoration:none;font-weight:700;${primary ? 'background:var(--green);color:#fff' : 'border:1px solid var(--line);color:var(--ink);background:var(--card)'}">${ico(IC[icon])}${label}</a>`;
+  const contacts = [h.phone && cbtn('tel:' + h.phone, 'phone', 'Appeler'), wa && cbtn(wa, 'wa', 'WhatsApp'), h.map_url && cbtn(h.map_url, 'map', 'Itinéraire'), h.email && cbtn('mailto:' + h.email, 'mail', 'E-mail'), h.facebook && cbtn(h.facebook, 'fb', 'Facebook'), h.instagram && cbtn(h.instagram, 'ig', 'Instagram')].filter(Boolean);
   root.innerHTML = `
-  <header style="position:relative;min-height:340px;display:flex;align-items:flex-end;color:#fff;background:${photos[0] ? `#2B1E16 url('${esc(photos[0])}') center/cover` : 'linear-gradient(135deg,#B4532A,#2B1E16)'}">
-    <div style="position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,.05),rgba(0,0,0,.65))"></div>
-    <div style="position:relative;max-width:1100px;width:100%;margin:0 auto;padding:32px clamp(16px,4vw,32px);display:flex;gap:18px;align-items:flex-end;flex-wrap:wrap">
-      ${h.logo ? `<img src="${esc(h.logo)}" alt="Logo ${esc(h.name)}" style="width:84px;height:84px;object-fit:contain;background:#fff;border-radius:14px;padding:6px">` : ''}
-      <div><h1 style="font-size:clamp(30px,5vw,48px);color:#fff">${esc(h.name)}</h1>${h.tagline ? `<p style="margin:6px 0 0;font-size:18px">${esc(h.tagline)}</p>` : ''}${h.city ? `<p style="margin:4px 0 0;opacity:.85">${esc(h.city)}</p>` : ''}</div>
+  <div style="position:sticky;top:0;z-index:20;background:rgba(251,246,238,.94);backdrop-filter:blur(8px);border-bottom:1px solid var(--line)"><div style="max-width:1100px;margin:0 auto;padding:10px clamp(16px,4vw,32px);display:flex;align-items:center;gap:12px">
+    ${h.logo ? `<img src="${esc(h.logo)}" alt="" style="width:40px;height:40px;object-fit:contain;border-radius:10px;background:#fff">` : ''}<strong style="font-family:var(--display);font-size:18px;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(h.name)}</strong>
+    <nav class="row" style="gap:14px;font-weight:600;font-size:14px" aria-label="Sections"><a href="#hebergements" style="color:var(--ink);text-decoration:none" class="pubnav">Hébergements</a><a href="#infos" style="color:var(--ink);text-decoration:none" class="pubnav">Infos</a><a href="#contact" style="color:var(--ink);text-decoration:none" class="pubnav">Contact</a></nav>
+    ${types.length ? '<a href="#reserver" style="display:inline-flex;align-items:center;min-height:42px;padding:0 18px;border-radius:999px;background:var(--green);color:#fff;font-weight:700;text-decoration:none">Réserver</a>' : ''}</div></div>
+  <header style="position:relative;min-height:min(62vh,520px);display:flex;align-items:flex-end;color:#fff;background:${cover ? `#2B1E16 url('${esc(cover)}') center/cover` : 'linear-gradient(135deg,var(--green),#2B1E16)'}">
+    <div style="position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,.08),rgba(0,0,0,.72))"></div>
+    <div style="position:relative;max-width:1100px;width:100%;margin:0 auto;padding:36px clamp(16px,4vw,32px);display:flex;gap:20px;align-items:flex-end;flex-wrap:wrap">
+      ${h.logo ? `<img src="${esc(h.logo)}" alt="Logo ${esc(h.name)}" style="width:110px;height:110px;object-fit:contain;background:#fff;border-radius:22px;padding:8px;box-shadow:0 10px 30px rgba(0,0,0,.25)">` : ''}
+      <div style="flex:1 1 300px"><h1 style="font-size:clamp(32px,6vw,56px);color:#fff;line-height:1.05">${esc(h.name)}</h1>${h.tagline ? `<p style="margin:8px 0 0;font-size:clamp(16px,2.2vw,20px)">${esc(h.tagline)}</p>` : ''}${h.city || h.address ? `<p style="margin:6px 0 0;opacity:.85">${esc([h.address, h.city].filter(Boolean).join(' · '))}</p>` : ''}
+        ${hl.length ? `<div class="row" style="gap:6px;margin-top:14px">${hl.map(x => `<span style="padding:6px 12px;border-radius:999px;background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.35);font-size:13px;font-weight:600;backdrop-filter:blur(4px)">${esc(x)}</span>`).join('')}</div>` : ''}</div>
+      ${types.length ? `<div style="background:rgba(255,255,255,.96);color:var(--ink);border-radius:18px;padding:14px 18px"><div class="muted" style="font-size:12px;font-weight:600">À partir de</div><div style="font-family:var(--display);font-weight:800;font-size:28px">${money(Math.min(...types.map(t => Number(t.from_rate))))}</div><div class="muted" style="font-size:12px">par nuit</div></div>` : ''}
     </div>
   </header>
   <main style="max-width:1100px;margin:0 auto;padding:28px clamp(16px,4vw,32px);display:flex;flex-wrap:wrap;gap:24px;align-items:flex-start">
     <div style="flex:999 1 520px;min-width:0;display:flex;flex-direction:column;gap:20px">
-      ${h.description ? `<section class="card"><h2 style="font-size:24px;margin-bottom:8px">Présentation</h2><p style="margin:0">${para(h.description)}</p></section>` : ''}
-      ${photos.length > 1 ? `<section class="grid" style="grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px">${photos.slice(1).map((u, i) => `<img src="${esc(u)}" alt="Photo ${i + 2} de ${esc(h.name)}" loading="lazy" style="width:100%;height:130px;object-fit:cover;border-radius:12px">`).join('')}</section>` : ''}
-      <section class="card"><h2 style="font-size:24px;margin-bottom:12px">Hébergements</h2>
-        ${types.length ? `<div class="grid g2">${types.map(t => `<div style="border:1px solid var(--line);border-radius:18px;overflow:hidden;background:var(--card)">
-          ${(t.photos || []).length ? `<div style="display:flex;overflow-x:auto;scroll-snap-type:x mandatory;gap:2px">${t.photos.map((u, i) => `<img src="${esc(u)}" alt="${esc(t.type)}, photo ${i + 1}" loading="lazy" style="flex:0 0 100%;height:190px;object-fit:cover;scroll-snap-align:start">`).join('')}</div>` : ''}
-          <div style="padding:16px"><div class="row between" style="flex-wrap:nowrap"><h3 style="font-size:19px">${esc(t.type)}</h3>${(t.photos || []).length > 1 ? `<span class="muted" style="font-size:12px">${t.photos.length} photos ↔</span>` : ''}</div>
+      ${h.description ? `<section class="card"><h2 style="font-size:24px;margin-bottom:8px">Bienvenue</h2><p style="margin:0;font-size:16px;line-height:1.65">${para(h.description)}</p></section>` : ''}
+      ${gallery.length ? `<section><div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px">${gallery.map((u, i) => `<button type="button" data-gal="${i}" style="padding:0;border:0;border-radius:14px;overflow:hidden;min-height:0;display:block;cursor:zoom-in"><img src="${esc(u)}" alt="Photo ${i + 1} de ${esc(h.name)}" loading="lazy" style="width:100%;height:${i === 0 && gallery.length > 2 ? 140 : 140}px;object-fit:cover;display:block"></button>`).join('')}</div></section>` : ''}
+      <section class="card" id="hebergements"><h2 style="font-size:24px;margin-bottom:12px">Hébergements</h2>
+        ${types.length ? `<div class="grid g2">${types.map(t => `<div style="border:1px solid var(--line);border-radius:18px;overflow:hidden;background:var(--card);display:flex;flex-direction:column">
+          ${(t.photos || []).length ? `<div style="display:flex;overflow-x:auto;scroll-snap-type:x mandatory;gap:2px">${t.photos.map((u, i) => `<img src="${esc(u)}" alt="${esc(t.type)}, photo ${i + 1}" loading="lazy" style="flex:0 0 100%;height:200px;object-fit:cover;scroll-snap-align:start">`).join('')}</div>` : `<div style="height:120px;background:linear-gradient(135deg,var(--green-l),var(--bg))"></div>`}
+          <div style="padding:16px;display:flex;flex-direction:column;flex:1"><div class="row between" style="flex-wrap:nowrap"><h3 style="font-size:19px">${esc(t.type)}</h3>${(t.photos || []).length > 1 ? `<span class="muted" style="font-size:12px">${t.photos.length} photos ↔</span>` : ''}</div>
           <p class="muted" style="margin:4px 0 8px;font-size:13px">${[t.capacity ? `Jusqu’à ${t.capacity} pers.` : '', BEDS[t.bed_type] || '', t.size_m2 ? t.size_m2 + ' m²' : ''].filter(Boolean).join(' · ')}</p>
           ${t.description ? `<p style="margin:0 0 8px;font-size:14px">${esc(t.description)}</p>` : ''}
-          ${(t.amenities || []).length ? `<div class="row" style="gap:4px;margin-bottom:10px">${t.amenities.map(a => `<span class="pill" style="background:var(--bg);color:var(--muted);font-weight:600">${esc(a)}</span>`).join('')}</div>` : ''}
-          <p style="margin:0">À partir de <strong style="font-size:20px">${money(t.from_rate)}</strong> / nuit</p></div></div>`).join('')}</div>` : '<p class="muted">Aucun hébergement réservable en ligne pour le moment.</p>'}
+          ${(t.amenities || []).length ? `<div class="row" style="gap:4px;margin-bottom:10px">${t.amenities.map(a => `<span class="pill" style="background:var(--green-l);color:var(--green-d);font-weight:600">${esc(a)}</span>`).join('')}</div>` : ''}
+          <div class="row between" style="margin-top:auto"><p style="margin:0">Dès <strong style="font-size:20px">${money(t.from_rate)}</strong> / nuit</p><a href="#reserver" data-pick="${esc(t.type)}" style="display:inline-flex;align-items:center;min-height:40px;padding:0 14px;border-radius:999px;background:var(--green);color:#fff;font-weight:700;text-decoration:none;font-size:14px">Choisir</a></div></div></div>`).join('')}</div>` : '<p class="muted">Aucun hébergement réservable en ligne pour le moment.</p>'}
       </section>
-      <section class="card"><h2 style="font-size:24px;margin-bottom:8px">Bon à savoir</h2>
-        <p style="margin:0 0 6px">Arrivée à partir de <strong>${esc(h.checkin_time)}</strong> · Départ avant <strong>${esc(h.checkout_time)}</strong></p>
+      <section class="card" id="infos"><h2 style="font-size:24px;margin-bottom:10px">Bon à savoir</h2>
+        <div class="row" style="gap:10px;margin-bottom:6px"><span class="pill" style="background:var(--green-l);color:var(--green-d);font-size:13px;padding:8px 12px">Arrivée dès ${esc(h.checkin_time)}</span><span class="pill" style="background:var(--green-l);color:var(--green-d);font-size:13px;padding:8px 12px">Départ avant ${esc(h.checkout_time)}</span></div>
         ${h.info ? `<p style="margin:10px 0 0">${para(h.info)}</p>` : ''}
         ${h.conditions ? `<h3 style="font-size:17px;margin:14px 0 4px">Conditions</h3><p style="margin:0">${para(h.conditions)}</p>` : ''}
       </section>
-      <section class="card"><h2 style="font-size:24px;margin-bottom:8px">Contact</h2>
-        ${h.address ? `<p style="margin:0 0 4px">${esc(h.address)}</p>` : ''}
-        <div class="row">${h.phone ? `<a href="tel:${esc(h.phone)}" style="font-weight:700">${esc(h.phone)}</a>` : ''}${wa ? `<a href="${wa}" target="_blank" rel="noopener" style="font-weight:700">WhatsApp</a>` : ''}${h.email ? `<a href="mailto:${esc(h.email)}" style="font-weight:700">${esc(h.email)}</a>` : ''}</div>
+      <section class="card" id="contact"><h2 style="font-size:24px;margin-bottom:8px">Contact</h2>
+        ${h.address || h.city ? `<p style="margin:0 0 12px">${esc([h.address, h.city].filter(Boolean).join(', '))}</p>` : ''}
+        <div class="row" style="gap:8px">${contacts.join('') || '<span class="muted">Coordonnées bientôt disponibles.</span>'}</div>
       </section>
     </div>
-    <aside style="flex:1 1 320px;min-width:0;position:sticky;top:16px">
+    <aside style="flex:1 1 320px;min-width:0;position:sticky;top:76px" id="reserver">
       <form class="card" id="bkForm" novalidate>
-        <h2 style="font-size:24px;margin-bottom:12px">Demande de réservation</h2>
+        <h2 style="font-size:24px;margin-bottom:12px">Réserver</h2>
         ${types.length ? `
         <div class="field"><label for="bType">Hébergement</label><select id="bType">${types.map(t => `<option value="${esc(t.type)}">${esc(t.type)} – dès ${money(t.from_rate)}</option>`).join('')}</select></div>
         <div class="row"><div class="field" style="flex:1 1 130px"><label for="bIn">Arrivée</label><input id="bIn" type="date" min="${t0}" value="${t0}" required></div><div class="field" style="flex:1 1 130px"><label for="bOut">Départ</label><input id="bOut" type="date" min="${t1}" value="${t1}" required></div></div>
@@ -2020,8 +2075,14 @@ async function renderPublicPage(slug){
       </form>
     </aside>
   </main>
+  ${wa ? `<a href="${wa}" target="_blank" rel="noopener" aria-label="Écrire sur WhatsApp" style="position:fixed;right:16px;bottom:16px;z-index:30;width:56px;height:56px;border-radius:50%;background:#25D366;color:#fff;display:grid;place-items:center;box-shadow:0 8px 24px rgba(0,0,0,.25)"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">${IC.wa}</svg></a>` : ''}
   <footer style="text-align:center;padding:24px 16px 40px;font-size:13px" class="muted">Réservations propulsées par <strong>Horus Hotel</strong></footer>`;
+  root.querySelectorAll('[data-gal]').forEach(b => b.onclick = () => { let i = +b.dataset.gal;
+    const show = () => { modal(`<div style="position:relative"><img src="${esc(gallery[i])}" alt="Photo ${i + 1}" style="width:100%;max-height:75vh;object-fit:contain;border-radius:12px;background:#000"><div class="row between" style="margin-top:10px"><button class="small ghost" id="gP">← Précédente</button><span class="muted">${i + 1} / ${gallery.length}</span><button class="small ghost" id="gN">Suivante →</button></div></div>`); $('modalBody').style.maxWidth = '960px';
+      $('gP').onclick = () => { i = (i - 1 + gallery.length) % gallery.length; show(); }; $('gN').onclick = () => { i = (i + 1) % gallery.length; show(); }; };
+    show(); });
   if (!types.length) return;
+  root.querySelectorAll('[data-pick]').forEach(a => a.onclick = () => { $('bType').value = a.dataset.pick; $('bType').dispatchEvent(new Event('change')); });
   let qt = null, lastQuote = null; const t_started = Date.now();
   const quote = async () => {
     const box = $('bQuote');
