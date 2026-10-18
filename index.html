@@ -456,7 +456,7 @@ function renderTarifs(){
     <div class="grid g2">
       ${trial ? `<div class="card row between"><div><h3 style="font-size:20px">${esc(trial.name)} · ${trial.trial_days} jours</h3><div class="muted" style="font-size:14px">0 FCFA · toutes les fonctions · chambres illimitées · ${trial.max_users} utilisateurs · 1 caisse · 1 devise</div></div>
         <button class="${o.billing_cycle === 'trial' ? '' : 'ghost'}" disabled>${o.billing_cycle === 'trial' ? 'Essai en cours' : 'Essai déjà utilisé'}</button></div>` : ''}
-      ${ent ? `<div class="card row between" style="background:var(--ink);color:#fff;border-color:var(--ink)"><div><h3 style="font-size:20px">${esc(ent.name)}</h3><div style="font-size:14px;color:#C9CED6">À partir de ${fcfa(ent.monthly_price)}/mois · ${esc(ent.description || '')}</div></div>
+      ${ent ? `<div class="card row between" style="background:var(--ink);color:#fff;border-color:var(--ink)"><div><h3 style="font-size:20px">${esc(ent.name)}</h3><div style="font-size:14px;color:#C9CED6">Sur devis · ${esc(ent.description || '')}</div></div>
         <button class="gold" data-quote>Demander un devis</button></div>` : ''}
     </div>`;
   $('v-tarifs').querySelectorAll('[data-cycle]').forEach(b => b.onclick = () => { S.cycle = b.dataset.cycle; renderTarifs(); });
