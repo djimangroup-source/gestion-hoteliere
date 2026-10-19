@@ -171,6 +171,7 @@ a.btn{display:inline-flex;align-items:center;min-height:44px;border-radius:999px
 body.modal-open{overflow:hidden}
 .posgrid{display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:16px;align-items:start}.poscart{position:sticky;top:16px}.posfab{display:none}
 @media (max-width:900px){.posgrid{grid-template-columns:1fr}.poscart{position:static}.posfab{display:block;position:fixed;left:16px;right:16px;bottom:calc(76px + env(safe-area-inset-bottom));z-index:30;min-height:54px;box-shadow:0 10px 30px rgba(0,0,0,.25)}}
+@media (max-width:700px){.rcgrid{grid-template-columns:1fr!important}}
 .big{font-family:var(--display);font-weight:800;font-size:56px;line-height:1;color:var(--green)}
 @media (max-width:700px){nav.side{max-width:none}}
 </style>
@@ -248,6 +249,7 @@ body.modal-open{overflow:hidden}
       <div class="menu">
         <button type="button" id="navEsts">Mes établissements</button>
         <button type="button" id="navTheme">Thème de l’application</button>
+        <button type="button" id="navPrint">Impression &amp; reçus</button>
         <button data-view="equipe">Équipe</button>
         <button data-view="abonnement">Mon abonnement</button>
         <button data-view="tarifs">Tarifs</button>
@@ -574,6 +576,7 @@ if (isStandalone()) $('navInstall').classList.add('hidden');
 $('navEsts').onclick = () => openEstablishments();
 $('navNotif').onclick = () => openNotifs();
 $('navTheme').onclick = () => openThemes();
+$('navPrint').onclick = () => openPrintSettings();
 
 const ROLE_VIEWS = {
   owner: null, admin: null,
@@ -795,7 +798,7 @@ function printInvoice(i){
   if (!i) return;
   const w = window.open('', '_blank');
   if (!w) return toast("Autorisez l'ouverture de fenêtres pour imprimer la facture.", true);
-  w.document.write(`<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>Facture ${esc(i.number)}</title><style>body{font:15px/1.5 system-ui,sans-serif;color:#2B1E16;max-width:720px;margin:40px auto;padding:0 20px}h1{font-size:26px;margin:0;color:#B4532A}table{width:100%;border-collapse:collapse;margin-top:24px}td,th{padding:10px;border-bottom:1px solid #ddd;text-align:left}.r{text-align:right}</style></head><body>
+  w.document.write(`<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>Facture ${esc(i.number)}</title><style>body{font:15px/1.5 system-ui,sans-serif;color:#2B1E16;max-width:720px;margin:40px auto;padding:0 20px}h1{font-size:26px;margin:0;color:#B4532A}table{width:100%;border-collapse:collapse;margin-top:24px}td,th{padding:10px;border-bottom:1px solid #ddd;text-align:left}.r{text-align:right}${printCss('doc')}</style></head><body>
   <h1>Facture ${esc(i.number)}</h1><p>Émise le ${date(i.issued_at)}<br>Client : ${esc($('orgLabel').textContent)}</p>
   <table><tr><th>Désignation</th><th>Période</th><th class="r">Montant</th></tr>
   <tr><td>Abonnement ${esc(i.plan_name)} (${CYCLE[i.billing_cycle] || esc(i.billing_cycle)})</td><td>${date(i.period_start)} – ${date(i.period_end)}</td><td class="r">${fcfa(i.amount)}</td></tr>
@@ -1012,7 +1015,7 @@ const can = (roles) => S.member && roles.includes(S.member.role);
 
 async function loadEst(){
   const [e, r] = await Promise.all([
-    sb.from('establishments').select('id,name,city').eq('organization_id', S.org).eq('is_active', true).order('created_at'),
+    sb.from('establishments').select('id,name,city,address,phone,slug,public_enabled,public_logo_url,public_phone,receipt_settings').eq('organization_id', S.org).eq('is_active', true).order('created_at'),
     sb.from('rooms').select('id,number,room_type,base_rate,capacity,photos,housekeeping_status,is_active,establishment_id').eq('organization_id', S.org).eq('is_active', true).order('number')
   ]);
   S.ests = e.data || []; if (!S.est) { try { S.est = localStorage.getItem('hh_est_' + S.org); } catch (_) {} } if (!S.est || !S.ests.find(x => x.id === S.est)) S.est = S.ests[0] && S.ests[0].id;
@@ -1488,7 +1491,7 @@ function printGuestInvoice(i){
   if (!i) return;
   const est = S.ests.find(e => e.id === i.establishment_id) || {};
   const w = window.open('', '_blank'); if (!w) return toast("Autorisez l'ouverture de fenêtres pour imprimer.", true);
-  w.document.write(`<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>Facture ${esc(i.number)}</title><style>body{font:14px/1.5 system-ui,sans-serif;color:#2B1E16;max-width:760px;margin:36px auto;padding:0 20px}h1{font-size:24px;margin:0;color:#B4532A}.top{border-bottom:3px solid #B4532A;padding-bottom:14px}table{width:100%;border-collapse:collapse;margin-top:20px}td,th{padding:9px;border-bottom:1px solid #ddd;text-align:left}.r{text-align:right}.top{display:flex;justify-content:space-between;gap:20px}</style></head><body>
+  w.document.write(`<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>Facture ${esc(i.number)}</title><style>body{font:14px/1.5 system-ui,sans-serif;color:#2B1E16;max-width:760px;margin:36px auto;padding:0 20px}h1{font-size:24px;margin:0;color:#B4532A}.top{border-bottom:3px solid #B4532A;padding-bottom:14px}table{width:100%;border-collapse:collapse;margin-top:20px}td,th{padding:9px;border-bottom:1px solid #ddd;text-align:left}.r{text-align:right}.top{display:flex;justify-content:space-between;gap:20px}${printCss('doc')}</style></head><body>
   <div class="top"><div><h1>${esc(est.name || '')}</h1><div>${esc(est.city || '')}</div></div><div class="r"><strong>FACTURE ${esc(i.number)}</strong><br>Émise le ${new Date(i.issued_at).toLocaleDateString('fr-FR')}</div></div>
   <p style="margin-top:24px">Client : <strong>${esc(i.guest_name)}</strong></p>
   <table><tr><th>Désignation</th><th class="r">Qté</th><th class="r">P.U.</th><th class="r">Montant</th></tr>
@@ -1790,14 +1793,14 @@ async function printReceipt(key){
   const est = S.ests.find(x => x.id === r0.establishment_id) || {};
   const total = rows.reduce((a, m) => a + Number(m.amount), 0);
   await teamNames();
-  w.document.write(`<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>Reçu ${receiptNo(key)}</title><style>body{font:14px/1.5 system-ui,sans-serif;color:#2B1E16;max-width:420px;margin:30px auto;padding:0 18px}h1{font-size:20px;margin:0;color:#B4532A}table{width:100%;border-collapse:collapse;margin:14px 0}td{padding:7px 0;border-bottom:1px dashed #ccc}.r{text-align:right}.t{font-size:18px;font-weight:700}.m{color:#6B5646;font-size:12px}</style></head><body>
-    <h1>${esc(est.name || 'Horus Hotel')}</h1><div class="m">${esc(est.city || '')}</div>
+  w.document.write(`<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>Reçu ${receiptNo(key)}</title><style>body{font:14px/1.5 system-ui,sans-serif;color:#2B1E16;max-width:420px;margin:30px auto;padding:0 18px}h1{font-size:20px;margin:0;color:#B4532A}table{width:100%;border-collapse:collapse;margin:14px 0}td{padding:7px 0;border-bottom:1px dashed #ccc}.r{text-align:right}.t{font-size:18px;font-weight:700}.m{color:#6B5646;font-size:12px}${printCss('ticket')}</style></head><body>
+    ${rcptHead(est)}
     <p><strong>Reçu ${receiptNo(key)}</strong><br>${new Date(r0.created_at).toLocaleString('fr-FR', { dateStyle:'long', timeStyle:'short' })}</p>
     ${b ? `<p>Client : <strong>${esc(b.guest_name)}</strong><br>Chambre ${esc(b.room_number)} · du ${dfr(b.check_in)} au ${dfr(b.check_out)}</p>` : ''}
     <table>${rows.map(m => `<tr><td>${esc(m.label)} · ${PMETHOD[m.method]}${m.reference ? `<br><span class="m">réf. ${esc(m.reference)}</span>` : ''}</td><td class="r">${money(m.amount)}</td></tr>`).join('')}
     <tr><td class="t">Total reçu</td><td class="r t">${money(total)}</td></tr></table>
     ${b ? `<p>${Number(b.balance) > 0 ? 'Reste à payer : <strong>' + money(b.balance) + '</strong>' : 'Séjour entièrement réglé.'}</p>` : ''}
-    <p class="m">Encaissé par ${esc(who(r0.created_by))}. Merci de votre confiance.</p>${S.overview && S.overview.plan && S.overview.plan.slug === 'decouverte' ? '<p class="m" style="text-align:center;margin-top:18px">Propulsé par Horus Hotel · gestion hôtelière gratuite</p>' : ''}
+    ${rcpt(est).show_server !== false ? `<p class="m">Encaissé par ${esc(who(r0.created_by))}.</p>` : ''}${rcptFoot(est, 'Merci de votre confiance.')}${S.overview && S.overview.plan && S.overview.plan.slug === 'decouverte' ? '<p class="m" style="text-align:center;margin-top:18px">Propulsé par Horus Hotel · gestion hôtelière gratuite</p>' : ''}
     <script>window.onload=()=>window.print()<\/script></body></html>`);
   w.document.close();
 }
@@ -1838,7 +1841,7 @@ async function printClosure(s){
   const est = S.ests.find(x => x.id === s.establishment_id) || {};
   const det = s.counted_detail || {};
   const byM = Object.keys(PMETHOD).map(k => [k, sum(rows.filter(m => m.method === k), ['payment','income'])]).filter(x => x[1] > 0);
-  w.document.write(`<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>Clôture de caisse</title><style>body{font:13px/1.5 system-ui,sans-serif;color:#2B1E16;max-width:760px;margin:30px auto;padding:0 20px}h1{color:#B4532A;font-size:22px;margin:0}h2{font-size:15px;margin:20px 0 6px}table{width:100%;border-collapse:collapse}td,th{padding:6px 8px;border-bottom:1px solid #ddd;text-align:left}.r{text-align:right}.sig{display:flex;gap:40px;margin-top:40px}.sig div{flex:1;border-top:1px solid #2B1E16;padding-top:6px}</style></head><body>
+  w.document.write(`<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>Clôture de caisse</title><style>body{font:13px/1.5 system-ui,sans-serif;color:#2B1E16;max-width:760px;margin:30px auto;padding:0 20px}h1{color:#B4532A;font-size:22px;margin:0}h2{font-size:15px;margin:20px 0 6px}table{width:100%;border-collapse:collapse}td,th{padding:6px 8px;border-bottom:1px solid #ddd;text-align:left}.r{text-align:right}.sig{display:flex;gap:40px;margin-top:40px}.sig div{flex:1;border-top:1px solid #2B1E16;padding-top:6px}${printCss('ticket')}</style></head><body>
     <h1>Clôture de caisse — ${esc(est.name || '')}</h1>
     <p>Ouverte le ${new Date(s.opened_at).toLocaleString('fr-FR')} par ${esc(who(s.opened_by))}<br>Clôturée le ${s.closed_at ? new Date(s.closed_at).toLocaleString('fr-FR') : '—'} par ${esc(who(s.closed_by))}</p>
     <h2>Espèces</h2><table><tr><td>Fond de caisse</td><td class="r">${money(s.opening_balance)}</td></tr><tr><td>Entrées en espèces</td><td class="r">${money(sum(cash, ['payment','income']))}</td></tr>
@@ -2096,7 +2099,7 @@ function exportReportCsv(r){
 function printReport(r){
   const w = window.open('', '_blank'); if (!w) return toast("Autorisez l'ouverture de fenêtres pour imprimer.", true);
   const row = (a, b) => `<tr><td>${a}</td><td class="r">${b}</td></tr>`;
-  w.document.write(`<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>Rapport ${esc(r.from)} – ${esc(r.to)}</title><style>body{font:13px/1.5 system-ui,sans-serif;color:#2B1E16;max-width:800px;margin:30px auto;padding:0 20px}h1{color:#B4532A;font-size:24px;margin:0}h2{font-size:16px;margin:22px 0 6px}table{width:100%;border-collapse:collapse}td,th{padding:6px 8px;border-bottom:1px solid #ddd;text-align:left}.r{text-align:right}</style></head><body>
+  w.document.write(`<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>Rapport ${esc(r.from)} – ${esc(r.to)}</title><style>body{font:13px/1.5 system-ui,sans-serif;color:#2B1E16;max-width:800px;margin:30px auto;padding:0 20px}h1{color:#B4532A;font-size:24px;margin:0}h2{font-size:16px;margin:22px 0 6px}table{width:100%;border-collapse:collapse}td,th{padding:6px 8px;border-bottom:1px solid #ddd;text-align:left}.r{text-align:right}${printCss('doc')}</style></head><body>
     <h1>Rapport d\u2019activité</h1><p>${esc($('orgLabel').textContent.split(' · ')[0])} · du ${new Date(r.from + 'T00:00:00').toLocaleDateString('fr-FR')} au ${new Date(r.to + 'T00:00:00').toLocaleDateString('fr-FR')}</p>
     <h2>Indicateurs</h2><table>${row('Chiffre d\u2019affaires hébergement', money(r.room_revenue))}${row('Nuits vendues / disponibles', r.sold_nights + ' / ' + r.available_nights)}${row('Taux d\u2019occupation', String(r.occupancy_pct).replace('.', ',') + ' %')}${row('ADR', money(r.adr))}${row('RevPAR', money(r.revpar))}${row('Encaissé', money(r.cash_in))}${row('Dépenses', money(r.expenses))}${row('Remboursements', money(r.refunds))}${row('Impayés', money(r.unpaid_total))}</table>
     <h2>Encaissements par moyen</h2><table>${Object.entries(r.by_method).map(([m, v]) => row(PMETHOD[m] || esc(m), money(v))).join('') || row('Aucun', '')}</table>
@@ -2287,6 +2290,74 @@ async function renderEquipe(){
     } catch (err) { toast(err.message, true); b.disabled = false; } });
 }
 
+/* ---------- Formats d'impression (réglés par appareil, selon l'imprimante branchée) ---------- */
+const PRINT_FMTS = { ticket: { '80': 'Ticket 80 mm (imprimante thermique standard)', '58': 'Ticket 58 mm (petite imprimante / mobile)', 'A5': 'Feuille A5', 'A4': 'Feuille A4' }, doc: { 'A4': 'A4 (standard)', 'A5': 'A5 (demi-page)', 'letter': 'Lettre US' } };
+const getFmt = (kind) => { try { const v = localStorage.getItem('hh_print_' + kind); if (v && PRINT_FMTS[kind][v]) return v; } catch (_) {} return kind === 'ticket' ? '80' : 'A4'; };
+function printCss(kind){
+  const f = getFmt(kind);
+  const thermal = (w, page, fs, h1) => `@page{size:${page}mm auto;margin:${page === 58 ? 1.5 : 3}mm}html,body{width:${w}mm}body{max-width:${w}mm!important;margin:0!important;padding:0!important;font-size:${fs}px!important;line-height:1.35!important;color:#000!important}*{color:#000!important;background:transparent!important;box-shadow:none!important}h1{font-size:${h1}px!important;text-align:center}h2{font-size:${fs + 1}px!important;margin:8px 0 4px!important}table{margin:6px 0!important;font-size:${fs}px!important}td,th{padding:2px 1px!important;border-color:#000!important}img{max-width:100%;filter:grayscale(1)}.noprint,button{display:none!important}`;
+  const sheet = (size, margin) => `@page{size:${size};margin:${margin}mm}body{max-width:none!important;margin:0!important;padding:0!important}.noprint,button{display:none!important}`;
+  if (f === '80') return thermal(72, 80, 12, 15);
+  if (f === '58') return thermal(48, 58, 10, 13);
+  if (f === 'A5') return sheet('A5', 10) + (kind === 'ticket' ? 'body{font-size:13px!important}' : 'body{font-size:12px!important}');
+  if (f === 'letter') return sheet('letter', 15);
+  return sheet('A4', 15);
+}
+/* ---------- Reçu personnalisé (par établissement) ---------- */
+const rcpt = (est) => (est && est.receipt_settings) || {};
+const myName = () => (S.member && S.member.display_name) || ((S.session && S.session.user.email) || '').split('@')[0];
+function rcptHead(est){
+  const r = rcpt(est), logo = r.show_logo !== false && est.public_logo_url;
+  const lines = [r.header, r.address ?? [est.address, est.city].filter(Boolean).join(', '), (r.phone ?? (est.phone || est.public_phone)) ? 'Tél. ' + (r.phone ?? (est.phone || est.public_phone)) : '', r.tax_id].filter(Boolean);
+  return `<div style="text-align:center;margin-bottom:6px">${logo ? `<img src="${esc(est.public_logo_url)}" alt="" style="max-height:60px;max-width:70%;object-fit:contain;margin-bottom:4px">` : ''}
+    <h1 style="text-align:center;margin:0">${esc(r.title || est.name || 'Horus Hotel')}</h1>${lines.map(l => `<div class="m" style="text-align:center">${esc(l)}</div>`).join('')}</div>`;
+}
+function rcptFoot(est, def){
+  const r = rcpt(est);
+  const url = est.slug && est.public_enabled ? location.origin + location.pathname + '?h=' + encodeURIComponent(est.slug) : '';
+  return `<p style="text-align:center;margin:10px 0 4px;white-space:pre-line">${esc(r.footer || def)}</p>${r.show_qr && url ? `<div style="text-align:center"><img src="https://api.qrserver.com/v1/create-qr-code/?size=140x140&margin=0&data=${encodeURIComponent(url)}" alt="" style="width:28mm;height:28mm"><div class="m">Réservez en ligne</div></div>` : ''}`;
+}
+function openReceiptEditor(){
+  const est = (S.ests || []).find(x => x.id === S.est) || {}; const r = { ...rcpt(est) };
+  const f = (id, label, val, ph, max = 80) => `<div class="field"><label for="${id}">${label}</label><input id="${id}" maxlength="${max}" value="${esc(val ?? '')}" placeholder="${esc(ph)}"></div>`;
+  modal(`<div class="eyebrow">${esc(est.name || '')}</div><h2 style="font-size:22px;margin:4px 0 12px">Personnaliser le reçu</h2>
+    <div class="rcgrid" style="display:grid;grid-template-columns:minmax(0,1fr) 240px;gap:16px;align-items:start">
+    <form id="rcForm">
+      ${f('rcTitle', 'Nom affiché', r.title, est.name)}
+      ${f('rcHeader', 'Slogan / ligne d’en-tête', r.header, 'ex. Votre confort, notre priorité')}
+      ${f('rcAddr', 'Adresse', r.address, [est.address, est.city].filter(Boolean).join(', ') || 'ex. Cocody Riviera 2, Abidjan')}
+      ${f('rcPhone', 'Téléphone', r.phone, est.phone || est.public_phone || 'ex. 07 07 00 00 00', 30)}
+      ${f('rcTax', 'Mentions légales (RCCM, NCC…)', r.tax_id, 'ex. RCCM CI-ABJ-2024-B-1234 · NCC 1234567A')}
+      <div class="field"><label for="rcFoot">Message de fin</label><textarea id="rcFoot" maxlength="200" rows="2" style="width:100%;min-height:64px;padding:10px 12px;border-radius:12px;border:1px solid var(--line);font:inherit" placeholder="ex. Merci de votre visite ! Wi-Fi : Palmiers2026">${esc(r.footer || '')}</textarea></div>
+      ${[['rcLogo', 'show_logo', 'Afficher le logo', r.show_logo !== false], ['rcServer', 'show_server', 'Afficher le nom du serveur / caissier', r.show_server !== false], ['rcQr', 'show_qr', 'QR code vers ma page de réservation', !!r.show_qr]].map(([id, , l, on]) => `<label class="row" style="gap:8px;font-weight:600;flex-wrap:nowrap;margin-bottom:8px"><input type="checkbox" id="${id}" ${on ? 'checked' : ''} style="width:20px;min-height:20px"> ${l}</label>`).join('')}
+      ${!est.public_logo_url ? '<p class="muted" style="font-size:12px;margin:0 0 8px">Ajoutez votre logo dans « Ma page de présentation ».</p>' : ''}
+      <button class="primary" style="width:100%" id="rcSave">Enregistrer</button>
+    </form>
+    <div><div class="muted" style="font-size:12px;margin-bottom:4px">Aperçu</div><div id="rcPrev" style="background:#fff;color:#000;border:1px solid var(--line);border-radius:6px;padding:10px;font:11px/1.4 ui-monospace,Menlo,monospace;box-shadow:0 6px 20px rgba(0,0,0,.08)"></div></div></div>`);
+  $('modalBody').style.maxWidth = '720px';
+  const read = () => ({ title: $('rcTitle').value.trim() || null, header: $('rcHeader').value.trim() || null, address: $('rcAddr').value.trim() || null, phone: $('rcPhone').value.trim() || null, tax_id: $('rcTax').value.trim() || null, footer: $('rcFoot').value.trim() || null, show_logo: $('rcLogo').checked, show_server: $('rcServer').checked, show_qr: $('rcQr').checked });
+  const clean = (o) => Object.fromEntries(Object.entries(o).filter(([, v]) => v !== null));
+  const prev = () => { const e2 = { ...est, receipt_settings: clean(read()) };
+    $('rcPrev').innerHTML = rcptHead(e2).replace(/<h1 /, '<h1 style="font-size:14px" ') + `<div class="m" style="text-align:center;margin:6px 0">Bar · Ticket n° 128<br>${new Date().toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })}</div>
+      <table style="width:100%;border-collapse:collapse"><tr><td>2 × Flag 65cl</td><td style="text-align:right">2 000 F</td></tr><tr><td>1 × Poulet braisé</td><td style="text-align:right">4 500 F</td></tr><tr><td style="border-top:1px dashed #000;font-weight:700">TOTAL</td><td style="border-top:1px dashed #000;font-weight:700;text-align:right">6 500 F</td></tr></table>
+      <div class="m">Payé par Wave${e2.receipt_settings.show_server !== false ? ' · Servi par ' + esc(myName() || 'Awa') : ''}</div>` + rcptFoot(e2, 'Merci de votre visite !'); };
+  $('rcForm').oninput = prev; $('rcForm').onchange = prev; prev();
+  $('rcForm').onsubmit = async (e) => { e.preventDefault(); const b = $('rcSave'); b.disabled = true;
+    const val = clean(read()); const { error } = await sb.from('establishments').update({ receipt_settings: val }).eq('id', est.id);
+    if (error) { b.disabled = false; return toast(errMsg(error), true); }
+    est.receipt_settings = val; closeModal(); toast('Reçu personnalisé enregistré.'); };
+}
+function openPrintSettings(){
+  const row = (kind, title) => `<h3 style="font-size:16px;margin:12px 0 6px">${title}</h3><div style="display:grid;gap:6px">${Object.entries(PRINT_FMTS[kind]).map(([k, l]) => `<label class="card" style="margin:0;padding:10px 12px;display:flex;gap:10px;align-items:center;cursor:pointer"><input type="radio" name="pf_${kind}" value="${k}" ${getFmt(kind) === k ? 'checked' : ''} style="width:18px;min-height:18px">${l}</label>`).join('')}</div>`;
+  modal(`<h2 style="font-size:22px;margin-bottom:4px">Impression</h2><p class="muted" style="margin:0 0 6px;font-size:14px">Réglage propre à cet appareil, selon l’imprimante qui y est branchée.</p>
+    ${row('ticket', 'Tickets, reçus de caisse et clôtures')}${row('doc', 'Factures et rapports')}
+    ${can(['owner', 'admin']) ? `<button type="button" class="ghost" id="pfRc" style="width:100%;margin-top:14px;justify-content:center">✏️ Personnaliser le reçu (logo, adresse, message…)</button>` : ''}
+    <div class="row" style="margin-top:10px"><button class="ghost" type="button" id="pfTest" style="flex:1">Imprimer un test</button><button class="primary" data-close style="flex:1">Terminé</button></div>
+    <p class="muted" style="font-size:12px;margin:10px 0 0">Astuce : dans la fenêtre d’impression, choisissez votre imprimante de tickets, marges « Aucune » et échelle 100 %.</p>`);
+  document.querySelectorAll('[name^=pf_]').forEach(r => r.onchange = () => { try { localStorage.setItem('hh_print_' + r.name.slice(3), r.value); } catch (_) {} toast('Format enregistré : ' + PRINT_FMTS[r.name.slice(3)][r.value]); });
+  if ($('pfRc')) $('pfRc').onclick = () => openReceiptEditor();
+  $('pfTest').onclick = () => printPosTicket({ server: myName(), number: 'TEST', total: 3500, outlet: 'bar', table: 'Table 1', method: 'cash', created_at: new Date().toISOString() }, [{ name: 'Flag 65cl', qty: 2, unit_price: 1000 }, { name: 'Coca-Cola', qty: 3, unit_price: 500 }]);
+}
 /* ================= Restaurant & Bar ================= */
 const OUTLETS = { restaurant: ['Restaurant', '🍽️'], bar: ['Bar', '🍹'] };
 const POS_OPS = [['wave', 'Wave'], ['orange_money', 'Orange'], ['mtn_money', 'MTN'], ['moov_money', 'Moov']];
@@ -2410,9 +2481,10 @@ function openPosPay(total){
       S.cart = []; S.rTable = '';
       modal(`<div style="text-align:center"><div style="width:64px;height:64px;border-radius:50%;background:var(--green-l);display:grid;place-items:center;margin:0 auto 10px;font-size:30px">✓</div>
         <h2 style="font-size:24px;margin-bottom:4px">Ticket n° ${data.number} encaissé</h2><p style="font-family:var(--display);font-size:30px;font-weight:800;margin:4px 0">${money(data.total)}</p>
-        ${change !== null && change > 0 ? `<p class="muted">Monnaie rendue : <strong>${money(change)}</strong></p>` : ''}<p class="muted" style="font-size:13px">Stock mis à jour · recette ajoutée à la caisse</p></div>
+        ${change !== null && change > 0 ? `<p class="muted">Monnaie rendue : <strong>${money(change)}</strong></p>` : ''}<p class="muted" style="font-size:13px">Stock mis à jour · recette ajoutée à la caisse</p><p style="font-size:13px;margin:4px 0 0"><a href="#" id="tkFmt">Format : ${esc(PRINT_FMTS.ticket[getFmt('ticket')])} · changer</a></p></div>
         <div class="row" style="margin-top:14px"><button class="ghost" type="button" id="tkPrint" style="flex:1">Imprimer le ticket</button><button class="primary" data-close style="flex:1">Nouvelle commande</button></div>`);
-      $('tkPrint').onclick = () => printPosTicket({ number: data.number, total: data.total, outlet: S.rOutlet, table, method, created_at: new Date().toISOString() }, lines.map(c => ({ name: c.name, qty: c.qty, unit_price: c.price })));
+      $('tkFmt').onclick = (e) => { e.preventDefault(); openPrintSettings(); };
+      $('tkPrint').onclick = () => printPosTicket({ number: data.number, total: data.total, outlet: S.rOutlet, table, method, server: myName(), created_at: new Date().toISOString() }, lines.map(c => ({ name: c.name, qty: c.qty, unit_price: c.price })));
       renderResto();
     };
   };
@@ -2422,11 +2494,11 @@ const PAY_NAME = { cash: 'Espèces', orange_money: 'Orange Money', mtn_money: 'M
 function printPosTicket(s, items){
   const w = window.open('', '_blank'); if (!w) return toast("Autorisez l'ouverture de fenêtres pour imprimer.", true);
   const est = (S.ests || []).find(x => x.id === S.est) || {};
-  w.document.write(`<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>Ticket ${s.number}</title><style>body{font:13px/1.45 ui-monospace,Menlo,monospace;color:#111;max-width:300px;margin:16px auto;padding:0 10px}h1{font-size:16px;margin:0;text-align:center}.c{text-align:center}table{width:100%;border-collapse:collapse;margin:10px 0}td{padding:3px 0;vertical-align:top}.r{text-align:right}.t td{border-top:1px dashed #000;font-weight:700;font-size:15px;padding-top:6px}.m{color:#555;font-size:11px}</style></head><body>
-    <h1>${esc(est.name || 'Horus Hotel')}</h1><div class="c m">${esc(est.city || '')}</div>
+  w.document.write(`<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>Ticket ${s.number}</title><style>body{font:13px/1.45 ui-monospace,Menlo,monospace;color:#111;max-width:300px;margin:16px auto;padding:0 10px}h1{font-size:16px;margin:0;text-align:center}.c{text-align:center}table{width:100%;border-collapse:collapse;margin:10px 0}td{padding:3px 0;vertical-align:top}.r{text-align:right}.t td{border-top:1px dashed #000;font-weight:700;font-size:15px;padding-top:6px}.m{color:#555;font-size:11px}${printCss('ticket')}</style></head><body>
+    ${rcptHead(est)}
     <p class="c">${esc(OUTLETS[s.outlet] ? OUTLETS[s.outlet][0] : '')} · Ticket n° ${s.number}<br>${new Date(s.created_at).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })}${s.table ? '<br>' + esc(s.table) : ''}</p>
     <table>${items.map(i => `<tr><td>${+i.qty} × ${esc(i.name)}</td><td class="r">${money(i.qty * i.unit_price)}</td></tr>`).join('')}<tr class="t"><td>TOTAL</td><td class="r">${money(s.total)}</td></tr></table>
-    <p class="m">Payé par ${esc(PAY_NAME[s.method] || s.method)}</p><p class="c">Merci de votre visite !</p>${S.overview && S.overview.plan && S.overview.plan.slug === 'decouverte' ? '<p class="c m">Propulsé par Horus Hotel</p>' : ''}
+    <p class="m">Payé par ${esc(PAY_NAME[s.method] || s.method)}${rcpt(est).show_server !== false && s.server ? ' · Servi par ' + esc(s.server) : ''}</p>${rcptFoot(est, 'Merci de votre visite !')}${S.overview && S.overview.plan && S.overview.plan.slug === 'decouverte' ? '<p class="c m">Propulsé par Horus Hotel</p>' : ''}
     <script>window.onload=()=>{window.print();}<\/script></body></html>`);
   w.document.close();
 }
@@ -2561,7 +2633,7 @@ async function drawSales(){
   const reload = () => { S.rFrom = $('rFrom').value || today(); S.rTo = $('rTo').value || S.rFrom; drawSales(); };
   $('rFrom').onchange = reload; $('rTo').onchange = reload;
   body.querySelectorAll('[data-rper]').forEach(b => b.onclick = () => { S.rTo = today(); S.rFrom = addDays(today(), -Number(b.dataset.rper)); drawSales(); });
-  body.querySelectorAll('[data-tprint]').forEach(b => b.onclick = () => { const t = sales.data.find(x => x.id === b.dataset.tprint); printPosTicket({ ...t, table: t.table_label }, t.pos_sale_items || []); });
+  body.querySelectorAll('[data-tprint]').forEach(b => b.onclick = () => { const t = sales.data.find(x => x.id === b.dataset.tprint); printPosTicket({ ...t, table: t.table_label, server: t.created_by === S.session.user.id ? myName() : '' }, t.pos_sale_items || []); });
   body.querySelectorAll('[data-tcancel]').forEach(b => b.onclick = () => { const t = sales.data.find(x => x.id === b.dataset.tcancel);
     modal(`<h2 style="font-size:22px;margin-bottom:8px">Annuler le ticket n° ${t.number} ?</h2><p class="muted">Le stock sera remis et un remboursement de ${money(t.total)} sera inscrit en caisse. Le propriétaire en sera informé dans le journal.</p>
       <form id="tcForm"><div class="field"><label for="tcWhy">Raison</label><input id="tcWhy" required minlength="3" maxlength="200" placeholder="ex. erreur de saisie"></div><div class="row"><button type="button" class="ghost" data-close style="flex:1">Retour</button><button class="primary" style="flex:1;background:var(--red);border-color:var(--red)">Annuler le ticket</button></div></form>`);
