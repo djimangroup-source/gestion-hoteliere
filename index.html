@@ -362,7 +362,7 @@ if (window.HorusApp && window.HorusApp.postMessage) {
   window.__nativeOpen = nativeOpen;
 }
 /* ---------- Mise à jour de l'application sans réinstaller ni perdre la connexion ---------- */
-const APP_VERSION = '2026.10.19-7';
+const APP_VERSION = '2026.10.19-8';
 async function refreshApp(){
   toast('Actualisation…');
   try { const reg = navigator.serviceWorker && await navigator.serviceWorker.getRegistration(); if (reg) { await reg.update(); if (reg.waiting) reg.waiting.postMessage('skipWaiting'); } } catch (_) {}
@@ -2851,7 +2851,7 @@ function drawPos(){
         ${shown.map(p => { const n = inCart(p.id), out = p.track_stock && Number(p.stock_qty) - n <= 0, low = p.track_stock && !out && Number(p.stock_qty) <= Number(p.alert_qty), img = prodImg(p), promo = effPrice(p) < Number(p.sale_price);
           return `<button type="button" data-add="${esc(p.id)}" ${out && !n ? 'disabled' : ''} style="position:relative;display:flex;flex-direction:column;align-items:stretch;text-align:left;padding:0;border-radius:18px;border:1.5px solid ${n ? 'var(--green)' : 'var(--line)'};background:var(--card);min-height:0;overflow:hidden;box-shadow:0 2px 10px rgba(0,0,0,.04)">
             <div style="position:relative;aspect-ratio:1/1;background:var(--green-l);display:grid;place-items:center;font-size:44px;${out ? 'filter:grayscale(1);opacity:.55' : ''}">${img ? `<img src="${esc(img)}" alt="" loading="lazy" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover">` : (OUTLETS[p.outlet] || ['', '🍽️'])[1]}
-              ${out ? '<span class="pill" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:#E36A6A;color:#fff">Rupture</span>' : low ? '<span class="pill" style="position:absolute;top:8px;left:8px;background:#E8A317;color:#fff">Stock faible</span>' : (p.tags || [])[0] ? `<span class="pill" style="position:absolute;top:8px;left:8px;background:var(--ink);color:var(--card)">${esc(p.tags[0])}</span>` : ''}
+              ${out ? '<span class="pill" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:#E36A6A;color:#fff">Rupture</span>' : low ? '<span class="pill" style="position:absolute;top:8px;left:8px;background:#E8A317;color:#fff">Stock faible</span>' : ''}
               ${(p.variants || []).length ? '<span class="pill" style="position:absolute;bottom:8px;left:8px;background:rgba(255,255,255,.92);color:#222">Options</span>' : ''}</div>
             <div style="padding:10px 12px 12px"><strong style="display:block;font-size:14px;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(p.name)}</strong>
               <div class="row between" style="gap:4px;margin-top:6px;flex-wrap:nowrap"><span><span style="font-weight:800;color:var(--green)">${money(effPrice(p))}</span>${promo ? ` <s class="muted" style="font-size:11px">${money(p.sale_price)}</s>` : ''}</span>${p.track_stock ? `<span class="pill ${out ? 'st-cancelled' : low ? 'st-past_due' : 'st-active'}" style="font-size:11px">${Math.max(0, +p.stock_qty)}</span>` : ''}</div></div>
@@ -2987,19 +2987,18 @@ function openProductForm(p, preset){
       <div class="field"><label for="pfName">Nom du produit</label><input id="pfName" required maxlength="80" value="${esc(p.name || '')}" placeholder="ex. Poulet braisé, Flag 65cl"></div>
       <div class="row" style="gap:10px"><div class="field" style="flex:1 1 160px"><label for="pfCat">Catégorie</label><input id="pfCat" list="pfCats" maxlength="40" value="${esc(p.category || '')}" placeholder="ex. Plats, Bières"><datalist id="pfCats">${cats.map(c => `<option value="${esc(c)}">`).join('')}</datalist></div>
         <div class="field" style="flex:1 1 110px"><label for="pfUnit">Unité</label><select id="pfUnit">${UNITS.map(u => `<option ${u === p.unit ? 'selected' : ''}>${u}</option>`).join('')}</select></div></div>
-      <label>Étiquette (optionnel)</label><div id="pfTags" class="row" style="gap:6px;margin:4px 0 6px"></div>
-      ${sec('Stock', '')}
-      <label class="row between" style="flex-wrap:nowrap;font-weight:600;margin-bottom:8px"><span>Gérer le stock</span><input type="checkbox" id="pfTrack" ${p.track_stock ? 'checked' : ''} style="width:22px;min-height:22px"></label>
-      <div class="row" id="pfStockRow" style="gap:10px">${isNew ? `<div class="field" style="flex:1"><label for="pfInit">Stock disponible</label><input id="pfInit" inputmode="decimal" placeholder="0"></div>` : `<div class="field" style="flex:1"><label>Stock disponible</label><input value="${+p.stock_qty} ${esc(p.unit)}" disabled></div>`}
-        <div class="field" style="flex:1"><label for="pfAlert">Alerte quand il reste</label><input id="pfAlert" inputmode="decimal" value="${+p.alert_qty || 0}"></div></div>
-      <div class="field"><label for="pfBar">Code-barres</label><div class="row" style="gap:6px;flex-wrap:nowrap"><input id="pfBar" maxlength="64" value="${esc(p.barcode || '')}" placeholder="ex. 6001234567890" style="flex:1;min-width:0"><button type="button" class="primary small" id="pfScan" aria-label="Scanner" style="min-width:48px">▦</button></div></div>
-      <div id="pfPrepBox">${sec('👨‍🍳 Cuisine')}<div class="field"><label for="pfPrep">Temps de préparation (minutes)</label><input id="pfPrep" inputmode="numeric" value="${p.prep_minutes ?? ''}" placeholder="ex. 15"><small class="muted">Affiché sur le bon de cuisine. Laissez vide si non applicable.</small></div></div>
       ${sec('Prix et promotions')}
       <div class="row" style="gap:10px"><div class="field" style="flex:1"><label for="pfSell">Prix normal *</label><input id="pfSell" inputmode="numeric" required value="${p.sale_price != null ? +p.sale_price : ''}" placeholder="0"></div>
         <div class="field" style="flex:1"><label for="pfPromo">Prix promotionnel</label><input id="pfPromo" inputmode="numeric" value="${p.promo_price != null ? +p.promo_price : ''}" placeholder="—"></div></div>
       <details class="card" style="padding:12px 14px;margin:0 0 6px" ${p.purchase_price > 0 || p.supplier ? 'open' : ''}><summary style="cursor:pointer;font-weight:700">🚚 Prix d’achat & fournisseur <span class="muted" style="font-weight:400;font-size:12px">— pour calculer la marge et valoriser le stock</span></summary>
         <div class="row" style="gap:10px;margin-top:10px"><div class="field" style="flex:1"><label for="pfBuy">Prix d’achat</label><input id="pfBuy" inputmode="numeric" value="${+p.purchase_price || ''}" placeholder="0"></div><div class="field" style="flex:1"><label for="pfSup">Fournisseur</label><input id="pfSup" maxlength="80" value="${esc(p.supplier || '')}" placeholder="ex. Solibra"></div></div></details>
       <p class="muted" id="pfMargin" style="margin:0 0 6px;font-size:13px"></p>
+      ${sec('Stock', '')}
+      <label class="row between" style="flex-wrap:nowrap;font-weight:600;margin-bottom:8px"><span>Gérer le stock</span><input type="checkbox" id="pfTrack" ${p.track_stock ? 'checked' : ''} style="width:22px;min-height:22px"></label>
+      <div class="row" id="pfStockRow" style="gap:10px">${isNew ? `<div class="field" style="flex:1"><label for="pfInit">Stock disponible</label><input id="pfInit" inputmode="decimal" placeholder="0"></div>` : `<div class="field" style="flex:1"><label>Stock disponible</label><input value="${+p.stock_qty} ${esc(p.unit)}" disabled></div>`}
+        <div class="field" style="flex:1"><label for="pfAlert">Alerte quand il reste</label><input id="pfAlert" inputmode="decimal" value="${+p.alert_qty || 0}"></div></div>
+      <div class="field"><label for="pfBar">Code-barres</label><div class="row" style="gap:6px;flex-wrap:nowrap"><input id="pfBar" maxlength="64" value="${esc(p.barcode || '')}" placeholder="ex. 6001234567890" style="flex:1;min-width:0"><button type="button" class="primary small" id="pfScan" aria-label="Scanner" style="min-width:48px">▦</button></div></div>
+      <div id="pfPrepBox">${sec('👨‍🍳 Cuisine')}<div class="field"><label for="pfPrep">Temps de préparation (minutes)</label><input id="pfPrep" inputmode="numeric" value="${p.prep_minutes ?? ''}" placeholder="ex. 15"><small class="muted">Affiché sur le bon de cuisine. Laissez vide si non applicable.</small></div></div>
       ${sec('Description')}
       <textarea id="pfDesc" maxlength="2000" rows="3" placeholder="Décrivez votre produit (ingrédients, accompagnement…)" style="width:100%;padding:10px 12px;border-radius:12px;border:1px solid var(--line);font:inherit;background:var(--card);color:inherit">${esc(p.description || '')}</textarea>
       ${sec('Variantes du produit', 'Tailles, cuissons, accompagnements… avec un prix propre si besoin')}
@@ -3015,13 +3014,11 @@ function openProductForm(p, preset){
   const drawImgs = () => { $('pfImgs').innerHTML = st.images.map((u, i) => `<div style="position:relative;aspect-ratio:1/1;border-radius:14px;overflow:hidden;border:1px solid var(--line)"><img src="${esc(u)}" alt="" style="width:100%;height:100%;object-fit:cover">${i === 0 ? '<span class="pill" style="position:absolute;bottom:4px;left:4px;font-size:10px;background:var(--ink);color:var(--card)">Principale</span>' : ''}<button type="button" data-rmimg="${i}" aria-label="Retirer" style="position:absolute;top:4px;right:4px;min-height:26px;width:26px;padding:0;border-radius:50%;border:0;background:rgba(0,0,0,.6);color:#fff">✕</button></div>`).join('')
       + (st.images.length < 4 ? `<label for="pfImg" style="aspect-ratio:1/1;border-radius:14px;border:2px dashed var(--line);display:grid;place-items:center;cursor:pointer;text-align:center;margin:0;background:var(--card)"><span class="muted" style="font-size:12px">⬆️<br>Galerie (${st.images.length}/4)<br><span style="font-size:10px">JPG, PNG, WebP</span></span></label>` : '');
     $('pfImgs').querySelectorAll('[data-rmimg]').forEach(b => b.onclick = () => { st.images.splice(+b.dataset.rmimg, 1); drawImgs(); }); };
-  const drawTags = () => { $('pfTags').innerHTML = PROD_TAGS.map(t => `<button type="button" class="small ${st.tags.includes(t) ? '' : 'ghost'}" data-tag="${esc(t)}">🏷️ ${esc(t)}</button>`).join('');
-    $('pfTags').querySelectorAll('[data-tag]').forEach(b => b.onclick = () => { const t = b.dataset.tag; st.tags = st.tags.includes(t) ? st.tags.filter(x => x !== t) : [...st.tags, t].slice(0, 8); drawTags(); }); };
   const drawVars = () => { $('pfVars').innerHTML = st.variants.map((v, i) => `<div class="row" style="gap:6px;margin-bottom:6px;flex-wrap:nowrap"><input data-vn="${i}" maxlength="60" value="${esc(v.name || '')}" placeholder="ex. Grand, Bien cuit, + frites" style="flex:2;min-width:0"><input data-vp="${i}" inputmode="numeric" value="${v.price ?? ''}" placeholder="Prix (sinon prix normal)" style="flex:1;min-width:0"><button type="button" class="small ghost" data-vrm="${i}" aria-label="Retirer" style="min-width:36px;padding:0;color:var(--red)">✕</button></div>`).join('');
     $('pfVars').querySelectorAll('[data-vn]').forEach(x => x.oninput = () => { st.variants[+x.dataset.vn].name = x.value; });
     $('pfVars').querySelectorAll('[data-vp]').forEach(x => x.oninput = () => { const v = x.value.replace(/\D/g, ''); st.variants[+x.dataset.vp].price = v === '' ? null : Number(v); });
     $('pfVars').querySelectorAll('[data-vrm]').forEach(b => b.onclick = () => { st.variants.splice(+b.dataset.vrm, 1); drawVars(); }); };
-  drawImgs(); drawTags(); drawVars();
+  drawImgs(); drawVars();
   $('pfVarAdd').onclick = () => { if (st.variants.length >= 30) return; st.variants.push({ name: '', price: null }); drawVars(); };
   const mg = () => { const b = num('pfBuy') || 0, s = num('pfPromo') && num('pfPromo') < (num('pfSell') || 0) ? num('pfPromo') : (num('pfSell') || 0); $('pfMargin').textContent = s > 0 ? `Marge : ${money(s - b)} par ${$('pfUnit').value} (${Math.round((s - b) / s * 100)} %)` : ''; };
   ['pfBuy', 'pfSell', 'pfPromo'].forEach(i => $(i).oninput = mg); $('pfUnit').onchange = mg; mg();
@@ -3038,7 +3035,7 @@ function openProductForm(p, preset){
     const row = { outlet: document.querySelector('[name=pfOut]:checked').value, name: $('pfName').value.trim(), category: $('pfCat').value.trim() || null, unit: $('pfUnit').value,
       sale_price: num('pfSell') || 0, promo_price: promo && promo > 0 ? promo : null, purchase_price: num('pfBuy') || 0, supplier: $('pfSup').value.trim() || null,
       track_stock: $('pfTrack').checked, alert_qty: num('pfAlert') || 0, barcode: $('pfBar').value.trim() || null, prep_minutes: num('pfPrep'),
-      description: $('pfDesc').value.trim() || null, tags: st.tags, variants: vars, images: st.images, image_url: st.images[0] || null, is_active: $('pfActive').checked };
+      description: $('pfDesc').value.trim() || null, tags: [], variants: vars, images: st.images, image_url: st.images[0] || null, is_active: $('pfActive').checked };
     if (row.barcode) { const dup = S.products.find(x => x.barcode === row.barcode && x.id !== p.id); if (dup) { b.disabled = false; return toast(`Ce code-barres est déjà utilisé par « ${dup.name} ».`, true); } }
     const res = isNew ? await sb.from('products').insert({ ...row, establishment_id: S.est }).select('id').single() : await sb.from('products').update(row).eq('id', p.id).select('id').single();
     if (res.error) { b.disabled = false; return toast(errMsg(res.error), true); }
