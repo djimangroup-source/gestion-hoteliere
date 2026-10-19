@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="manifest" href="manifest.webmanifest">
+<script>(function(){try{var x=localStorage.getItem("hh_theme");if(x&&x!=="sable")document.documentElement.dataset.theme=x;}catch(e){}})();</script>
 <meta name="theme-color" content="#B4532A">
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-192.png">
@@ -11,12 +12,12 @@
 <meta name="apple-mobile-web-app-title" content="Horus Hotel">
 <title>Horus Hotel – Gestion hôtelière</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700;12..96,800&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700;12..96,800&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=Manrope:wght@500;700;800&family=Sora:wght@600;700;800&family=Work+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 <style>
 :root{--bg:#F3EBDD;--card:#FBF6EE;--ink:#2B1E16;--muted:#6E5A4A;--line:#E5D8C3;--green:#B4532A;--green-d:#8E3D1C;--green-l:#F7D9C4;--ok:#2F5A1E;--ok-l:#E6EEDC;--gold:#8C6A1E;--gold-l:#F2DCA8;--red:#8E2B2B;--red-l:#F2CFCF;--amber:#7A3216;--amber-l:#F7D9C4;--blue:#2E4C6E;--blue-l:#E3EAF1;--nav:#FBF6EE;--display:"Bricolage Grotesque",system-ui,sans-serif}
 *{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.55 "DM Sans",system-ui,sans-serif}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.55 var(--body,"DM Sans"),system-ui,sans-serif}
 h1,h2,h3{font-family:var(--display);font-weight:800;letter-spacing:-.5px;margin:0}
 button,input,select{font:inherit}
 button{cursor:pointer;min-height:44px;border-radius:999px;padding:0 20px;font-weight:700;border:2px solid var(--ink);background:transparent;color:var(--ink)}
@@ -75,6 +76,26 @@ nav.side button.navsearch kbd{font:600 11px/1 var(--body,inherit);border:1px sol
   main{max-width:1320px}
 }
 @media (max-width:899px){nav.side{flex-wrap:nowrap;overflow-x:auto}nav.side .brand{flex:0 0 auto}}
+/* ===== Thèmes au choix ===== */
+html[data-theme="lagune"]{--bg:#F4F7FB;--card:#FFFFFF;--ink:#0F1B2D;--muted:#55657D;--line:#E3E9F2;--green:#1E5BD8;--green-d:#1747A8;--green-l:#EAF1FE;--ok:#0B6B5F;--ok-l:#DDF7F2;--amber:#8A5A00;--amber-l:#FFF4D6;--red:#A12A2E;--red-l:#FDE4E4;--gold-l:#FFF4D6;--nav:#FFFFFF;--display:"Manrope",system-ui,sans-serif;--body:"Manrope"}
+html[data-theme="indigo"]{--bg:#FAF5EC;--card:#FFFFFF;--ink:#1B1F3B;--muted:#6A5A45;--line:#EADBC2;--green:#C9741A;--green-d:#9E5A12;--green-l:#F6E2C4;--ok:#2F5A1E;--ok-l:#DCEBD5;--amber:#8A4A0A;--amber-l:#F6D9A8;--red:#B23A2E;--red-l:#F3D0C8;--gold-l:#F6D9A8;--nav:#1B1F3B;--display:"Sora",system-ui,sans-serif;--body:"Work Sans"}
+html[data-theme="indigo"] nav.side,html[data-theme="indigo"] nav.side .brand{color:#E8E2F5}
+html[data-theme="indigo"] nav.side button{color:#E8E2F5}html[data-theme="indigo"] nav.side .org{color:#B9B3D1}
+html[data-theme="indigo"] nav.side button:hover,html[data-theme="indigo"] nav.side details.more summary:hover{background:rgba(255,255,255,.08)}
+html[data-theme="indigo"] nav.side button.active{background:#E39B34;color:#1B1F3B}
+html[data-theme="indigo"] nav.side details.more summary{color:#E8E2F5}
+html[data-theme="nuit"]{color-scheme:dark;--bg:#0E1116;--card:#151A22;--ink:#ECE7DC;--muted:#A7AFBC;--line:#2A3240;--green:#D4A84F;--green-d:#B88C35;--green-l:#2E2817;--ok:#7FC8A9;--ok-l:#1E2E29;--amber:#F2C46D;--amber-l:#3A3020;--red:#F08A7E;--red-l:#3A2321;--gold-l:#3A3020;--blue-l:#1C2533;--nav:#151A22;--display:"Space Grotesk",system-ui,sans-serif}
+html[data-theme="nuit"] button.primary{color:#0E1116}
+html[data-theme="nuit"] input,html[data-theme="nuit"] select,html[data-theme="nuit"] textarea{background:#1C222C!important;color:#ECE7DC;border-color:#3A4352}
+html[data-theme="nuit"] [style*="background:#fff"],html[data-theme="nuit"] [style*="background: #fff"],html[data-theme="nuit"] [style*="background:#FBF6EE"],html[data-theme="nuit"] [style*="background:#F3EBDD"],html[data-theme="nuit"] [style*="background:var(--bg)"]{background:#1C222C!important;color:#ECE7DC}
+html[data-theme="nuit"] .modal .card{background:#151A22}
+html[data-theme="nuit"] [style*="background:var(--ink)"],html[data-theme="nuit"] .kpi.dark{background:#232A35!important;color:#ECE7DC!important;border-color:#2A3240!important}
+html[data-theme="nuit"] [style*="background:var(--ink)"] button.primary{color:#0E1116!important}
+html[data-theme="indigo"] nav.side button.navsearch{background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.18);color:#E8E2F5}
+html[data-theme="indigo"] nav.side button.navsearch kbd{color:#E8E2F5;border-color:rgba(255,255,255,.3)}
+html[data-theme="indigo"] nav.side #navInstall{color:#E39B34!important}
+html[data-theme="indigo"] nav.side select.estsw{background:rgba(255,255,255,.08);color:#E8E2F5;border-color:rgba(255,255,255,.2)}
+
 .card{background:var(--card);border:1px solid var(--line);border-radius:22px;padding:24px}
 .grid{display:grid;gap:16px}
 .g2{grid-template-columns:repeat(auto-fit,minmax(280px,1fr))}
@@ -182,6 +203,7 @@ body.modal-open{overflow:hidden}
       <summary>Réglages</summary>
       <div class="menu">
         <button type="button" id="navEsts">Mes établissements</button>
+        <button type="button" id="navTheme">Thème de l’application</button>
         <button data-view="equipe">Équipe</button>
         <button data-view="abonnement">Mon abonnement</button>
         <button data-view="tarifs">Tarifs</button>
@@ -376,6 +398,7 @@ $('navSearch').onclick = () => openPalette();
 $('navInstall').onclick = () => installApp();
 if (isStandalone()) $('navInstall').classList.add('hidden');
 $('navEsts').onclick = () => openEstablishments();
+$('navTheme').onclick = () => openThemes();
 
 const ROLE_VIEWS = {
   owner: null, admin: null,
@@ -407,6 +430,19 @@ function renderLocked(v){
     <p class="muted" style="font-size:13px;margin:14px 0 0">Votre formule actuelle : ${esc((S.overview && S.overview.plan && S.overview.plan.name) || '')}</p></div>`;
 }
 
+
+const APP_THEMES = { sable:['Sable & Terracotta','#F3EBDD','#B4532A','#2B1E16'], lagune:['Lagune','#F4F7FB','#1E5BD8','#0F1B2D'], indigo:['Indigo & Ocre','#FAF5EC','#C9741A','#1B1F3B'], nuit:['Nuit & Or (sombre)','#0E1116','#D4A84F','#ECE7DC'] };
+function setTheme(k){ if (k === 'sable') delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme = k; try { localStorage.setItem('hh_theme', k); } catch (_) {} const m = document.querySelector('meta[name=theme-color]'); if (m) m.content = APP_THEMES[k][2]; }
+function openThemes(){
+  const nb = $('navMore'); if (nb) nb.open = false;
+  let cur = 'sable'; try { cur = localStorage.getItem('hh_theme') || 'sable'; } catch (_) {}
+  modal(`<h2 style="font-size:24px;margin-bottom:4px">Thème de l’application</h2><p class="muted" style="margin:0 0 14px">Choisissez l’apparence. Le changement s’applique tout de suite sur cet appareil.</p>
+    <div class="grid" style="grid-template-columns:repeat(2,minmax(0,1fr));gap:10px">${Object.entries(APP_THEMES).map(([k, t]) => `<button type="button" data-th="${k}" style="min-height:0;padding:0;border-radius:16px;border:${k === cur ? '3px solid var(--green)' : '1px solid var(--line)'};overflow:hidden;text-align:left;background:${t[1]};color:${t[3]}">
+      <div style="display:flex;height:70px"><span style="width:30%;background:${k === 'indigo' ? '#1B1F3B' : k === 'nuit' ? '#151A22' : t[1]};border-right:1px solid rgba(0,0,0,.08)"></span><span style="flex:1;padding:10px;display:flex;flex-direction:column;gap:6px"><span style="height:10px;width:60%;border-radius:5px;background:${t[2]}"></span><span style="height:8px;width:80%;border-radius:4px;background:${t[3]};opacity:.25"></span><span style="height:8px;width:50%;border-radius:4px;background:${t[3]};opacity:.25"></span></span></div>
+      <div style="padding:8px 12px;font-weight:700;font-size:14px">${k === cur ? '✓ ' : ''}${t[0]}</div></button>`).join('')}</div>
+    <div class="row" style="margin-top:14px"><button class="ghost" data-close>Fermer</button></div>`);
+  document.querySelectorAll('[data-th]').forEach(b => b.onclick = () => { setTheme(b.dataset.th); openThemes(); });
+}
 function renderEstSwitch(){
   const s = $('estSwitch'); if (!s) return;
   const list = S.ests || [];
