@@ -266,6 +266,7 @@ body.modal-open{overflow:hidden}
         <button type="button" id="navTheme">Thème de l’application</button>
         <button type="button" id="navRefresh">🔄 Actualiser l’application</button>
         <button type="button" id="navPrint">Impression &amp; reçus</button>
+        <button type="button" id="navPrn">Imprimantes thermiques</button>
         <button data-view="equipe">Équipe</button>
         <button data-view="abonnement">Mon abonnement</button>
         <button data-view="tarifs">Tarifs</button>
@@ -361,7 +362,7 @@ if (window.HorusApp && window.HorusApp.postMessage) {
   window.__nativeOpen = nativeOpen;
 }
 /* ---------- Mise à jour de l'application sans réinstaller ni perdre la connexion ---------- */
-const APP_VERSION = '2026.10.19-6';
+const APP_VERSION = '2026.10.19-7';
 async function refreshApp(){
   toast('Actualisation…');
   try { const reg = navigator.serviceWorker && await navigator.serviceWorker.getRegistration(); if (reg) { await reg.update(); if (reg.waiting) reg.waiting.postMessage('skipWaiting'); } } catch (_) {}
@@ -680,6 +681,7 @@ $('navRefresh').onclick = () => refreshApp();
 $('navMods').onclick = () => openModules();
 $('navCur').onclick = () => { modal(`<h2 style="font-size:22px;margin-bottom:10px">Devise d’affichage</h2><p class="muted" style="font-size:14px;margin:0 0 10px">Les montants s’affichent dans cette devise (aucune conversion n’est faite).</p><div style="display:grid;gap:6px">${Object.entries(CURRENCIES).map(([k, v]) => `<button type="button" class="${k === S.currency ? '' : 'ghost'}" data-cur="${k}" style="justify-content:space-between;display:flex"><span>${v[0]}</span><strong>${k} · ${v[1]}</strong></button>`).join('')}</div>`); document.querySelectorAll('[data-cur]').forEach(b => b.onclick = () => { closeModal(); setCurrency(b.dataset.cur); }); };
 $('navPrint').onclick = () => openPrintSettings();
+$('navPrn').onclick = () => openPrinterSetup('caisse');
 
 const ROLE_VIEWS = {
   owner: null, admin: null,
@@ -2576,8 +2578,8 @@ async function uploadProductPhoto(file){
   if (error) throw error;
   return sb.storage.from('public-media').getPublicUrl(path).data.publicUrl;
 }
-const prodThumb = (p, size = 64) => p.image_url
-  ? `<img src="${esc(p.image_url)}" alt="" loading="lazy" style="width:100%;height:${size}px;object-fit:cover;border-radius:12px;display:block">`
+const prodThumb = (p, size = 64) => ((p.images && p.images[0]) || p.image_url)
+  ? `<img src="${esc((p.images && p.images[0]) || p.image_url)}" alt="" loading="lazy" style="width:100%;height:${size}px;object-fit:cover;border-radius:12px;display:block">`
   : `<div style="height:${size}px;border-radius:12px;background:var(--green-l);display:grid;place-items:center;font-size:${Math.round(size / 2.4)}px">${OUTLETS[p.outlet] ? OUTLETS[p.outlet][1] : '🍽️'}</div>`;
 const stockTxt = (p) => !p.track_stock ? '' : Number(p.stock_qty) <= 0 ? '<span class="pill st-cancelled">Rupture</span>' : Number(p.stock_qty) <= Number(p.alert_qty) ? `<span class="pill st-past_due">Reste ${+p.stock_qty}</span>` : `<span class="muted" style="font-size:12px">Stock ${+p.stock_qty}</span>`;
 
@@ -2586,11 +2588,11 @@ async function renderResto(){
   S.rTab = S.rTab || 'caisse'; S.rOutlet = S.rOutlet || 'restaurant'; S.cart = S.cart || [];
   if (!isMgr() && !['caisse', 'ventes'].includes(S.rTab)) S.rTab = 'caisse';
   if (S.rTab === 'ventes' && !can(['owner', 'admin', 'manager', 'accountant'])) S.rTab = 'caisse';
-  const { data: prods, error } = await sb.from('products').select('*').eq('establishment_id', S.est).eq('is_active', true).order('category', { nullsFirst: false }).order('name');
+  const { data: prods, error } = await sb.from('products').select('*').eq('establishment_id', S.est).order('category', { nullsFirst: false }).order('name');
   if (error) { el.innerHTML = head('Restaurant & Bar') + `<p class="muted">${esc(errMsg(error))}</p>`; return; }
   S.products = prods || [];
   const tabs = [['caisse', 'Caisse'], ...(isMgr() ? [['produits', 'Produits'], ['stock', 'Stock']] : []), ...(can(['owner', 'admin', 'manager', 'accountant']) ? [['ventes', 'Ventes']] : [])];
-  const low = S.products.filter(p => p.track_stock && Number(p.stock_qty) <= Number(p.alert_qty)).length;
+  const low = S.products.filter(p => p.is_active !== false && p.track_stock && Number(p.stock_qty) <= Number(p.alert_qty)).length;
   el.innerHTML = head('Restaurant & Bar', isMgr() ? `<button class="small" type="button" id="rNewProd">+ Produit</button>` : '') + readOnlyNote() + `
     <div class="row" style="gap:6px;margin-bottom:16px;overflow-x:auto;flex-wrap:nowrap">${tabs.map(([k, l]) => `<button type="button" class="small ${S.rTab === k ? '' : 'ghost'}" data-rtab="${k}" style="white-space:nowrap">${l}${k === 'stock' && low ? ` <span class="pill st-past_due" style="margin-left:4px">${low}</span>` : ''}</button>`).join('')}</div>
     <div id="rBody"></div>`;
@@ -2599,68 +2601,336 @@ async function renderResto(){
   ({ caisse: drawPos, produits: drawProducts, stock: drawStock, ventes: drawSales })[S.rTab]();
 }
 
-/* ----- Caisse (prise de commande) ----- */
+const PAY_NAME = { cash: 'Espèces', orange_money: 'Orange Money', mtn_money: 'MTN MoMo', moov_money: 'Moov Money', wave: 'Wave', card: 'Carte', bank_transfer: 'Virement' };
+function printPosTicket(s, items){
+  const w = window.open('', '_blank'); if (!w) return toast("Autorisez l'ouverture de fenêtres pour imprimer.", true);
+  const est = (S.ests || []).find(x => x.id === S.est) || {};
+  w.document.write(`<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>Ticket ${s.number}</title><style>body{font:13px/1.45 ui-monospace,Menlo,monospace;color:#111;max-width:300px;margin:16px auto;padding:0 10px}h1{font-size:16px;margin:0;text-align:center}.c{text-align:center}table{width:100%;border-collapse:collapse;margin:10px 0}td{padding:3px 0;vertical-align:top}.r{text-align:right}.t td{border-top:1px dashed #000;font-weight:700;font-size:15px;padding-top:6px}.m{color:#555;font-size:11px}${printCss('ticket')}</style></head><body>
+    ${rcptHead(est)}
+    <p class="c">${esc(OUTLETS[s.outlet] ? OUTLETS[s.outlet][0] : '')} · Ticket n° ${s.number}<br>${new Date(s.created_at).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })}${s.table ? '<br>' + esc(s.table) : ''}</p>
+    <table>${items.map(i => `<tr><td>${+i.qty} × ${esc(i.name)}</td><td class="r">${money(i.qty * i.unit_price)}</td></tr>`).join('')}<tr class="t"><td>TOTAL</td><td class="r">${money(s.total)}</td></tr></table>
+    ${s.method ? `<p class="m">Payé par ${esc(PAY_NAME[s.method] || s.method)}${rcpt(est).show_server !== false && s.server ? ' · Servi par ' + esc(s.server) : ''}</p>` : (s.server ? `<p class="m">Serveur : ${esc(s.server)}</p>` : '')}${rcptFoot(est, 'Merci de votre visite !')}${S.overview && S.overview.plan && S.overview.plan.slug === 'decouverte' ? '<p class="c m">Propulsé par Horus Hotel</p>' : ''}
+    <script>window.onload=()=>{window.print();}<\/script></body></html>`);
+  w.document.close();
+}
+
+/* ================= Imprimantes thermiques (ESC/POS) : USB filaire, série, Bluetooth, RawBT, système ================= */
+const PRN_TYPES = {
+  system: ['🖨️', 'Imprimante du système', 'Wi-Fi, réseau ou USB avec pilote installé : passe par la fenêtre d’impression.'],
+  usb: ['🔌', 'USB filaire (direct)', 'Imprimante de tickets branchée en USB. Chrome ou Edge sur ordinateur ou Android.'],
+  serial: ['🧵', 'Port série / COM', 'Imprimantes série, USB-série ou Bluetooth appairée en port COM (ordinateur, Chrome/Edge).'],
+  bluetooth: ['📶', 'Bluetooth', 'Petites imprimantes Bluetooth basse consommation (Chrome Android ou ordinateur).'],
+  rawbt: ['🤖', 'Android · application RawBT', 'Toutes imprimantes Bluetooth, USB ou réseau via l’application gratuite RawBT.']
+};
+const PRN_ROLES = { caisse: 'Caisse (tickets clients)', cuisine: 'Cuisine / Bar (bons de commande)' };
+const BLE_SERVICES = ['000018f0-0000-1000-8000-00805f9b34fb', 'e7810a71-73ae-499d-8c15-faa9aef0c3f2', '49535343-fe7d-4ae5-8fa9-9fafd205e455', '0000ff00-0000-1000-8000-00805f9b34fb', '0000fee7-0000-1000-8000-00805f9b34fb', '0000ae30-0000-1000-8000-00805f9b34fb'];
+const PRN = { conn: {} };
+const prnCfg = (role) => { try { return JSON.parse(localStorage.getItem('hh_prn_' + role) || 'null') || { type: 'system', width: 80, auto: false, copies: 1, drawer: false }; } catch (_) { return { type: 'system', width: 80, auto: false, copies: 1, drawer: false }; } };
+const prnSave = (role, c) => { try { localStorage.setItem('hh_prn_' + role, JSON.stringify(c)); } catch (_) {} };
+const prnSupported = (t) => t === 'usb' ? !!navigator.usb : t === 'serial' ? !!navigator.serial : t === 'bluetooth' ? !!navigator.bluetooth : t === 'rawbt' ? /Android/i.test(navigator.userAgent) : true;
+
+// ---- Encodeur ESC/POS ----
+const deaccent = (t) => String(t ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[’‘]/g, "'").replace(/[«»“”]/g, '"').replace(/[–—]/g, '-').replace(/·/g, '-').replace(/[^\x20-\x7E\n]/g, '');
+class Esc {
+  constructor(width){ this.cols = width === 58 ? 32 : 48; this.b = [0x1B, 0x40]; }
+  raw(...a){ this.b.push(...a); return this; }
+  text(t){ for (const c of deaccent(t)) this.b.push(c.charCodeAt(0)); return this; }
+  line(t = ''){ return this.text(t).raw(0x0A); }
+  align(a){ return this.raw(0x1B, 0x61, a === 'center' ? 1 : a === 'right' ? 2 : 0); }
+  bold(on){ return this.raw(0x1B, 0x45, on ? 1 : 0); }
+  size(w, h){ return this.raw(0x1D, 0x21, ((w - 1) << 4) | (h - 1)); }
+  rule(ch = '-'){ return this.line(ch.repeat(this.cols)); }
+  pair(l, r){ l = deaccent(l); r = deaccent(r); const room = this.cols - r.length - 1; if (l.length > room) { this.line(l); return this.line(' '.repeat(this.cols - r.length) + r); } return this.line(l + ' '.repeat(this.cols - l.length - r.length) + r); }
+  wrap(t){ const words = deaccent(t).split(/\s+/); let cur = ''; words.forEach(w => { if ((cur + ' ' + w).trim().length > this.cols) { this.line(cur); cur = w; } else cur = (cur + ' ' + w).trim(); }); if (cur) this.line(cur); return this; }
+  feed(n = 3){ return this.raw(0x1B, 0x64, n); }
+  cut(){ return this.raw(0x1D, 0x56, 0x42, 0x00); }
+  drawer(){ return this.raw(0x1B, 0x70, 0x00, 0x19, 0xFA); }
+  bytes(){ return new Uint8Array(this.b); }
+}
+const moneyTxt = (n) => money(n).replace(/[  ]/g, ' ');
+
+// ---- Connexions ----
+async function prnConnect(role, ask){
+  const c = prnCfg(role); const k = role + ':' + c.type;
+  if (PRN.conn[k]) return PRN.conn[k];
+  let send;
+  if (c.type === 'usb') {
+    let dev = (await navigator.usb.getDevices())[0];
+    if (!dev || ask) dev = await navigator.usb.requestDevice({ filters: [] });
+    await dev.open(); if (dev.configuration === null) await dev.selectConfiguration(1);
+    let ifc = null, ep = null;
+    for (const i of dev.configuration.interfaces) for (const a of i.alternates) { const o = a.endpoints.find(e => e.direction === 'out' && e.type === 'bulk'); if (o && !ep) { ifc = i.interfaceNumber; ep = o.endpointNumber; } }
+    if (ep === null) throw new Error('Aucune sortie d’impression trouvée sur cet appareil USB.');
+    await dev.claimInterface(ifc);
+    send = async (data) => { for (let i = 0; i < data.length; i += 4096) await dev.transferOut(ep, data.slice(i, i + 4096)); };
+    c.label = dev.productName || 'Imprimante USB';
+  } else if (c.type === 'serial') {
+    let port = (await navigator.serial.getPorts())[0];
+    if (!port || ask) port = await navigator.serial.requestPort();
+    if (!port.writable) await port.open({ baudRate: Number(c.baud) || 9600 });
+    send = async (data) => { const w = port.writable.getWriter(); try { await w.write(data); } finally { w.releaseLock(); } };
+    c.label = 'Port série';
+  } else if (c.type === 'bluetooth') {
+    let dev = null;
+    if (!ask && navigator.bluetooth.getDevices) { dev = (await navigator.bluetooth.getDevices())[0] || null; }
+    if (!dev) dev = await navigator.bluetooth.requestDevice({ acceptAllDevices: true, optionalServices: BLE_SERVICES });
+    const gatt = await dev.gatt.connect();
+    let ch = null;
+    for (const s of await gatt.getPrimaryServices()) { for (const x of await s.getCharacteristics()) { if (x.properties.write || x.properties.writeWithoutResponse) { ch = x; break; } } if (ch) break; }
+    if (!ch) throw new Error('Cette imprimante Bluetooth ne propose pas de canal d’impression compatible.');
+    send = async (data) => { for (let i = 0; i < data.length; i += 180) { const part = data.slice(i, i + 180); if (ch.properties.writeWithoutResponse) await ch.writeValueWithoutResponse(part); else await ch.writeValue(part); await new Promise(r => setTimeout(r, 20)); } };
+    dev.addEventListener('gattserverdisconnected', () => { delete PRN.conn[k]; prnStatus(); });
+    c.label = dev.name || 'Imprimante Bluetooth';
+  } else if (c.type === 'rawbt') {
+    send = async (data) => { let s = ''; data.forEach(x => { s += String.fromCharCode(x); }); location.href = 'rawbt:base64,' + btoa(s); };
+    c.label = 'RawBT';
+  } else return null;
+  prnSave(role, c); PRN.conn[k] = { send }; prnStatus(); return PRN.conn[k];
+}
+async function prnSend(role, bytes){
+  const c = prnCfg(role);
+  const conn = await prnConnect(role, false).catch(async (e) => { if (/No device selected|aucun|cancel/i.test(e.message)) throw e; return prnConnect(role, true); });
+  for (let i = 0; i < Math.max(1, Number(c.copies) || 1); i++) await conn.send(bytes);
+}
+function prnStatus(){
+  const dot = $('posPrnDot'); if (!dot) return;
+  const c = prnCfg('caisse'); const ok = c.type === 'system' || c.type === 'rawbt' || PRN.conn['caisse:' + c.type];
+  dot.style.background = ok ? '#2E8B57' : '#E0A100'; dot.title = ok ? 'Imprimante prête' : 'Imprimante à connecter';
+}
+
+// ---- Documents imprimés ----
+function escTicket(width, s, items, opts = {}){
+  const est = (S.ests || []).find(x => x.id === S.est) || {}; const r = rcpt(est);
+  const e = new Esc(width).align('center').bold(true).size(2, 2).line(r.title || est.name || 'Horus Hotel').size(1, 1).bold(false);
+  [r.header, r.address ?? [est.address, est.city].filter(Boolean).join(', '), (r.phone ?? (est.phone || est.public_phone)) ? 'Tel. ' + (r.phone ?? (est.phone || est.public_phone)) : '', r.tax_id].filter(Boolean).forEach(l => e.wrap(l));
+  e.rule().line((opts.title || ((OUTLETS[s.outlet] ? OUTLETS[s.outlet][0] : '') + ' - Ticket No ' + s.number))).line(new Date(s.created_at || Date.now()).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }));
+  if (s.table) e.line('Table : ' + s.table); if (s.server && r.show_server !== false) e.line('Serveur : ' + s.server);
+  e.align('left').rule();
+  items.forEach(i => e.pair(`${+i.qty} x ${i.name}`, moneyTxt(i.qty * i.unit_price)));
+  e.rule().bold(true).size(1, 2).pair('TOTAL', moneyTxt(s.total)).size(1, 1).bold(false);
+  if (s.method) e.line('Paye par ' + (PAY_NAME[s.method] || s.method));
+  if (opts.change > 0) e.line('Monnaie rendue : ' + moneyTxt(opts.change));
+  e.align('center').raw(0x0A).wrap(r.footer || (opts.bill ? 'Addition - non encaissee' : 'Merci de votre visite !'));
+  if (S.overview && S.overview.plan && S.overview.plan.slug === 'decouverte') e.line('Propulse par Horus Hotel');
+  e.feed(4).cut(); if (opts.drawer) e.drawer();
+  return e.bytes();
+}
+function escKitchen(width, o){
+  const e = new Esc(width).align('center').bold(true).size(2, 2).line(o.outlet === 'bar' ? 'BAR' : 'CUISINE').size(1, 1).line('Bon No ' + o.ref).bold(false)
+    .line(new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })).align('left').rule();
+  if (o.table) e.bold(true).size(1, 2).line('Table : ' + o.table).size(1, 1).bold(false); if (o.server) e.line('Serveur : ' + o.server);
+  e.rule(); o.items.forEach(i => { e.bold(true).size(1, 2).line(`${+i.qty} x ${i.name}`).size(1, 1).bold(false); if (i.prep) e.line('   ~ ' + i.prep + ' min'); if (i.note) e.line('   > ' + i.note); });
+  if (o.note) e.rule().wrap('Note : ' + o.note);
+  return e.feed(4).cut().bytes();
+}
+// Impression unifiée : ESC/POS si une imprimante est configurée, sinon fenêtre d'impression
+async function printDocument(role, escBytesFn, htmlFallbackFn){
+  const c = prnCfg(role);
+  if (c.type === 'system') return htmlFallbackFn();
+  try { await prnSend(role, escBytesFn(Number(c.width) || 80)); toast('Envoyé à l’imprimante.'); }
+  catch (e) { toast('Impression impossible : ' + (e.message || e) + '. Ouverture de l’impression classique.', true); htmlFallbackFn(); }
+}
+async function openDrawer(){
+  const c = prnCfg('caisse'); if (c.type === 'system') return toast('Le tiroir-caisse s’ouvre avec une imprimante connectée en direct (USB, série, Bluetooth, RawBT).', true);
+  try { await prnSend('caisse', new Esc(Number(c.width) || 80).drawer().bytes()); toast('Tiroir-caisse ouvert.'); } catch (e) { toast(errMsg(e), true); }
+}
+
+function openPrinterSetup(role = 'caisse'){
+  const draw = () => {
+    const c = prnCfg(role);
+    $('modalBody').innerHTML = `<div class="row between" style="margin-bottom:6px"><h2 style="font-size:22px">Imprimantes</h2><button class="small ghost" data-close style="border:0;font-size:18px" aria-label="Fermer">✕</button></div>
+      <p class="muted" style="margin:0 0 10px;font-size:13px">Réglage propre à cet appareil. Branchez ou allumez l’imprimante avant de la connecter.</p>
+      <div class="row" style="gap:6px;margin-bottom:12px;flex-wrap:nowrap">${Object.entries(PRN_ROLES).map(([k, l]) => `<button type="button" class="small ${k === role ? '' : 'ghost'}" data-prole="${k}" style="flex:1">${l}</button>`).join('')}</div>
+      <div style="display:grid;gap:6px">${Object.entries(PRN_TYPES).map(([k, [ic, l, d]]) => { const sup = prnSupported(k); return `<label class="card" style="margin:0;padding:10px 12px;display:flex;gap:10px;align-items:flex-start;cursor:${sup ? 'pointer' : 'not-allowed'};${sup ? '' : 'opacity:.5'};${c.type === k ? 'border-color:var(--green);background:var(--green-l)' : ''}"><input type="radio" name="ptype" value="${k}" ${c.type === k ? 'checked' : ''} ${sup ? '' : 'disabled'} style="width:18px;min-height:18px;margin-top:3px"><span><strong>${ic} ${l}</strong>${PRN.conn[role + ':' + k] ? ' <span class="pill st-active">connectée</span>' : ''}<br><span class="muted" style="font-size:12px">${d}${sup ? '' : ' — non disponible sur ce navigateur'}</span></span></label>`; }).join('')}</div>
+      <div class="row" style="gap:10px;margin-top:12px">
+        <div style="flex:1"><label>Largeur du papier</label><select id="pW"><option value="80" ${+c.width === 80 ? 'selected' : ''}>80 mm (48 caractères)</option><option value="58" ${+c.width === 58 ? 'selected' : ''}>58 mm (32 caractères)</option></select></div>
+        <div style="flex:1"><label>Exemplaires</label><select id="pCopies">${[1, 2, 3].map(n => `<option ${+c.copies === n ? 'selected' : ''}>${n}</option>`).join('')}</select></div>
+        ${c.type === 'serial' ? `<div style="flex:1"><label>Vitesse</label><select id="pBaud">${[9600, 19200, 38400, 115200].map(n => `<option ${+(c.baud || 9600) === n ? 'selected' : ''}>${n}</option>`).join('')}</select></div>` : ''}
+      </div>
+      <label class="row" style="gap:8px;font-weight:600;flex-wrap:nowrap;margin:10px 0 6px"><input type="checkbox" id="pAuto" ${c.auto ? 'checked' : ''} style="width:20px;min-height:20px"> ${role === 'caisse' ? 'Imprimer automatiquement le ticket après chaque encaissement' : 'Imprimer automatiquement à l’envoi en cuisine'}</label>
+      ${role === 'caisse' ? `<label class="row" style="gap:8px;font-weight:600;flex-wrap:nowrap;margin-bottom:6px"><input type="checkbox" id="pDrawer" ${c.drawer ? 'checked' : ''} style="width:20px;min-height:20px"> Ouvrir le tiroir-caisse après un paiement en espèces</label>` : ''}
+      <div class="row" style="margin-top:12px;gap:8px">${c.type !== 'system' && c.type !== 'rawbt' ? '<button class="ghost" type="button" id="pConn" style="flex:1">Connecter l’imprimante</button>' : ''}<button class="ghost" type="button" id="pTest" style="flex:1">Imprimer un test</button>${role === 'caisse' ? '<button class="ghost" type="button" id="pDrw" style="flex:1">Ouvrir le tiroir</button>' : ''}</div>
+      <p class="muted" style="font-size:12px;margin:10px 0 0">${c.type === 'usb' ? 'Sous Windows, si l’imprimante n’apparaît pas, elle est déjà prise par son pilote : utilisez « Imprimante du système » ou installez le pilote WinUSB (outil Zadig).' : c.type === 'rawbt' ? 'Installez « RawBT » depuis le Play Store, choisissez-y votre imprimante (Bluetooth, USB ou réseau/IP), puis imprimez un test ici.' : c.type === 'system' ? 'Pour une imprimante réseau (IP) ou Wi-Fi : installez son pilote sur l’ordinateur, puis choisissez-la dans la fenêtre d’impression (marges « Aucune »).' : 'Le choix de l’appareil est mémorisé : la reconnexion est automatique ensuite.'}</p>`;
+    $('modalBody').querySelectorAll('[data-prole]').forEach(b => b.onclick = () => { role = b.dataset.prole; draw(); });
+    const upd = (patch) => { const c2 = { ...prnCfg(role), ...patch }; prnSave(role, c2); };
+    $('modalBody').querySelectorAll('[name=ptype]').forEach(r => r.onchange = () => { upd({ type: r.value }); draw(); });
+    $('pW').onchange = () => upd({ width: +$('pW').value }); $('pCopies').onchange = () => upd({ copies: +$('pCopies').value });
+    if ($('pBaud')) $('pBaud').onchange = () => { upd({ baud: +$('pBaud').value }); delete PRN.conn[role + ':serial']; };
+    $('pAuto').onchange = () => upd({ auto: $('pAuto').checked }); if ($('pDrawer')) $('pDrawer').onchange = () => upd({ drawer: $('pDrawer').checked });
+    if ($('pConn')) $('pConn').onclick = async () => { try { delete PRN.conn[role + ':' + prnCfg(role).type]; await prnConnect(role, true); toast('Imprimante connectée : ' + (prnCfg(role).label || '')); draw(); } catch (e) { toast(/No device selected|cancel/i.test(e.message) ? 'Aucune imprimante choisie.' : errMsg(e), true); } };
+    $('pTest').onclick = () => role === 'caisse'
+      ? printDocument('caisse', (w) => escTicket(w, { number: 'TEST', total: 3500, outlet: 'bar', table: 'Table 1', server: myName(), method: 'cash', created_at: new Date().toISOString() }, [{ name: 'Flag 65cl', qty: 2, unit_price: 1000 }, { name: 'Coca-Cola', qty: 3, unit_price: 500 }]), () => printPosTicket({ number: 'TEST', total: 3500, outlet: 'bar', table: 'Table 1', server: myName(), method: 'cash', created_at: new Date().toISOString() }, [{ name: 'Flag 65cl', qty: 2, unit_price: 1000 }, { name: 'Coca-Cola', qty: 3, unit_price: 500 }]))
+      : printDocument('cuisine', (w) => escKitchen(w, { ref: 'TEST', outlet: 'restaurant', table: 'Table 4', server: myName(), items: [{ qty: 2, name: 'Poulet braisé', prep: 20 }, { qty: 1, name: 'Attiéké poisson', note: 'sans piment' }] }), () => printKitchenHtml({ ref: 'TEST', outlet: 'restaurant', table: 'Table 4', server: myName(), items: [{ qty: 2, name: 'Poulet braisé', prep: 20 }] }));
+    if ($('pDrw')) $('pDrw').onclick = openDrawer;
+  };
+  modal('<div></div>'); $('modalBody').style.maxWidth = '560px'; draw();
+}
+function printKitchenHtml(o){
+  const w = window.open('', '_blank'); if (!w) return toast("Autorisez l'ouverture de fenêtres pour imprimer.", true);
+  w.document.write(`<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>Bon ${esc(o.ref)}</title><style>body{font:15px/1.4 ui-monospace,Menlo,monospace;max-width:300px;margin:12px auto;padding:0 8px}h1{text-align:center;font-size:22px;margin:0}.b{font-size:18px;font-weight:700;margin:6px 0}.m{font-size:12px}${printCss('ticket')}</style></head><body>
+    <h1>${o.outlet === 'bar' ? 'BAR' : 'CUISINE'}</h1><p style="text-align:center">Bon n° ${esc(o.ref)} · ${new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</p>
+    ${o.table ? `<div class="b">Table : ${esc(o.table)}</div>` : ''}${o.server ? `<div>Serveur : ${esc(o.server)}</div>` : ''}<hr>
+    ${o.items.map(i => `<div class="b">${+i.qty} × ${esc(i.name)}</div>${i.prep ? `<div class="m">~ ${i.prep} min</div>` : ''}${i.note ? `<div class="m">› ${esc(i.note)}</div>` : ''}`).join('')}
+    ${o.note ? `<hr><div>Note : ${esc(o.note)}</div>` : ''}<script>window.onload=()=>window.print()<\/script></body></html>`);
+  w.document.close();
+}
+
+/* ----- Caisse restaurant/bar v2 : variantes, promo, code-barres, attente, cuisine, addition, imprimantes ----- */
+const PROD_TAGS = ['Nouveau', 'Promo', 'Populaire', 'Spécialité', 'Fait maison', 'Épicé', 'Végétarien', 'Best-seller', 'Édition limitée'];
+const prodImg = (p) => (p.images && p.images[0]) || p.image_url || null;
+const effPrice = (p) => (p.promo_price != null && Number(p.promo_price) > 0 && Number(p.promo_price) < Number(p.sale_price)) ? Number(p.promo_price) : Number(p.sale_price);
+const holdsKey = () => 'hh_holds_' + S.est;
+const getHolds = () => { try { return JSON.parse(localStorage.getItem(holdsKey()) || '[]'); } catch (_) { return []; } };
+const setHolds = (h) => { try { localStorage.setItem(holdsKey(), JSON.stringify(h)); } catch (_) {} };
+const cartTotal = () => S.cart.reduce((a, c) => a + c.qty * c.price, 0);
+const cartCount = () => S.cart.reduce((a, c) => a + c.qty, 0);
+function cartAdd(p, variant){
+  const v = variant ? (p.variants || []).find(x => x.name === variant) : null;
+  const price = v && v.price != null && v.price !== '' ? Number(v.price) : effPrice(p);
+  const key = p.id + '|' + (variant || '');
+  const already = S.cart.filter(c => c.id === p.id).reduce((a, c) => a + c.qty, 0);
+  if (p.track_stock && already + 1 > Number(p.stock_qty)) { toast(`Stock insuffisant pour ${p.name}.`, true); return false; }
+  const c = S.cart.find(x => x.key === key);
+  if (c) c.qty += 1; else S.cart.push({ key, id: p.id, name: p.name + (variant ? ' · ' + variant : ''), variant: variant || null, price, qty: 1, prep: p.prep_minutes || null, sent: 0 });
+  return true;
+}
+function pickProduct(p){
+  if ((p.variants || []).length) {
+    modal(`<h2 style="font-size:22px;margin-bottom:4px">${esc(p.name)}</h2><p class="muted" style="margin:0 0 12px">Choisissez la variante</p>
+      <div style="display:grid;gap:8px">${p.variants.map((v, i) => `<button type="button" class="ghost" data-var="${i}" style="justify-content:space-between;display:flex;min-height:52px"><span>${esc(v.name)}</span><strong>${money(v.price != null && v.price !== '' ? v.price : effPrice(p))}</strong></button>`).join('')}</div>`);
+    document.querySelectorAll('[data-var]').forEach(b => b.onclick = () => { closeModal(); if (cartAdd(p, p.variants[+b.dataset.var].name)) drawPos(); });
+  } else if (cartAdd(p)) drawPos();
+}
+async function scanBarcode(onCode){
+  if (!('BarcodeDetector' in window)) return toast('Le scan par caméra n’est pas pris en charge sur ce navigateur. Utilisez Chrome sur Android, ou une douchette USB (elle tape le code automatiquement).', true);
+  let stream;
+  try { stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } }); } catch (e) { return toast('Accès à la caméra refusé.', true); }
+  const ov = document.createElement('div');
+  ov.style.cssText = 'position:fixed;inset:0;z-index:80;background:rgba(0,0,0,.85);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:20px';
+  ov.innerHTML = '<div style="color:#fff;font-weight:700;font-size:18px">Scanner un code-barres</div><div style="position:relative;width:min(92vw,480px)"><video playsinline muted style="width:100%;border-radius:16px;background:#000;aspect-ratio:4/3;object-fit:cover"></video><div style="position:absolute;left:10%;right:10%;top:45%;height:2px;background:#E36A6A;box-shadow:0 0 12px #E36A6A"></div></div><button type="button" class="ghost" style="color:#fff;border-color:#fff;min-width:160px">Annuler</button>';
+  document.body.appendChild(ov);
+  const v = ov.querySelector('video'); v.srcObject = stream; await v.play();
+  let stop = false; const end = () => { stop = true; stream.getTracks().forEach(t => t.stop()); ov.remove(); };
+  ov.querySelector('button').onclick = end;
+  const det = new BarcodeDetector({ formats: ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128', 'code_39', 'qr_code'] });
+  const loop = async () => { if (stop) return; try { const r = await det.detect(v); if (r.length) { end(); if (navigator.vibrate) navigator.vibrate(80); onCode(r[0].rawValue); return; } } catch (_) {} requestAnimationFrame(loop); };
+  loop();
+}
 function drawPos(){
   const body = $('rBody');
-  const list = S.products.filter(p => p.outlet === S.rOutlet);
-  const cats = [...new Set(list.map(p => p.category || 'Autres'))];
-  if (S.rCat && !cats.includes(S.rCat)) S.rCat = null;
-  const shown = list.filter(p => !S.rCat || (p.category || 'Autres') === S.rCat).filter(p => !S.rQ || p.name.toLowerCase().includes(S.rQ.toLowerCase()));
-  const qtyIn = (id) => (S.cart.find(c => c.id === id) || {}).qty || 0;
-  const total = S.cart.reduce((a, c) => a + c.qty * c.price, 0), count = S.cart.reduce((a, c) => a + c.qty, 0);
-  if (!S.products.length) {
-    body.innerHTML = `<div class="card" style="text-align:center;padding:36px"><div style="font-size:42px">🍽️🍹</div><h2 style="font-size:22px;margin:8px 0">Ajoutez votre carte</h2><p class="muted">Créez vos plats et boissons avec leur photo, leur prix d’achat et leur prix de vente. Le stock se décompte tout seul à chaque vente.</p>${isMgr() ? '<button class="primary" type="button" id="rFirst">+ Ajouter un produit</button>' : '<p class="muted">Demandez au gérant d’ajouter les produits.</p>'}</div>`;
+  if (!S.products.filter(p => p.is_active !== false).length) {
+    body.innerHTML = `<div class="card" style="text-align:center;padding:36px"><div style="font-size:42px">🍽️🍹</div><h2 style="font-size:22px;margin:8px 0">Ajoutez votre carte</h2><p class="muted">Créez vos plats et boissons avec leurs photos, leur prix d’achat et leur prix de vente. Le stock se décompte tout seul à chaque vente.</p>${isMgr() ? '<button class="primary" type="button" id="rFirst">+ Ajouter un produit</button>' : '<p class="muted">Demandez au gérant d’ajouter les produits.</p>'}</div>`;
     if ($('rFirst')) $('rFirst').onclick = () => openProductForm(null);
     return;
   }
+  S.rServer = S.rServer ?? myName();
+  const list = S.products.filter(p => p.outlet === S.rOutlet && p.is_active !== false);
+  const cats = [...new Set(list.map(p => p.category || 'Autres'))];
+  if (S.rCat && !cats.includes(S.rCat)) S.rCat = null;
+  const q = (S.rQ || '').toLowerCase();
+  const shown = list.filter(p => !S.rCat || (p.category || 'Autres') === S.rCat).filter(p => !q || p.name.toLowerCase().includes(q) || (p.barcode || '') === q);
+  const inCart = (id) => S.cart.filter(c => c.id === id).reduce((a, c) => a + c.qty, 0);
+  const total = cartTotal(), count = cartCount(), holds = getHolds(), unsent = S.cart.filter(c => c.qty > c.sent).length;
+  const c = prnCfg('caisse');
   body.innerHTML = `<div class="posgrid">
     <div>
       <div class="row" style="gap:6px;margin-bottom:10px;flex-wrap:nowrap">${Object.entries(OUTLETS).map(([k, [l, ic]]) => `<button type="button" class="${S.rOutlet === k ? 'primary' : 'ghost'}" data-outlet="${k}" style="flex:1">${ic} ${l}</button>`).join('')}</div>
-      <input id="rQ" type="search" placeholder="Rechercher un produit…" value="${esc(S.rQ || '')}" style="margin-bottom:10px">
-      <div class="row" style="gap:6px;margin-bottom:12px;overflow-x:auto;flex-wrap:nowrap"><button type="button" class="small ${!S.rCat ? '' : 'ghost'}" data-rcat="">Tout</button>${cats.map(c => `<button type="button" class="small ${S.rCat === c ? '' : 'ghost'}" data-rcat="${esc(c)}" style="white-space:nowrap">${esc(c)}</button>`).join('')}</div>
-      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(132px,1fr));gap:10px">
-        ${shown.map(p => { const out = p.track_stock && Number(p.stock_qty) - qtyIn(p.id) <= 0, q = qtyIn(p.id);
-          return `<button type="button" data-add="${esc(p.id)}" ${out ? 'disabled' : ''} style="position:relative;display:flex;flex-direction:column;gap:6px;align-items:stretch;text-align:left;padding:8px;border-radius:16px;border:1.5px solid ${q ? 'var(--green)' : 'var(--line)'};background:var(--card);min-height:0;${out ? 'opacity:.45' : ''}">
-            ${prodThumb(p, 84)}<strong style="font-size:14px;line-height:1.2">${esc(p.name)}</strong>
-            <span class="row between" style="gap:4px"><span style="font-weight:800;color:var(--green)">${money(p.sale_price)}</span>${stockTxt(p)}</span>
-            ${q ? `<span style="position:absolute;top:4px;right:4px;min-width:26px;height:26px;border-radius:13px;background:var(--green);color:#fff;font-weight:800;display:grid;place-items:center">${q}</span>` : ''}</button>`; }).join('') || '<p class="muted">Aucun produit.</p>'}
+      <div class="row" style="gap:6px;margin-bottom:10px;flex-wrap:nowrap">
+        <input id="rQ" type="search" placeholder="Rechercher ou scanner un code-barres…" value="${esc(S.rQ || '')}" style="flex:1;min-width:0" autocomplete="off">
+        <button type="button" class="ghost small" id="rScan" title="Scanner" aria-label="Scanner un code-barres" style="min-width:44px">▦</button>
+        <button type="button" class="ghost small" id="rFull" title="Plein écran" aria-label="Plein écran" style="min-width:44px">⤢</button>
+      </div>
+      <div class="row" style="gap:6px;margin-bottom:10px;overflow-x:auto;flex-wrap:nowrap">
+        <button type="button" class="small ghost" id="rHolds" style="white-space:nowrap">🕒 En attente${holds.length ? ` <span class="pill st-past_due">${holds.length}</span>` : ''}</button>
+        <button type="button" class="small ghost" id="rHist" style="white-space:nowrap">Historique</button>
+        <button type="button" class="small ghost" id="rPrn" style="white-space:nowrap">🖨️ Imprimante <span id="posPrnDot" style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#E0A100;vertical-align:middle"></span></button>
+        ${c.type !== 'system' ? '<button type="button" class="small ghost" id="rDrawer" style="white-space:nowrap">Tiroir</button>' : ''}
+      </div>
+      <div class="row" style="gap:6px;margin-bottom:12px;overflow-x:auto;flex-wrap:nowrap"><button type="button" class="small ${!S.rCat ? '' : 'ghost'}" data-rcat="">Tout</button>${cats.map(cc => `<button type="button" class="small ${S.rCat === cc ? '' : 'ghost'}" data-rcat="${esc(cc)}" style="white-space:nowrap">${esc(cc)}</button>`).join('')}</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px">
+        ${shown.map(p => { const n = inCart(p.id), out = p.track_stock && Number(p.stock_qty) - n <= 0, low = p.track_stock && !out && Number(p.stock_qty) <= Number(p.alert_qty), img = prodImg(p), promo = effPrice(p) < Number(p.sale_price);
+          return `<button type="button" data-add="${esc(p.id)}" ${out && !n ? 'disabled' : ''} style="position:relative;display:flex;flex-direction:column;align-items:stretch;text-align:left;padding:0;border-radius:18px;border:1.5px solid ${n ? 'var(--green)' : 'var(--line)'};background:var(--card);min-height:0;overflow:hidden;box-shadow:0 2px 10px rgba(0,0,0,.04)">
+            <div style="position:relative;aspect-ratio:1/1;background:var(--green-l);display:grid;place-items:center;font-size:44px;${out ? 'filter:grayscale(1);opacity:.55' : ''}">${img ? `<img src="${esc(img)}" alt="" loading="lazy" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover">` : (OUTLETS[p.outlet] || ['', '🍽️'])[1]}
+              ${out ? '<span class="pill" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:#E36A6A;color:#fff">Rupture</span>' : low ? '<span class="pill" style="position:absolute;top:8px;left:8px;background:#E8A317;color:#fff">Stock faible</span>' : (p.tags || [])[0] ? `<span class="pill" style="position:absolute;top:8px;left:8px;background:var(--ink);color:var(--card)">${esc(p.tags[0])}</span>` : ''}
+              ${(p.variants || []).length ? '<span class="pill" style="position:absolute;bottom:8px;left:8px;background:rgba(255,255,255,.92);color:#222">Options</span>' : ''}</div>
+            <div style="padding:10px 12px 12px"><strong style="display:block;font-size:14px;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(p.name)}</strong>
+              <div class="row between" style="gap:4px;margin-top:6px;flex-wrap:nowrap"><span><span style="font-weight:800;color:var(--green)">${money(effPrice(p))}</span>${promo ? ` <s class="muted" style="font-size:11px">${money(p.sale_price)}</s>` : ''}</span>${p.track_stock ? `<span class="pill ${out ? 'st-cancelled' : low ? 'st-past_due' : 'st-active'}" style="font-size:11px">${Math.max(0, +p.stock_qty)}</span>` : ''}</div></div>
+            ${n ? `<span style="position:absolute;top:8px;right:8px;min-width:28px;height:28px;border-radius:14px;background:var(--green);color:#fff;font-weight:800;display:grid;place-items:center">${n}</span>` : ''}</button>`; }).join('') || '<p class="muted">Aucun produit.</p>'}
       </div>
     </div>
-    <div class="card poscart" id="rCart">
-      <div class="row between"><h3 style="font-size:18px">Commande</h3>${S.cart.length ? '<button type="button" class="small ghost" id="rClear" style="border:0">Vider</button>' : ''}</div>
-      <input id="rTable" placeholder="Table / chambre / client (facultatif)" value="${esc(S.rTable || '')}" maxlength="30" style="margin:8px 0">
-      <div style="max-height:46vh;overflow-y:auto">${S.cart.map(c => `<div class="row between" style="padding:8px 0;border-bottom:1px dashed var(--line);flex-wrap:nowrap;gap:8px">
-          <div style="min-width:0"><strong style="display:block;font-size:14px">${esc(c.name)}</strong><span class="muted" style="font-size:12px">${money(c.price)}</span></div>
-          <div class="row" style="gap:4px;flex-wrap:nowrap"><button type="button" class="small ghost" data-dec="${esc(c.id)}" aria-label="Retirer un" style="min-width:36px;padding:0">−</button><strong style="min-width:22px;text-align:center">${c.qty}</strong><button type="button" class="small ghost" data-inc="${esc(c.id)}" aria-label="Ajouter un" style="min-width:36px;padding:0">+</button></div>
-          <strong style="min-width:76px;text-align:right">${money(c.qty * c.price)}</strong></div>`).join('') || '<p class="muted" style="text-align:center;padding:18px 0">Touchez un produit pour l’ajouter.</p>'}</div>
-      <div class="row between" style="margin:12px 0"><span class="muted">${count} article${count > 1 ? 's' : ''}</span><span style="font-family:var(--display);font-size:28px;font-weight:800">${money(total)}</span></div>
-      <button class="primary" type="button" id="rPay" style="width:100%;min-height:54px;font-size:17px" ${S.cart.length ? '' : 'disabled'}>Encaisser · ${money(total)}</button>
+    <div class="card poscart" id="rCart" style="display:flex;flex-direction:column;gap:8px">
+      <div class="row between"><h3 style="font-size:20px">Panier</h3><span class="muted">🛒 ${count} article${count > 1 ? 's' : ''}</span></div>
+      <button type="button" class="ghost small" id="rHold" ${S.cart.length ? '' : 'disabled'} style="width:100%;background:#FFF4E5;border-color:#F3C98B;color:#9A5B00">🕒 Mettre en attente</button>
+      <div style="max-height:40vh;overflow-y:auto">${S.cart.map(it => `<div class="row" style="padding:8px 0;border-bottom:1px dashed var(--line);flex-wrap:nowrap;gap:8px">
+          <div style="min-width:0;flex:1"><strong style="display:block;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(it.name)}</strong><span class="muted" style="font-size:12px">${money(it.price)}${it.sent ? ` · ${it.sent} envoyé(s)` : ''}</span></div>
+          <div class="row" style="gap:4px;flex-wrap:nowrap"><button type="button" class="small ghost" data-dec="${esc(it.key)}" aria-label="Retirer un" style="min-width:34px;padding:0">−</button><strong style="min-width:20px;text-align:center">${it.qty}</strong><button type="button" class="small ghost" data-inc="${esc(it.key)}" aria-label="Ajouter un" style="min-width:34px;padding:0">+</button></div>
+          <button type="button" class="small ghost" data-del="${esc(it.key)}" aria-label="Supprimer" style="min-width:30px;padding:0;border:0;color:var(--red)">✕</button></div>`).join('') || '<p class="muted" style="text-align:center;padding:18px 0">Touchez un produit pour l’ajouter.</p>'}</div>
+      <div class="row" style="gap:6px;flex-wrap:nowrap"><input id="rTable" placeholder="# N° table / chambre" value="${esc(S.rTable || '')}" maxlength="30" style="flex:1;min-width:0"><input id="rServer" list="rServers" placeholder="Serveur(se)" value="${esc(S.rServer || '')}" maxlength="60" style="flex:1;min-width:0"><datalist id="rServers">${(() => { try { return JSON.parse(localStorage.getItem('hh_servers') || '[]'); } catch (_) { return []; } })().map(n => `<option value="${esc(n)}">`).join('')}</datalist></div>
+      <div class="row between" style="margin:4px 0"><span style="font-size:20px;font-weight:700">Total</span><span style="font-family:var(--display);font-size:30px;font-weight:800;color:var(--green)">${money(total)}</span></div>
+      <button class="ghost" type="button" id="rKitchen" style="width:100%;background:var(--ink);color:var(--card);border-color:var(--ink)" ${unsent ? '' : 'disabled'}>👨‍🍳 Envoyer en ${S.rOutlet === 'bar' ? 'préparation (bar)' : 'cuisine'}${unsent ? ` · ${unsent}` : ''}</button>
+      <button class="ghost" type="button" id="rBill" style="width:100%" ${S.cart.length ? '' : 'disabled'}>🧾 Imprimer l’addition</button>
+      <button class="primary" type="button" id="rPay" style="width:100%;min-height:56px;font-size:18px" ${S.cart.length ? '' : 'disabled'}>Encaisser · ${money(total)}</button>
     </div></div>
-    ${S.cart.length ? `<button type="button" class="primary posfab" id="rFab">🧾 ${count} · ${money(total)}</button>` : ''}`;
+    ${S.cart.length ? `<button type="button" class="primary posfab" id="rFab">🛒 ${count} · ${money(total)}</button>` : ''}`;
+  prnStatus();
   body.querySelectorAll('[data-outlet]').forEach(b => b.onclick = () => { S.rOutlet = b.dataset.outlet; S.rCat = null; drawPos(); });
   body.querySelectorAll('[data-rcat]').forEach(b => b.onclick = () => { S.rCat = b.dataset.rcat || null; drawPos(); });
-  $('rQ').oninput = () => { S.rQ = $('rQ').value; clearTimeout(S.rQt); S.rQt = setTimeout(() => { drawPos(); const q = $('rQ'); q.focus(); q.setSelectionRange(q.value.length, q.value.length); }, 250); };
+  const tryCode = (code) => { code = String(code || '').trim(); if (!code) return false; const p = S.products.find(x => x.barcode && x.barcode === code); if (!p) return false; if (p.outlet !== S.rOutlet) S.rOutlet = p.outlet; S.rQ = ''; pickProduct(p); return true; };
+  $('rQ').oninput = () => { S.rQ = $('rQ').value; clearTimeout(S.rQt); S.rQt = setTimeout(() => { drawPos(); const qq = $('rQ'); qq.focus(); qq.setSelectionRange(qq.value.length, qq.value.length); }, 300); };
+  $('rQ').onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); clearTimeout(S.rQt); if (!tryCode($('rQ').value)) { S.rQ = $('rQ').value; drawPos(); if (/^\d{6,}$/.test(S.rQ)) toast('Aucun produit avec ce code-barres.', true); } } };
+  $('rScan').onclick = () => scanBarcode((code) => { if (!tryCode(code)) toast('Aucun produit avec le code ' + code + '.', true); });
+  $('rFull').onclick = () => { try { document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen(); } catch (_) {} };
+  $('rHolds').onclick = openHolds; $('rHist').onclick = () => { S.rTab = 'ventes'; renderResto(); };
+  $('rPrn').onclick = () => openPrinterSetup('caisse'); if ($('rDrawer')) $('rDrawer').onclick = openDrawer;
   $('rTable').oninput = () => { S.rTable = $('rTable').value; };
-  const bump = (id, d) => { const p = S.products.find(x => x.id === id); let c = S.cart.find(x => x.id === id);
-    if (!c && d > 0) { c = { id, name: p.name, price: Number(p.sale_price), qty: 0 }; S.cart.push(c); }
-    if (!c) return; if (d > 0 && p.track_stock && c.qty + 1 > Number(p.stock_qty)) return toast(`Stock insuffisant pour ${p.name}.`, true);
-    c.qty += d; if (c.qty <= 0) S.cart = S.cart.filter(x => x.id !== id); drawPos(); };
-  body.querySelectorAll('[data-add]').forEach(b => b.onclick = () => bump(b.dataset.add, 1));
-  body.querySelectorAll('[data-inc]').forEach(b => b.onclick = () => bump(b.dataset.inc, 1));
-  body.querySelectorAll('[data-dec]').forEach(b => b.onclick = () => bump(b.dataset.dec, -1));
-  if ($('rClear')) $('rClear').onclick = () => { S.cart = []; drawPos(); };
+  $('rServer').oninput = () => { S.rServer = $('rServer').value; };
+  const find = (k) => S.cart.find(x => x.key === k);
+  body.querySelectorAll('[data-add]').forEach(b => b.onclick = () => pickProduct(S.products.find(p => p.id === b.dataset.add)));
+  body.querySelectorAll('[data-inc]').forEach(b => b.onclick = () => { const it = find(b.dataset.inc); const p = S.products.find(x => x.id === it.id); if (p && cartAdd(p, it.variant)) drawPos(); });
+  body.querySelectorAll('[data-dec]').forEach(b => b.onclick = () => { const it = find(b.dataset.dec); it.qty -= 1; if (it.qty <= 0) S.cart = S.cart.filter(x => x !== it); drawPos(); });
+  body.querySelectorAll('[data-del]').forEach(b => b.onclick = () => { S.cart = S.cart.filter(x => x.key !== b.dataset.del); drawPos(); });
   if ($('rFab')) $('rFab').onclick = () => $('rCart').scrollIntoView({ behavior: 'smooth' });
+  $('rHold').onclick = holdCurrent;
+  $('rKitchen').onclick = sendKitchen;
+  $('rBill').onclick = () => { const s = { number: '—', total: cartTotal(), outlet: S.rOutlet, table: S.rTable, server: S.rServer, created_at: new Date().toISOString() }, items = S.cart.map(x => ({ name: x.name, qty: x.qty, unit_price: x.price }));
+    printDocument('caisse', (w) => escTicket(w, s, items, { bill: true, title: 'ADDITION' }), () => printPosTicket({ ...s, number: 'Addition' }, items)); };
   $('rPay').onclick = () => openPosPay(total);
+}
+function rememberServer(){ const n = (S.rServer || '').trim(); if (!n) return; try { const l = JSON.parse(localStorage.getItem('hh_servers') || '[]').filter(x => x !== n); l.unshift(n); localStorage.setItem('hh_servers', JSON.stringify(l.slice(0, 12))); } catch (_) {} }
+function holdCurrent(){
+  if (!S.cart.length) return;
+  const h = getHolds(); const id = S.holdId || ('A' + Date.now().toString(36).slice(-4).toUpperCase());
+  const rec = { id, table: S.rTable || '', server: S.rServer || '', outlet: S.rOutlet, cart: S.cart, at: new Date().toISOString() };
+  setHolds([rec, ...h.filter(x => x.id !== id)]); rememberServer();
+  S.cart = []; S.rTable = ''; S.holdId = null; toast(`Commande ${rec.table ? 'table ' + rec.table : id} mise en attente.`); drawPos();
+}
+function openHolds(){
+  const h = getHolds();
+  modal(`<h2 style="font-size:22px;margin-bottom:10px">Commandes en attente</h2>${h.length ? h.map(x => `<div class="card" style="padding:12px;margin-bottom:8px"><div class="row between" style="flex-wrap:nowrap"><div><strong>${x.table ? 'Table ' + esc(x.table) : 'Commande ' + esc(x.id)}</strong> <span class="muted">· ${esc(OUTLETS[x.outlet][0])}${x.server ? ' · ' + esc(x.server) : ''}</span><div class="muted" style="font-size:12px">${new Date(x.at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })} · ${x.cart.reduce((a, c) => a + c.qty, 0)} article(s) · ${money(x.cart.reduce((a, c) => a + c.qty * c.price, 0))}</div></div>
+    <div class="row" style="gap:6px;flex-wrap:nowrap"><button class="small" type="button" data-resume="${esc(x.id)}">Reprendre</button><button class="small ghost" type="button" data-drop="${esc(x.id)}" aria-label="Supprimer" style="color:var(--red)">✕</button></div></div></div>`).join('') : '<p class="muted">Aucune commande en attente.</p>'}
+    <p class="muted" style="font-size:12px">Les commandes en attente sont gardées sur cet appareil.</p>`);
+  document.querySelectorAll('[data-resume]').forEach(b => b.onclick = () => { if (S.cart.length) holdCurrent(); const all = getHolds(); const x = all.find(y => y.id === b.dataset.resume); setHolds(all.filter(y => y.id !== x.id)); S.cart = x.cart; S.rTable = x.table; S.rServer = x.server; S.rOutlet = x.outlet; S.holdId = x.id; closeModal(); drawPos(); });
+  document.querySelectorAll('[data-drop]').forEach(b => b.onclick = () => { setHolds(getHolds().filter(y => y.id !== b.dataset.drop)); openHolds(); drawPos(); });
+}
+async function sendKitchen(){
+  const items = S.cart.filter(c => c.qty > c.sent).map(c => ({ qty: c.qty - c.sent, name: c.name, prep: c.prep }));
+  if (!items.length) return;
+  if (!S.holdId) S.holdId = 'A' + Date.now().toString(36).slice(-4).toUpperCase();
+  const o = { ref: S.holdId, outlet: S.rOutlet, table: S.rTable, server: S.rServer, items };
+  await printDocument('cuisine', (w) => escKitchen(w, o), () => printKitchenHtml(o));
+  S.cart.forEach(c => { c.sent = c.qty; }); rememberServer();
+  if (prnCfg('cuisine').auto !== false) { /* bon envoyé */ }
+  toast('Bon envoyé en ' + (S.rOutlet === 'bar' ? 'préparation.' : 'cuisine.')); drawPos();
 }
 function openPosPay(total){
   const st = { mode: 'cash', received: '', op: 'wave', ref: '' };
   const round = (v, s) => Math.ceil(v / s) * s;
-  const chips = [...new Set([round(total, 500), round(total, 1000), round(total, 2000), round(total, 5000), round(total, 10000)])].filter(v => v >= total).slice(0, 4);
+  const chips = [...new Set([total, round(total, 500), round(total, 1000), round(total, 2000), round(total, 5000), round(total, 10000)])].filter(v => v >= total).slice(0, 4);
   modal('<div id="pp"></div>'); $('modalBody').style.maxWidth = '520px';
   const draw = () => {
     const change = st.mode === 'cash' && +st.received >= total ? +st.received - total : null;
     $('pp').innerHTML = `<div class="row between" style="margin-bottom:12px"><h2 style="font-size:24px">Encaisser</h2><button class="small ghost" data-close aria-label="Fermer" style="border:0;font-size:18px">✕</button></div>
-      <div style="border-radius:18px;padding:16px 18px;margin-bottom:14px;background:var(--green-l)"><div style="font-size:12px;font-weight:800;letter-spacing:.14em;color:var(--muted)">${esc(OUTLETS[S.rOutlet][0].toUpperCase())}${S.rTable ? ' · ' + esc(S.rTable) : ''}</div><div style="font-family:var(--display);font-weight:800;font-size:34px">${money(total)}</div></div>
+      <div style="border-radius:18px;padding:16px 18px;margin-bottom:14px;background:var(--green-l)"><div style="font-size:12px;font-weight:800;letter-spacing:.14em;color:var(--muted)">${esc(OUTLETS[S.rOutlet][0].toUpperCase())}${S.rTable ? ' · ' + esc(S.rTable) : ''}${S.rServer ? ' · ' + esc(S.rServer) : ''}</div><div style="font-family:var(--display);font-weight:800;font-size:34px">${money(total)}</div></div>
       <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px">${[['cash', '💵', 'Espèces'], ['mobile', '📱', 'Mobile'], ['card', '💳', 'Carte']].map(([k, ic, l]) => `<button type="button" data-pm="${k}" style="min-height:72px;display:flex;flex-direction:column;gap:2px;align-items:center;justify-content:center;border-radius:14px;border:2px solid ${st.mode === k ? 'var(--green)' : 'var(--line)'};background:${st.mode === k ? 'var(--green-l)' : 'var(--card)'};font-weight:700"><span style="font-size:22px">${ic}</span>${l}</button>`).join('')}</div>
       ${st.mode === 'cash' ? `<label for="ppGiven">Montant reçu</label><input id="ppGiven" inputmode="numeric" value="${esc(st.received)}" placeholder="${total}">
         <div class="row" style="gap:6px;margin:8px 0">${chips.map(v => `<button type="button" class="small ghost" data-given="${v}">${money(v)}</button>`).join('')}</div>
@@ -2678,33 +2948,111 @@ function openPosPay(total){
       if (st.mode === 'mobile' && st.ref.trim().length < 4) return toast('Saisissez la référence Mobile Money.', true);
       const b = $('ppGo'); b.disabled = true;
       const method = st.mode === 'cash' ? 'cash' : st.mode === 'card' ? 'card' : st.op;
-      const items = S.cart.map(c => ({ product_id: c.id, qty: c.qty }));
-      const { data, error } = await sb.rpc('pos_checkout', { p_est: S.est, p_outlet: S.rOutlet, p_items: items, p_method: method, p_reference: st.mode === 'mobile' ? st.ref.trim() : null, p_table: S.rTable || null });
+      const items = S.cart.map(c => ({ product_id: c.id, qty: c.qty, variant: c.variant }));
+      const { data, error } = await sb.rpc('pos_checkout_v2', { p_est: S.est, p_outlet: S.rOutlet, p_items: items, p_method: method, p_reference: st.mode === 'mobile' ? st.ref.trim() : null, p_table: S.rTable || null, p_server: S.rServer || null });
       if (error) { b.disabled = false; return toast(errMsg(error), true); }
-      const lines = S.cart.slice(), table = S.rTable;
-      S.cart = []; S.rTable = '';
+      const lines = S.cart.map(c => ({ name: c.name, qty: c.qty, unit_price: c.price })), table = S.rTable, server = S.rServer;
+      rememberServer(); S.cart = []; S.rTable = ''; S.holdId = null;
+      const sale = { number: data.number, total: data.total, outlet: S.rOutlet, table, server, method, created_at: new Date().toISOString() };
+      const cfg = prnCfg('caisse');
+      const doPrint = () => printDocument('caisse', (w) => escTicket(w, sale, lines, { change, drawer: method === 'cash' && cfg.drawer }), () => printPosTicket(sale, lines));
       modal(`<div style="text-align:center"><div style="width:64px;height:64px;border-radius:50%;background:var(--green-l);display:grid;place-items:center;margin:0 auto 10px;font-size:30px">✓</div>
         <h2 style="font-size:24px;margin-bottom:4px">Ticket n° ${data.number} encaissé</h2><p style="font-family:var(--display);font-size:30px;font-weight:800;margin:4px 0">${money(data.total)}</p>
-        ${change !== null && change > 0 ? `<p class="muted">Monnaie rendue : <strong>${money(change)}</strong></p>` : ''}<p class="muted" style="font-size:13px">Stock mis à jour · recette ajoutée à la caisse</p><p style="font-size:13px;margin:4px 0 0"><a href="#" id="tkFmt">Format : ${esc(PRINT_FMTS.ticket[getFmt('ticket')])} · changer</a></p></div>
+        ${change !== null && change > 0 ? `<p class="muted">Monnaie à rendre : <strong>${money(change)}</strong></p>` : ''}<p class="muted" style="font-size:13px">Stock mis à jour · recette ajoutée à la caisse</p>
+        <p style="font-size:13px;margin:4px 0 0"><a href="#" id="tkFmt">🖨️ ${esc(PRN_TYPES[cfg.type][1])} · ${cfg.type === 'system' ? esc(PRINT_FMTS.ticket[getFmt('ticket')]) : cfg.width + ' mm'} · changer</a></p></div>
         <div class="row" style="margin-top:14px"><button class="ghost" type="button" id="tkPrint" style="flex:1">Imprimer le ticket</button><button class="primary" data-close style="flex:1">Nouvelle commande</button></div>`);
-      $('tkFmt').onclick = (e) => { e.preventDefault(); openPrintSettings(); };
-      $('tkPrint').onclick = () => printPosTicket({ number: data.number, total: data.total, outlet: S.rOutlet, table, method, server: myName(), created_at: new Date().toISOString() }, lines.map(c => ({ name: c.name, qty: c.qty, unit_price: c.price })));
+      $('tkFmt').onclick = (e) => { e.preventDefault(); openPrinterSetup('caisse'); };
+      $('tkPrint').onclick = doPrint;
+      if (cfg.auto) doPrint(); else if (method === 'cash' && cfg.drawer && cfg.type !== 'system') openDrawer();
       renderResto();
     };
   };
   draw();
 }
-const PAY_NAME = { cash: 'Espèces', orange_money: 'Orange Money', mtn_money: 'MTN MoMo', moov_money: 'Moov Money', wave: 'Wave', card: 'Carte', bank_transfer: 'Virement' };
-function printPosTicket(s, items){
-  const w = window.open('', '_blank'); if (!w) return toast("Autorisez l'ouverture de fenêtres pour imprimer.", true);
-  const est = (S.ests || []).find(x => x.id === S.est) || {};
-  w.document.write(`<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>Ticket ${s.number}</title><style>body{font:13px/1.45 ui-monospace,Menlo,monospace;color:#111;max-width:300px;margin:16px auto;padding:0 10px}h1{font-size:16px;margin:0;text-align:center}.c{text-align:center}table{width:100%;border-collapse:collapse;margin:10px 0}td{padding:3px 0;vertical-align:top}.r{text-align:right}.t td{border-top:1px dashed #000;font-weight:700;font-size:15px;padding-top:6px}.m{color:#555;font-size:11px}${printCss('ticket')}</style></head><body>
-    ${rcptHead(est)}
-    <p class="c">${esc(OUTLETS[s.outlet] ? OUTLETS[s.outlet][0] : '')} · Ticket n° ${s.number}<br>${new Date(s.created_at).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })}${s.table ? '<br>' + esc(s.table) : ''}</p>
-    <table>${items.map(i => `<tr><td>${+i.qty} × ${esc(i.name)}</td><td class="r">${money(i.qty * i.unit_price)}</td></tr>`).join('')}<tr class="t"><td>TOTAL</td><td class="r">${money(s.total)}</td></tr></table>
-    <p class="m">Payé par ${esc(PAY_NAME[s.method] || s.method)}${rcpt(est).show_server !== false && s.server ? ' · Servi par ' + esc(s.server) : ''}</p>${rcptFoot(est, 'Merci de votre visite !')}${S.overview && S.overview.plan && S.overview.plan.slug === 'decouverte' ? '<p class="c m">Propulsé par Horus Hotel</p>' : ''}
-    <script>window.onload=()=>{window.print();}<\/script></body></html>`);
-  w.document.close();
+
+/* ----- Fiche produit complète ----- */
+function openProductForm(p, preset){
+  const isNew = !p;
+  p = p || { outlet: (preset && preset.outlet) || S.rOutlet || 'restaurant', unit: S.rOutlet === 'bar' ? 'bouteille' : 'plat', track_stock: true, alert_qty: 5, purchase_price: 0, images: [], tags: [], variants: [], is_active: true };
+  const st = { images: [...(p.images && p.images.length ? p.images : (p.image_url ? [p.image_url] : []))], tags: [...(p.tags || [])], variants: (p.variants || []).map(v => ({ ...v })), again: !!(preset && preset.again) };
+  const cats = [...new Set([...(PROD_CATS.restaurant), ...(PROD_CATS.bar), ...S.products.map(x => x.category).filter(Boolean)])];
+  const sec = (t, sub) => `<div style="margin:18px 0 10px;padding-bottom:6px;border-bottom:1px solid var(--line)"><strong style="font-size:16px">${t}</strong>${sub ? `<div class="muted" style="font-size:12px">${sub}</div>` : ''}</div>`;
+  modal(`<div class="row between"><div><div class="eyebrow">${isNew ? 'Nouveau produit' : 'Modifier le produit'}</div><h2 style="font-size:24px;margin:2px 0 4px">${isNew ? 'Ajouter un produit' : esc(p.name)}</h2></div><button class="small ghost" data-close style="border:0;font-size:18px" aria-label="Fermer">✕</button></div>
+    <form id="pfForm">
+      <div class="muted" style="font-size:12px;font-weight:800;letter-spacing:.08em;margin:6px 0">PHOTOS DU PRODUIT (4 MAXIMUM)</div>
+      <div id="pfImgs" style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px"></div>
+      <input id="pfImg" type="file" accept="image/jpeg,image/png,image/webp" multiple class="sr-only">
+      ${sec('Informations de base')}
+      <div class="row" style="gap:6px;margin-bottom:12px;flex-wrap:nowrap">${Object.entries(OUTLETS).map(([k, [l, ic]]) => `<label class="card" style="flex:1;padding:10px;margin:0;cursor:pointer;display:flex;gap:8px;align-items:center"><input type="radio" name="pfOut" value="${k}" ${p.outlet === k ? 'checked' : ''} style="width:18px;min-height:18px">${ic} ${l}</label>`).join('')}</div>
+      <div class="field"><label for="pfName">Nom du produit</label><input id="pfName" required maxlength="80" value="${esc(p.name || '')}" placeholder="ex. Poulet braisé, Flag 65cl"></div>
+      <div class="row" style="gap:10px"><div class="field" style="flex:1 1 160px"><label for="pfCat">Catégorie</label><input id="pfCat" list="pfCats" maxlength="40" value="${esc(p.category || '')}" placeholder="ex. Plats, Bières"><datalist id="pfCats">${cats.map(c => `<option value="${esc(c)}">`).join('')}</datalist></div>
+        <div class="field" style="flex:1 1 110px"><label for="pfUnit">Unité</label><select id="pfUnit">${UNITS.map(u => `<option ${u === p.unit ? 'selected' : ''}>${u}</option>`).join('')}</select></div></div>
+      <label>Étiquette (optionnel)</label><div id="pfTags" class="row" style="gap:6px;margin:4px 0 6px"></div>
+      ${sec('Stock', '')}
+      <label class="row between" style="flex-wrap:nowrap;font-weight:600;margin-bottom:8px"><span>Gérer le stock</span><input type="checkbox" id="pfTrack" ${p.track_stock ? 'checked' : ''} style="width:22px;min-height:22px"></label>
+      <div class="row" id="pfStockRow" style="gap:10px">${isNew ? `<div class="field" style="flex:1"><label for="pfInit">Stock disponible</label><input id="pfInit" inputmode="decimal" placeholder="0"></div>` : `<div class="field" style="flex:1"><label>Stock disponible</label><input value="${+p.stock_qty} ${esc(p.unit)}" disabled></div>`}
+        <div class="field" style="flex:1"><label for="pfAlert">Alerte quand il reste</label><input id="pfAlert" inputmode="decimal" value="${+p.alert_qty || 0}"></div></div>
+      <div class="field"><label for="pfBar">Code-barres</label><div class="row" style="gap:6px;flex-wrap:nowrap"><input id="pfBar" maxlength="64" value="${esc(p.barcode || '')}" placeholder="ex. 6001234567890" style="flex:1;min-width:0"><button type="button" class="primary small" id="pfScan" aria-label="Scanner" style="min-width:48px">▦</button></div></div>
+      <div id="pfPrepBox">${sec('👨‍🍳 Cuisine')}<div class="field"><label for="pfPrep">Temps de préparation (minutes)</label><input id="pfPrep" inputmode="numeric" value="${p.prep_minutes ?? ''}" placeholder="ex. 15"><small class="muted">Affiché sur le bon de cuisine. Laissez vide si non applicable.</small></div></div>
+      ${sec('Prix et promotions')}
+      <div class="row" style="gap:10px"><div class="field" style="flex:1"><label for="pfSell">Prix normal *</label><input id="pfSell" inputmode="numeric" required value="${p.sale_price != null ? +p.sale_price : ''}" placeholder="0"></div>
+        <div class="field" style="flex:1"><label for="pfPromo">Prix promotionnel</label><input id="pfPromo" inputmode="numeric" value="${p.promo_price != null ? +p.promo_price : ''}" placeholder="—"></div></div>
+      <details class="card" style="padding:12px 14px;margin:0 0 6px" ${p.purchase_price > 0 || p.supplier ? 'open' : ''}><summary style="cursor:pointer;font-weight:700">🚚 Prix d’achat & fournisseur <span class="muted" style="font-weight:400;font-size:12px">— pour calculer la marge et valoriser le stock</span></summary>
+        <div class="row" style="gap:10px;margin-top:10px"><div class="field" style="flex:1"><label for="pfBuy">Prix d’achat</label><input id="pfBuy" inputmode="numeric" value="${+p.purchase_price || ''}" placeholder="0"></div><div class="field" style="flex:1"><label for="pfSup">Fournisseur</label><input id="pfSup" maxlength="80" value="${esc(p.supplier || '')}" placeholder="ex. Solibra"></div></div></details>
+      <p class="muted" id="pfMargin" style="margin:0 0 6px;font-size:13px"></p>
+      ${sec('Description')}
+      <textarea id="pfDesc" maxlength="2000" rows="3" placeholder="Décrivez votre produit (ingrédients, accompagnement…)" style="width:100%;padding:10px 12px;border-radius:12px;border:1px solid var(--line);font:inherit;background:var(--card);color:inherit">${esc(p.description || '')}</textarea>
+      ${sec('Variantes du produit', 'Tailles, cuissons, accompagnements… avec un prix propre si besoin')}
+      <div id="pfVars"></div><button type="button" class="ghost small" id="pfVarAdd">+ Ajouter une variante</button>
+      ${sec('Publication')}
+      <label class="row between" style="flex-wrap:nowrap;font-weight:600;margin-bottom:8px"><span>Produit actif (visible en caisse)</span><input type="checkbox" id="pfActive" ${p.is_active !== false ? 'checked' : ''} style="width:22px;min-height:22px"></label>
+      ${isNew ? `<label class="row between" style="flex-wrap:nowrap;font-weight:600;margin-bottom:12px"><span>Ajouter un autre produit<br><span class="muted" style="font-weight:400;font-size:12px">Rester sur le formulaire après la création</span></span><input type="checkbox" id="pfAgain" ${st.again ? 'checked' : ''} style="width:22px;min-height:22px"></label>` : ''}
+      <button class="primary" style="width:100%;min-height:52px" id="pfBtn">${isNew ? 'Créer le produit' : 'Enregistrer'}</button>
+      ${!isNew ? `<div class="row" style="margin-top:10px;gap:6px">${p.track_stock ? `<button type="button" class="small ghost" id="pfIn" style="flex:1">+ Entrée de stock</button><button type="button" class="small ghost" id="pfInv" style="flex:1">Inventaire</button><button type="button" class="small ghost" id="pfLoss" style="flex:1">Perte / casse</button>` : ''}<button type="button" class="small ghost" id="pfDel" style="flex:1;color:var(--red)">Retirer de la carte</button></div>` : ''}
+    </form>`);
+  $('modalBody').style.maxWidth = '640px';
+  const num = (id) => { const v = String(($(id) || {}).value || '').replace(/\s/g, '').replace(',', '.'); return v === '' ? null : Number(v); };
+  const drawImgs = () => { $('pfImgs').innerHTML = st.images.map((u, i) => `<div style="position:relative;aspect-ratio:1/1;border-radius:14px;overflow:hidden;border:1px solid var(--line)"><img src="${esc(u)}" alt="" style="width:100%;height:100%;object-fit:cover">${i === 0 ? '<span class="pill" style="position:absolute;bottom:4px;left:4px;font-size:10px;background:var(--ink);color:var(--card)">Principale</span>' : ''}<button type="button" data-rmimg="${i}" aria-label="Retirer" style="position:absolute;top:4px;right:4px;min-height:26px;width:26px;padding:0;border-radius:50%;border:0;background:rgba(0,0,0,.6);color:#fff">✕</button></div>`).join('')
+      + (st.images.length < 4 ? `<label for="pfImg" style="aspect-ratio:1/1;border-radius:14px;border:2px dashed var(--line);display:grid;place-items:center;cursor:pointer;text-align:center;margin:0;background:var(--card)"><span class="muted" style="font-size:12px">⬆️<br>Galerie (${st.images.length}/4)<br><span style="font-size:10px">JPG, PNG, WebP</span></span></label>` : '');
+    $('pfImgs').querySelectorAll('[data-rmimg]').forEach(b => b.onclick = () => { st.images.splice(+b.dataset.rmimg, 1); drawImgs(); }); };
+  const drawTags = () => { $('pfTags').innerHTML = PROD_TAGS.map(t => `<button type="button" class="small ${st.tags.includes(t) ? '' : 'ghost'}" data-tag="${esc(t)}">🏷️ ${esc(t)}</button>`).join('');
+    $('pfTags').querySelectorAll('[data-tag]').forEach(b => b.onclick = () => { const t = b.dataset.tag; st.tags = st.tags.includes(t) ? st.tags.filter(x => x !== t) : [...st.tags, t].slice(0, 8); drawTags(); }); };
+  const drawVars = () => { $('pfVars').innerHTML = st.variants.map((v, i) => `<div class="row" style="gap:6px;margin-bottom:6px;flex-wrap:nowrap"><input data-vn="${i}" maxlength="60" value="${esc(v.name || '')}" placeholder="ex. Grand, Bien cuit, + frites" style="flex:2;min-width:0"><input data-vp="${i}" inputmode="numeric" value="${v.price ?? ''}" placeholder="Prix (sinon prix normal)" style="flex:1;min-width:0"><button type="button" class="small ghost" data-vrm="${i}" aria-label="Retirer" style="min-width:36px;padding:0;color:var(--red)">✕</button></div>`).join('');
+    $('pfVars').querySelectorAll('[data-vn]').forEach(x => x.oninput = () => { st.variants[+x.dataset.vn].name = x.value; });
+    $('pfVars').querySelectorAll('[data-vp]').forEach(x => x.oninput = () => { const v = x.value.replace(/\D/g, ''); st.variants[+x.dataset.vp].price = v === '' ? null : Number(v); });
+    $('pfVars').querySelectorAll('[data-vrm]').forEach(b => b.onclick = () => { st.variants.splice(+b.dataset.vrm, 1); drawVars(); }); };
+  drawImgs(); drawTags(); drawVars();
+  $('pfVarAdd').onclick = () => { if (st.variants.length >= 30) return; st.variants.push({ name: '', price: null }); drawVars(); };
+  const mg = () => { const b = num('pfBuy') || 0, s = num('pfPromo') && num('pfPromo') < (num('pfSell') || 0) ? num('pfPromo') : (num('pfSell') || 0); $('pfMargin').textContent = s > 0 ? `Marge : ${money(s - b)} par ${$('pfUnit').value} (${Math.round((s - b) / s * 100)} %)` : ''; };
+  ['pfBuy', 'pfSell', 'pfPromo'].forEach(i => $(i).oninput = mg); $('pfUnit').onchange = mg; mg();
+  const tr = () => { $('pfStockRow').style.display = $('pfTrack').checked ? '' : 'none'; }; $('pfTrack').onchange = tr; tr();
+  const prepVis = () => { const o = document.querySelector('[name=pfOut]:checked').value; $('pfPrepBox').style.display = o === 'restaurant' ? '' : 'none'; };
+  document.querySelectorAll('[name=pfOut]').forEach(r => r.onchange = prepVis); prepVis();
+  $('pfScan').onclick = () => scanBarcode((code) => { $('pfBar').value = code; });
+  $('pfImg').onchange = async () => { const files = [...$('pfImg').files].slice(0, 4 - st.images.length); $('pfImg').value = '';
+    for (const f of files) { try { const u = await uploadProductPhoto(f); st.images.push(u); drawImgs(); } catch (e) { toast(errMsg(e), true); } } };
+  $('pfForm').onsubmit = async (e) => { e.preventDefault(); const b = $('pfBtn'); b.disabled = true;
+    const promo = num('pfPromo');
+    const vars = st.variants.filter(v => (v.name || '').trim()).map(v => ({ name: v.name.trim().slice(0, 60), price: v.price == null ? null : Number(v.price) }));
+    if (new Set(vars.map(v => v.name.toLowerCase())).size !== vars.length) { b.disabled = false; return toast('Deux variantes portent le même nom.', true); }
+    const row = { outlet: document.querySelector('[name=pfOut]:checked').value, name: $('pfName').value.trim(), category: $('pfCat').value.trim() || null, unit: $('pfUnit').value,
+      sale_price: num('pfSell') || 0, promo_price: promo && promo > 0 ? promo : null, purchase_price: num('pfBuy') || 0, supplier: $('pfSup').value.trim() || null,
+      track_stock: $('pfTrack').checked, alert_qty: num('pfAlert') || 0, barcode: $('pfBar').value.trim() || null, prep_minutes: num('pfPrep'),
+      description: $('pfDesc').value.trim() || null, tags: st.tags, variants: vars, images: st.images, image_url: st.images[0] || null, is_active: $('pfActive').checked };
+    if (row.barcode) { const dup = S.products.find(x => x.barcode === row.barcode && x.id !== p.id); if (dup) { b.disabled = false; return toast(`Ce code-barres est déjà utilisé par « ${dup.name} ».`, true); } }
+    const res = isNew ? await sb.from('products').insert({ ...row, establishment_id: S.est }).select('id').single() : await sb.from('products').update(row).eq('id', p.id).select('id').single();
+    if (res.error) { b.disabled = false; return toast(errMsg(res.error), true); }
+    if (isNew && row.track_stock && num('pfInit') > 0) {
+      const { error } = await sb.rpc('stock_entry', { p_product: res.data.id, p_kind: 'purchase', p_qty: num('pfInit'), p_unit_cost: row.purchase_price, p_supplier: row.supplier, p_note: 'Stock de départ' });
+      if (error) toast(errMsg(error), true);
+    }
+    toast(isNew ? `« ${row.name} » ajouté.` : 'Produit enregistré.'); S.rOutlet = row.outlet;
+    const again = isNew && $('pfAgain') && $('pfAgain').checked;
+    closeModal(); await renderResto(); if (again) openProductForm(null, { outlet: row.outlet, again: true }); };
+  if ($('pfIn')) $('pfIn').onclick = () => openStockEntry(p, 'purchase');
+  if ($('pfInv')) $('pfInv').onclick = () => openStockEntry(p, 'adjust');
+  if ($('pfLoss')) $('pfLoss').onclick = () => openStockEntry(p, 'loss');
+  if ($('pfDel')) $('pfDel').onclick = async () => { const { error } = await sb.from('products').update({ is_active: false }).eq('id', p.id); if (error) return toast(errMsg(error), true); closeModal(); toast('Produit retiré de la carte. L’historique est conservé.'); renderResto(); };
 }
 
 /* ----- Produits ----- */
@@ -2715,7 +3063,7 @@ function drawProducts(){
   body.innerHTML = Object.entries(OUTLETS).map(([o, [l, ic]]) => `<h3 style="font-size:18px;margin:6px 0 10px">${ic} ${l} <span class="muted" style="font-size:14px">· ${by(o).length} produit(s)</span></h3>
     <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;margin-bottom:20px">${by(o).map(p => `<div class="card" style="padding:10px;display:flex;gap:10px;flex-direction:column">
       ${prodThumb(p, 110)}
-      <div><strong>${esc(p.name)}</strong><div class="muted" style="font-size:12px">${esc(p.category || 'Sans catégorie')} · ${esc(p.unit)}</div></div>
+      <div style="${p.is_active === false ? 'opacity:.55' : ''}"><strong>${esc(p.name)}</strong>${p.is_active === false ? ' <span class="pill st-cancelled">inactif</span>' : ''}${effPrice(p) < Number(p.sale_price) ? ' <span class="pill st-past_due">promo</span>' : ''}${(p.variants || []).length ? ` <span class="pill st-trial">${p.variants.length} variante(s)</span>` : ''}<div class="muted" style="font-size:12px">${esc(p.category || 'Sans catégorie')} · ${esc(p.unit)}${p.barcode ? ' · ▦ ' + esc(p.barcode) : ''}</div></div>
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px;font-size:12px"><div><div class="muted">Achat</div><strong>${money(p.purchase_price)}</strong></div><div><div class="muted">Vente</div><strong style="color:var(--green)">${money(p.sale_price)}</strong></div><div><div class="muted">Marge</div><strong>${margin(p)} %</strong></div></div>
       <div class="row between">${p.track_stock ? `<span><span class="muted" style="font-size:12px">Stock </span><strong>${+p.stock_qty}</strong></span>${stockTxt(p).includes('pill') ? stockTxt(p) : ''}` : '<span class="muted" style="font-size:12px">Stock non suivi</span>'}</div>
       <div class="row" style="gap:6px"><button class="small" type="button" data-edit="${esc(p.id)}" style="flex:1">Modifier</button>${p.track_stock ? `<button class="small ghost" type="button" data-sin="${esc(p.id)}" style="flex:1">+ Stock</button>` : ''}</div>
@@ -2723,51 +3071,6 @@ function drawProducts(){
   body.querySelectorAll('[data-edit]').forEach(b => b.onclick = () => openProductForm(S.products.find(p => p.id === b.dataset.edit)));
   body.querySelectorAll('[data-sin]').forEach(b => b.onclick = () => openStockEntry(S.products.find(p => p.id === b.dataset.sin), 'purchase'));
   body.querySelectorAll('[data-newo]').forEach(a => a.onclick = (e) => { e.preventDefault(); S.rOutlet = a.dataset.newo; openProductForm(null); });
-}
-function openProductForm(p){
-  const isNew = !p; p = p || { outlet: S.rOutlet || 'restaurant', unit: S.rOutlet === 'bar' ? 'bouteille' : 'plat', track_stock: true, alert_qty: 5, purchase_price: 0 };
-  let img = p.image_url || null;
-  const cats = [...new Set([...(PROD_CATS.restaurant), ...(PROD_CATS.bar), ...S.products.map(x => x.category).filter(Boolean)])];
-  modal(`<div class="eyebrow">${isNew ? 'Nouveau produit' : 'Modifier le produit'}</div><h2 style="font-size:24px;margin:4px 0 12px">${isNew ? 'Ajouter à la carte' : esc(p.name)}</h2>
-    <form id="pfForm">
-      <div class="row" style="gap:6px;margin-bottom:12px;flex-wrap:nowrap">${Object.entries(OUTLETS).map(([k, [l, ic]]) => `<label class="card" style="flex:1;padding:10px;margin:0;cursor:pointer;display:flex;gap:8px;align-items:center"><input type="radio" name="pfOut" value="${k}" ${p.outlet === k ? 'checked' : ''} style="width:18px;min-height:18px">${ic} ${l}</label>`).join('')}</div>
-      <div class="row" style="gap:12px;align-items:flex-start;flex-wrap:nowrap;margin-bottom:12px">
-        <label for="pfImg" id="pfImgBox" style="flex:none;width:96px;height:96px;border-radius:16px;border:2px dashed var(--line);display:grid;place-items:center;cursor:pointer;overflow:hidden;background:var(--card);margin:0">${img ? `<img src="${esc(img)}" alt="" style="width:100%;height:100%;object-fit:cover">` : '<span class="muted" style="font-size:12px;text-align:center">📷<br>Photo</span>'}</label>
-        <input id="pfImg" type="file" accept="image/jpeg,image/png,image/webp" class="sr-only">
-        <div style="flex:1"><div class="field"><label for="pfName">Nom</label><input id="pfName" required maxlength="80" value="${esc(p.name || '')}" placeholder="ex. Poulet braisé, Flag 65cl"></div></div>
-      </div>
-      <div class="row" style="gap:10px"><div class="field" style="flex:1 1 150px"><label for="pfCat">Catégorie</label><input id="pfCat" list="pfCats" maxlength="40" value="${esc(p.category || '')}" placeholder="ex. Plats, Bières"><datalist id="pfCats">${cats.map(c => `<option value="${esc(c)}">`).join('')}</datalist></div>
-        <div class="field" style="flex:1 1 110px"><label for="pfUnit">Unité</label><select id="pfUnit">${UNITS.map(u => `<option ${u === p.unit ? 'selected' : ''}>${u}</option>`).join('')}</select></div></div>
-      <div class="row" style="gap:10px"><div class="field" style="flex:1"><label for="pfBuy">Prix d’achat fournisseur</label><input id="pfBuy" inputmode="numeric" value="${+p.purchase_price || ''}" placeholder="0"></div>
-        <div class="field" style="flex:1"><label for="pfSell">Prix de vente</label><input id="pfSell" inputmode="numeric" required value="${p.sale_price != null ? +p.sale_price : ''}" placeholder="0"></div></div>
-      <p class="muted" id="pfMargin" style="margin:-6px 0 12px;font-size:13px"></p>
-      <label class="row" style="gap:8px;font-weight:600;flex-wrap:nowrap;margin-bottom:10px"><input type="checkbox" id="pfTrack" ${p.track_stock ? 'checked' : ''} style="width:20px;min-height:20px"> Suivre le stock (boissons, produits achetés)</label>
-      <div class="row" id="pfStockRow" style="gap:10px">${isNew ? `<div class="field" style="flex:1"><label for="pfInit">Stock de départ</label><input id="pfInit" inputmode="decimal" placeholder="0"></div>` : ''}
-        <div class="field" style="flex:1"><label for="pfAlert">Alerte quand il reste</label><input id="pfAlert" inputmode="decimal" value="${+p.alert_qty || 0}"></div></div>
-      <button class="primary" style="width:100%" id="pfBtn">${isNew ? 'Ajouter le produit' : 'Enregistrer'}</button>
-      ${!isNew ? `<div class="row" style="margin-top:10px;gap:6px">${p.track_stock ? `<button type="button" class="small ghost" id="pfInv" style="flex:1">Inventaire</button><button type="button" class="small ghost" id="pfLoss" style="flex:1">Perte / casse</button>` : ''}<button type="button" class="small ghost" id="pfDel" style="flex:1;color:var(--red)">Retirer de la carte</button></div>` : ''}
-    </form>`);
-  const num = (id) => Number(String($(id).value || '0').replace(/\s/g, '').replace(',', '.')) || 0;
-  const mg = () => { const b = num('pfBuy'), s = num('pfSell'); $('pfMargin').textContent = s > 0 ? `Marge : ${money(s - b)} par ${$('pfUnit').value} (${Math.round((s - b) / s * 100)} %)` : ''; };
-  ['pfBuy', 'pfSell'].forEach(i => $(i).oninput = mg); $('pfUnit').onchange = mg; mg();
-  const tr = () => { $('pfStockRow').style.display = $('pfTrack').checked ? '' : 'none'; }; $('pfTrack').onchange = tr; tr();
-  $('pfImg').onchange = async () => { const f = $('pfImg').files[0]; if (!f) return; $('pfImgBox').innerHTML = '<span class="muted" style="font-size:12px">Envoi…</span>';
-    try { img = await uploadProductPhoto(f); $('pfImgBox').innerHTML = `<img src="${esc(img)}" alt="" style="width:100%;height:100%;object-fit:cover">`; } catch (e) { toast(errMsg(e), true); $('pfImgBox').innerHTML = '<span class="muted" style="font-size:12px">📷<br>Photo</span>'; } };
-  $('pfForm').onsubmit = async (e) => { e.preventDefault(); const b = $('pfBtn'); b.disabled = true;
-    const row = { outlet: document.querySelector('[name=pfOut]:checked').value, name: $('pfName').value.trim(), category: $('pfCat').value.trim() || null, unit: $('pfUnit').value,
-      purchase_price: num('pfBuy'), sale_price: num('pfSell'), track_stock: $('pfTrack').checked, alert_qty: num('pfAlert'), image_url: img };
-    let res;
-    if (isNew) res = await sb.from('products').insert({ ...row, establishment_id: S.est }).select('id').single();
-    else res = await sb.from('products').update(row).eq('id', p.id).select('id').single();
-    if (res.error) { b.disabled = false; return toast(errMsg(res.error), true); }
-    if (isNew && row.track_stock && $('pfInit') && num('pfInit') > 0) {
-      const { error } = await sb.rpc('stock_entry', { p_product: res.data.id, p_kind: 'purchase', p_qty: num('pfInit'), p_unit_cost: row.purchase_price, p_supplier: null, p_note: 'Stock de départ' });
-      if (error) toast(errMsg(error), true);
-    }
-    closeModal(); toast(isNew ? 'Produit ajouté.' : 'Produit enregistré.'); S.rOutlet = row.outlet; renderResto(); };
-  if ($('pfInv')) $('pfInv').onclick = () => openStockEntry(p, 'adjust');
-  if ($('pfLoss')) $('pfLoss').onclick = () => openStockEntry(p, 'loss');
-  if ($('pfDel')) $('pfDel').onclick = async () => { const { error } = await sb.from('products').update({ is_active: false }).eq('id', p.id); if (error) return toast(errMsg(error), true); closeModal(); toast('Produit retiré de la carte. L’historique est conservé.'); renderResto(); };
 }
 function openStockEntry(p, kind){
   const T = { purchase: ['Entrée de stock', 'Quantité reçue', 'Enregistrer l’entrée'], adjust: ['Inventaire', 'Quantité comptée en réalité', 'Corriger le stock'], loss: ['Perte / casse', 'Quantité perdue', 'Enregistrer la perte'] }[kind];
@@ -2788,7 +3091,7 @@ function openStockEntry(p, kind){
 /* ----- Stock ----- */
 async function drawStock(){
   const body = $('rBody'); body.innerHTML = '<p class="muted">Chargement…</p>';
-  const tracked = S.products.filter(p => p.track_stock);
+  const tracked = S.products.filter(p => p.track_stock && p.is_active !== false);
   const low = tracked.filter(p => Number(p.stock_qty) <= Number(p.alert_qty)).sort((a, b) => a.stock_qty - b.stock_qty);
   const value = tracked.reduce((a, p) => a + Math.max(0, Number(p.stock_qty)) * Number(p.purchase_price), 0);
   const { data: mv } = await sb.from('stock_movements').select('*').eq('establishment_id', S.est).order('created_at', { ascending: false }).limit(60);
@@ -2830,14 +3133,14 @@ async function drawSales(){
       <div class="card kpi"><div class="l muted">Restaurant · Bar</div><div style="font-weight:800;font-size:16px;margin-top:6px">${money((s.by_outlet || {}).restaurant || 0)}<br>${money((s.by_outlet || {}).bar || 0)}</div></div></div>
     ${(s.top || []).length ? `<div class="card" style="margin-bottom:16px"><h3 style="font-size:18px;margin-bottom:8px">Meilleures ventes</h3>${s.top.map((t, i) => `<div class="row between" style="padding:6px 0;border-bottom:1px dashed var(--line)"><span>${i + 1}. <strong>${esc(t.name)}</strong> <span class="muted">× ${+t.qty}</span></span><span>${money(t.amount)} <span class="muted" style="font-size:12px">· marge ${money(t.margin)}</span></span></div>`).join('')}</div>` : ''}
     <div class="card"><h3 style="font-size:18px;margin-bottom:8px">Tickets</h3>${(sales.data || []).map(t => `<div style="padding:9px 0;border-bottom:1px solid var(--line);${t.status === 'cancelled' ? 'opacity:.55' : ''}">
-      <div class="row between" style="flex-wrap:nowrap"><span><strong>N° ${t.number}</strong> <span class="muted">· ${esc(OUTLETS[t.outlet][1])} ${new Date(t.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}${t.table_label ? ' · ' + esc(t.table_label) : ''} · ${esc(PAY_NAME[t.method] || t.method)}</span></span>
+      <div class="row between" style="flex-wrap:nowrap"><span><strong>N° ${t.number}</strong> <span class="muted">· ${esc(OUTLETS[t.outlet][1])} ${new Date(t.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}${t.table_label ? ' · ' + esc(t.table_label) : ''}${t.server_name ? ' · ' + esc(t.server_name) : ''} · ${esc(PAY_NAME[t.method] || t.method)}</span></span>
         <strong style="${t.status === 'cancelled' ? 'text-decoration:line-through' : ''}">${money(t.total)}</strong></div>
       <div class="muted" style="font-size:12px">${(t.pos_sale_items || []).map(i => `${+i.qty} × ${esc(i.name)}`).join(', ')}${t.status === 'cancelled' ? ` · <strong>Annulé</strong> : ${esc(t.cancel_reason || '')}` : ''}</div>
       <div class="row" style="gap:6px;margin-top:4px"><button class="small ghost" type="button" data-tprint="${esc(t.id)}">Imprimer</button>${t.status === 'paid' && isMgr() ? `<button class="small ghost" type="button" data-tcancel="${esc(t.id)}" style="color:var(--red)">Annuler</button>` : ''}</div></div>`).join('') || '<p class="muted">Aucune vente sur la période.</p>'}</div>`;
   const reload = () => { S.rFrom = $('rFrom').value || today(); S.rTo = $('rTo').value || S.rFrom; drawSales(); };
   $('rFrom').onchange = reload; $('rTo').onchange = reload;
   body.querySelectorAll('[data-rper]').forEach(b => b.onclick = () => { S.rTo = today(); S.rFrom = addDays(today(), -Number(b.dataset.rper)); drawSales(); });
-  body.querySelectorAll('[data-tprint]').forEach(b => b.onclick = () => { const t = sales.data.find(x => x.id === b.dataset.tprint); printPosTicket({ ...t, table: t.table_label, server: t.created_by === S.session.user.id ? myName() : '' }, t.pos_sale_items || []); });
+  body.querySelectorAll('[data-tprint]').forEach(b => b.onclick = () => { const t = sales.data.find(x => x.id === b.dataset.tprint); printPosTicket({ ...t, table: t.table_label, server: t.server_name || '' }, t.pos_sale_items || []); });
   body.querySelectorAll('[data-tcancel]').forEach(b => b.onclick = () => { const t = sales.data.find(x => x.id === b.dataset.tcancel);
     modal(`<h2 style="font-size:22px;margin-bottom:8px">Annuler le ticket n° ${t.number} ?</h2><p class="muted">Le stock sera remis et un remboursement de ${money(t.total)} sera inscrit en caisse. Le propriétaire en sera informé dans le journal.</p>
       <form id="tcForm"><div class="field"><label for="tcWhy">Raison</label><input id="tcWhy" required minlength="3" maxlength="200" placeholder="ex. erreur de saisie"></div><div class="row"><button type="button" class="ghost" data-close style="flex:1">Retour</button><button class="primary" style="flex:1;background:var(--red);border-color:var(--red)">Annuler le ticket</button></div></form>`);
