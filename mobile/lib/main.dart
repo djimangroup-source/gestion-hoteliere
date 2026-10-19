@@ -4,12 +4,10 @@
 import 'dart:convert';
 
 import 'package:connectivity_plus/connectivity_plus.dart';
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:printing/printing.dart';
-import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import 'package:webview_flutter_android/webview_flutter_android.dart';
@@ -108,23 +106,20 @@ class _HomePageState extends State<HomePage> {
       AndroidWebViewController.enableDebugging(false);
       // Champs « choisir une photo » (chambres, produits, logo, justificatifs)
       await c.setOnShowFileSelector((params) async {
-        final images = params.acceptTypes.any((t) => t.startsWith('image'));
-        if (images && params.isCaptureEnabled) {
-          final shot = await ImagePicker().pickImage(source: ImageSource.camera, imageQuality: 80, maxWidth: 1800);
+        final picker = ImagePicker();
+        final multiple = params.mode == FileSelectorMode.openMultiple;
+        ImageSource? source = params.isCaptureEnabled ? ImageSource.camera : await _askSource();
+        if (source == null) return <String>[];
+        if (source == ImageSource.camera) {
+          final shot = await picker.pickImage(source: ImageSource.camera, imageQuality: 80, maxWidth: 1800);
           return shot == null ? <String>[] : [Uri.file(shot.path).toString()];
         }
-        if (images) {
-          final choice = await _askSource();
-          if (choice == null) return <String>[];
-          if (choice == ImageSource.camera) {
-            final shot = await ImagePicker().pickImage(source: ImageSource.camera, imageQuality: 80, maxWidth: 1800);
-            return shot == null ? <String>[] : [Uri.file(shot.path).toString()];
-          }
-          final res = await FilePicker.platform.pickFiles(type: FileType.image, allowMultiple: params.mode == FileSelectorMode.openMultiple);
-          return res == null ? <String>[] : res.files.where((f) => f.path != null).map((f) => Uri.file(f.path!).toString()).toList();
+        if (multiple) {
+          final list = await picker.pickMultiImage(imageQuality: 80, maxWidth: 1800);
+          return list.map((x) => Uri.file(x.path).toString()).toList();
         }
-        final res = await FilePicker.platform.pickFiles(allowMultiple: params.mode == FileSelectorMode.openMultiple);
-        return res == null ? <String>[] : res.files.where((f) => f.path != null).map((f) => Uri.file(f.path!).toString()).toList();
+        final one = await picker.pickImage(source: ImageSource.gallery, imageQuality: 80, maxWidth: 1800);
+        return one == null ? <String>[] : [Uri.file(one.path).toString()];
       });
     }
   }
@@ -157,9 +152,6 @@ class _HomePageState extends State<HomePage> {
           name: title,
           onLayout: (format) => Printing.convertHtml(format: format, html: html),
         );
-        break;
-      case 'share':
-        await Share.share((msg['text'] ?? '') as String, subject: msg['subject'] as String?);
         break;
       case 'open':
         final u = Uri.tryParse((msg['url'] ?? '') as String);
