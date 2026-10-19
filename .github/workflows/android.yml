@@ -1,0 +1,65 @@
+name: Application Android (Flutter)
+
+on:
+  push:
+    paths:
+      - 'mobile/**'
+      - '.github/workflows/android.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Générer la partie Android
+        run: flutter create --platforms=android --org app.horushotel --project-name horus_hotel .
+
+      - name: Réglages Android (nom, internet, liens externes)
+        run: |
+          python3 - <<'PY'
+          import re
+          p = 'android/app/src/main/AndroidManifest.xml'
+          s = open(p, encoding='utf-8').read()
+          if 'android.permission.INTERNET' not in s:
+              s = s.replace('<application', '<uses-permission android:name="android.permission.INTERNET"/>\n    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>\n    <application', 1)
+          s = re.sub(r'android:label="[^"]*"', 'android:label="Horus Hotel"', s, count=1)
+          queries = '''
+              <intent><action android:name="android.intent.action.VIEW"/><data android:scheme="https"/></intent>
+              <intent><action android:name="android.intent.action.VIEW"/><data android:scheme="tel"/></intent>
+              <intent><action android:name="android.intent.action.SENDTO"/><data android:scheme="mailto"/></intent>
+              <intent><action android:name="android.intent.action.VIEW"/><data android:scheme="whatsapp"/></intent>
+              <intent><action android:name="android.media.action.IMAGE_CAPTURE"/></intent>'''
+          if '<queries>' in s:
+              s = s.replace('<queries>', '<queries>' + queries, 1)
+          else:
+              s = s.replace('</manifest>', '    <queries>' + queries + '\n    </queries>\n</manifest>', 1)
+          open(p, 'w', encoding='utf-8').write(s)
+          PY
+
+      - run: flutter pub get
+      - run: dart run flutter_launcher_icons
+      - run: dart run flutter_native_splash:create
+
+      - name: Construire l'APK
+        run: flutter build apk --release
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: horus-hotel-android
+          path: mobile/build/app/outputs/flutter-apk/app-release.apk
+          retention-days: 30

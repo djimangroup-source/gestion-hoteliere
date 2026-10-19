@@ -1,0 +1,46 @@
+name: horus_hotel
+description: Horus Hotel — gestion hôtelière et résidences (application Android).
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.3.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  webview_flutter: ^4.10.0
+  webview_flutter_android: ^4.3.0
+  url_launcher: ^6.3.1
+  printing: ^5.13.4
+  file_picker: ^8.1.4
+  image_picker: ^1.1.2
+  connectivity_plus: ^6.1.0
+  share_plus: ^10.1.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+  flutter_launcher_icons: ^0.14.1
+  flutter_native_splash: ^2.4.3
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/
+
+flutter_launcher_icons:
+  android: true
+  ios: false
+  image_path: assets/icon.png
+  adaptive_icon_background: "#B4532A"
+  adaptive_icon_foreground: assets/icon.png
+  min_sdk_android: 21
+
+flutter_native_splash:
+  color: "#F6EFE4"
+  image: assets/icon.png
+  android_12:
+    color: "#F6EFE4"
+    image: assets/icon.png

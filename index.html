@@ -344,8 +344,24 @@ function show(id){ ['auth','onboard','app','public'].forEach(x => $(x).classList
 /* ---------- Installation de l'application ---------- */
 let INSTALL_EVT = null;
 if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).catch(() => {});
+/* ---------- Application Android (Flutter) : impression et liens via le téléphone ---------- */
+const IN_APP = !!(window.HorusApp && window.HorusApp.postMessage) || /HorusApp\//.test(navigator.userAgent);
+if (window.HorusApp && window.HorusApp.postMessage) {
+  const nativeOpen = window.open.bind(window);
+  window.open = function(url, target){
+    if (url) { window.HorusApp.postMessage(JSON.stringify({ type: 'open', url: new URL(url, location.href).href })); return null; }
+    let html = '';
+    const fake = { closed: false, focus(){}, print(){}, close(){ this.closed = true; },
+      document: { write(x){ html += x; }, writeln(x){ html += x + '\n'; }, close(){
+        const clean = html.replace(/<script>window\.onload[\s\S]*?<\/script>/g, '');
+        const t = (clean.match(/<title>([^<]*)<\/title>/) || [])[1] || 'Horus Hotel';
+        window.HorusApp.postMessage(JSON.stringify({ type: 'print', title: t, html: clean })); } } };
+    return fake;
+  };
+  window.__nativeOpen = nativeOpen;
+}
 /* ---------- Mise à jour de l'application sans réinstaller ni perdre la connexion ---------- */
-const APP_VERSION = '2026.10.19-5';
+const APP_VERSION = '2026.10.19-6';
 async function refreshApp(){
   toast('Actualisation…');
   try { const reg = navigator.serviceWorker && await navigator.serviceWorker.getRegistration(); if (reg) { await reg.update(); if (reg.waiting) reg.waiting.postMessage('skipWaiting'); } } catch (_) {}
@@ -656,7 +672,7 @@ function openMore(){
 document.querySelectorAll('#tabbar [data-tab]').forEach(b => b.onclick = () => openTab(b.dataset.tab));
 
 $('navInstall').onclick = () => installApp();
-if (isStandalone()) $('navInstall').classList.add('hidden');
+if (isStandalone() || IN_APP) $('navInstall').classList.add('hidden');
 $('navEsts').onclick = () => openEstablishments();
 $('navNotif').onclick = () => openNotifs();
 $('navTheme').onclick = () => openThemes();
