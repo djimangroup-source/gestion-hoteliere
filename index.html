@@ -377,7 +377,7 @@ if (window.HorusApp && window.HorusApp.postMessage) {
   window.__nativeOpen = nativeOpen;
 }
 /* ---------- Mise à jour de l'application sans réinstaller ni perdre la connexion ---------- */
-const APP_VERSION = '2026.10.19-12';
+const APP_VERSION = '2026.10.19-13';
 async function refreshApp(){
   toast('Actualisation…');
   try { const reg = navigator.serviceWorker && await navigator.serviceWorker.getRegistration(); if (reg) { await reg.update(); if (reg.waiting) reg.waiting.postMessage('skipWaiting'); } } catch (_) {}
@@ -555,8 +555,8 @@ function renderLegalPage(k){
 // Acceptation obligatoire (nouvelle inscription, ou nouvelle version des documents)
 async function ensureLegalAccepted(){
   if (!S.session) return true;
-  const { data } = await sb.from('legal_acceptances').select('id').eq('user_id', S.session.user.id).eq('version', LEGAL_VERSION).limit(1);
-  if (data && data.length) return true;
+  const { data, error } = await sb.from('legal_acceptances').select('id').eq('user_id', S.session.user.id).eq('version', LEGAL_VERSION).limit(1);
+  if (error || (data && data.length)) return true;
   let pending = null; try { pending = localStorage.getItem('hh_legal_ok'); } catch (_) {}
   if (pending === LEGAL_VERSION) { const { error } = await sb.from('legal_acceptances').insert({ version: LEGAL_VERSION, user_agent: navigator.userAgent.slice(0, 300) }); try { localStorage.removeItem('hh_legal_ok'); } catch (_) {} if (!error || error.code === '23505') return true; }
   return new Promise((resolve) => {
@@ -725,7 +725,10 @@ async function boot(){
   ]);
   S.isAdmin = adm.data === true;
   S.member = mem.data && mem.data[0];
+  if (mem.error && isNetErr(mem.error)) { const c = cacheGet('member_' + session.user.id); if (c) { S.member = c; S.offlineBoot = true; } }
+  else if (S.member) cacheSet('member_' + session.user.id, S.member);
   $('navAdmin').classList.toggle('hidden', !S.isAdmin);
+  if (!S.member && mem.error) { show('auth'); renderAuth(); return toast('Connexion impossible : vérifiez votre réseau.', true); }
   if (!S.member && (session.user.user_metadata || {}).staff) {
     await sb.auth.signOut();
     return toast('Ce compte personnel est suspendu. Contactez votre responsable.', true);
@@ -742,7 +745,7 @@ async function boot(){
   applyRoleNav();
   show('app');
   await loadCommon();
-  go(S.view);
+  go(S.offlineBoot && !navigator.onLine && allowed('resto') ? 'resto' : S.view);
   if (S.member.must_change_password) forcePinChange();
 }
 async function loadCommon(){
@@ -753,7 +756,7 @@ async function loadCommon(){
   ]);
   if (ov.error) toast(errMsg(ov.error), true);
   S.overview = ov.data; S.plans = pl.data || []; S.providers = pr.data || [];
-  await loadOrgPrefs(); applyRoleNav(); refreshClock();
+  await loadOrgPrefs(); applyRoleNav(); refreshClock(); offBar(); syncOffline();
   renderBanner();
   refreshAlertBadge();
   startNotifs();
@@ -923,6 +926,7 @@ function go(view){
   if (S.org && !allowed(view)) view = (ROLE_VIEWS[S.member.role] || ['dashboard']).find(allowed) || 'dashboard';
   if (!S.org && view !== 'admin') view = 'admin';
   S.view = view;
+  if (!navigator.onLine && S.offlineBoot && view !== 'resto') { /* vue sans données hors connexion */ }
   document.querySelectorAll('nav.side [data-view]').forEach(b => b.classList.toggle('active', b.dataset.view === view && (!b.dataset.rtab || b.dataset.rtab === (S.rTab || 'caisse'))));
   if (typeof drawSubnav === 'function') drawSubnav();
   try { const gg = typeof groupOf === 'function' && groupOf(view); if (gg) localStorage.setItem('hh_tab_' + gg, view); } catch (_) {}
@@ -1290,6 +1294,7 @@ async function loadEst(){
     sb.from('establishments').select('id,name,city,address,phone,slug,public_enabled,public_logo_url,public_phone,receipt_settings').eq('organization_id', S.org).eq('is_active', true).order('created_at'),
     sb.from('rooms').select('id,number,room_type,base_rate,capacity,photos,housekeeping_status,is_active,establishment_id').eq('organization_id', S.org).eq('is_active', true).order('number')
   ]);
+  if (e.error && isNetErr(e.error)) { const c = cacheGet('ests_' + S.org); if (c) { e.data = c.ests; r.data = c.rooms; } } else cacheSet('ests_' + S.org, { ests: e.data || [], rooms: r.data || [] });
   S.ests = e.data || []; if (!S.est) { try { S.est = localStorage.getItem('hh_est_' + S.org); } catch (_) {} } if (!S.est || !S.ests.find(x => x.id === S.est)) S.est = S.ests[0] && S.ests[0].id;
   renderEstSwitch();
   S.rooms = (r.data || []).filter(x => x.establishment_id === S.est).sort((a, b) => String(a.number).localeCompare(String(b.number), 'fr', { numeric: true }));
@@ -2789,6 +2794,51 @@ function openPrintSettings(){
   if ($('pfRc')) $('pfRc').onclick = () => openReceiptEditor();
   $('pfTest').onclick = () => printPosTicket({ server: myName(), number: 'TEST', total: 3500, outlet: 'bar', table: 'Table 1', method: 'cash', created_at: new Date().toISOString() }, [{ name: 'Flag 65cl', qty: 2, unit_price: 1000 }, { name: 'Coca-Cola', qty: 3, unit_price: 500 }]);
 }
+/* ================= Mode hors connexion (caisse restaurant/bar) ================= */
+const OFF = { key: 'hh_offline_sales', syncing: false };
+const offQueue = () => { try { return JSON.parse(localStorage.getItem(OFF.key) || '[]'); } catch (_) { return []; } };
+const offSave = (l) => { try { localStorage.setItem(OFF.key, JSON.stringify(l)); } catch (_) {} };
+const isNetErr = (e) => !navigator.onLine || /fetch|network|Failed to fetch|NetworkError|Load failed/i.test(String((e && (e.message || e.details)) || e));
+function cacheSet(k, v){ try { localStorage.setItem('hh_c_' + k, JSON.stringify(v)); } catch (_) {} }
+function cacheGet(k){ try { return JSON.parse(localStorage.getItem('hh_c_' + k) || 'null'); } catch (_) { return null; } }
+function offBar(){
+  let b = $('offBar'); const q = offQueue().filter(x => x.org === S.org);
+  const show = !navigator.onLine || q.length;
+  if (!show) { if (b) b.remove(); return; }
+  if (!b) { b = document.createElement('div'); b.id = 'offBar'; b.setAttribute('role', 'status'); b.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:70;padding:6px 12px;text-align:center;font-size:13px;font-weight:700'; document.body.appendChild(b); }
+  b.style.background = navigator.onLine ? '#FFF4E0' : '#2B1E16'; b.style.color = navigator.onLine ? '#9A5B00' : '#FBF6EE';
+  b.innerHTML = navigator.onLine ? `${q.length} vente(s) faite(s) hors connexion en cours d’envoi… <button type="button" class="small ghost" id="offSync" style="min-height:26px;margin-left:6px">Envoyer</button>` : `Hors connexion — la caisse restaurant/bar continue de fonctionner${q.length ? ` · ${q.length} vente(s) en attente d’envoi` : ''}`;
+  const s = $('offSync'); if (s) s.onclick = syncOffline;
+}
+async function syncOffline(){
+  if (OFF.syncing || !navigator.onLine) return; const q = offQueue(); if (!q.length) return offBar();
+  OFF.syncing = true; const left = []; let ok = 0;
+  for (const it of q) {
+    const { data, error } = await sb.rpc('pos_checkout_v2', it.payload);
+    if (error) { if (isNetErr(error)) { left.push(it); break; } it.error = errMsg(error); it.failed = true; left.push(it); }
+    else { ok++; it.done = data.number; }
+  }
+  const rest = left.concat(q.slice(q.indexOf(left[0]) + 1).filter(x => !left.includes(x) && !x.done));
+  offSave(q.filter(x => !x.done)); OFF.syncing = false; offBar();
+  if (ok) toast(`${ok} vente(s) hors connexion envoyée(s) : stock et caisse mis à jour.`);
+  const failed = offQueue().filter(x => x.failed);
+  if (failed.length && can(['owner', 'admin', 'manager'])) toast(`${failed.length} vente(s) hors connexion refusée(s) (ex. stock insuffisant) : voir Restaurant & Bar → Ventes.`, true);
+  if (S.view === 'resto') renderResto();
+}
+window.addEventListener('online', () => { offBar(); syncOffline(); });
+window.addEventListener('offline', offBar);
+setInterval(() => { if (navigator.onLine && offQueue().length) syncOffline(); }, 60000);
+function offlineSale(payload, display){
+  const l = offQueue(); const ref = 'HL-' + Date.now().toString(36).slice(-5).toUpperCase();
+  l.push({ ref, org: S.org, est: S.est, at: new Date().toISOString(), payload, display }); offSave(l); offBar();
+  return { number: ref, total: display.total, offline: true };
+}
+function offlinePanel(){
+  const l = offQueue().filter(x => x.est === S.est); if (!l.length) return '';
+  return `<div class="card" style="margin-bottom:14px;border-color:#F3D8A6;background:#FFF9EE"><h3 style="font-size:16px;margin-bottom:6px">Ventes faites hors connexion (${l.length})</h3>${l.map((x, i) => `<div class="row between" style="padding:6px 0;border-bottom:1px dashed var(--line);font-size:13px;flex-wrap:nowrap"><span>${esc(x.ref)} · ${new Date(x.at).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })} · <strong>${money(x.display.total)}</strong>${x.failed ? ` <span class="pill st-cancelled">refusée : ${esc(x.error || '')}</span>` : ' <span class="pill st-past_due">en attente</span>'}</span>${x.failed && can(['owner', 'admin', 'manager']) ? `<button class="small ghost" type="button" data-offdrop="${esc(x.ref)}">Retirer</button>` : ''}</div>`).join('')}<p class="muted" style="font-size:12px;margin:6px 0 0">Elles sont envoyées automatiquement dès le retour du réseau. Une vente refusée doit être ressaisie ou annulée (l’argent reçu reste à justifier en caisse).</p></div>`;
+}
+document.addEventListener('click', (e) => { const b = e.target.closest('[data-offdrop]'); if (!b) return; offSave(offQueue().filter(x => x.ref !== b.dataset.offdrop)); offBar(); if (S.view === 'resto') renderResto(); });
+
 /* ================= Assistant intégré (questions en français sur vos chiffres) ================= */
 const ASK_SUGG = ['Combien j’ai encaissé aujourd’hui ?', 'Ventes du bar cette semaine', 'Taux d’occupation ce mois', 'Qui n’a pas fini de payer ?', 'Quels produits sont en rupture ?', 'Dépenses du mois dernier', 'Arrivées de demain', 'Meilleures ventes ce mois'];
 const askNorm = (t) => String(t || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[’']/g, ' ');
@@ -3173,8 +3223,9 @@ async function renderResto(){
   if (!isMgr() && !['caisse', 'ventes'].includes(S.rTab)) S.rTab = 'caisse';
   if (S.rTab === 'ventes' && !can(['owner', 'admin', 'manager', 'accountant'])) S.rTab = 'caisse';
   const { data: prods, error } = await sb.from('products').select('*').eq('establishment_id', S.est).order('category', { nullsFirst: false }).order('name');
-  if (error) { el.innerHTML = head('Restaurant & Bar') + `<p class="muted">${esc(errMsg(error))}</p>`; return; }
-  S.products = prods || [];
+  let prodList = prods;
+  if (error) { if (isNetErr(error) && cacheGet('prods_' + S.est)) prodList = cacheGet('prods_' + S.est); else { el.innerHTML = head('Restaurant & Bar') + `<p class="muted">${esc(errMsg(error))}</p>`; return; } } else cacheSet('prods_' + S.est, prods || []);
+  S.products = prodList || [];
   const tabs = [['caisse', 'Caisse'], ...(isMgr() ? [['produits', 'Produits'], ['stock', 'Stock']] : []), ...(can(['owner', 'admin', 'manager', 'accountant']) ? [['ventes', 'Ventes']] : [])];
   const low = S.products.filter(p => p.is_active !== false && p.track_stock && Number(p.stock_qty) <= Number(p.alert_qty)).length;
   el.innerHTML = head('Restaurant & Bar', isMgr() ? `<button class="small" type="button" id="rNewProd">+ Produit</button>` : '') + readOnlyNote() + `
@@ -3416,7 +3467,7 @@ function drawPos(){
   const inCart = (id) => S.cart.filter(c => c.id === id).reduce((a, c) => a + c.qty, 0);
   const total = cartTotal(), count = cartCount(), holds = getHolds(), unsent = S.cart.filter(c => c.qty > c.sent).length;
   const c = prnCfg('caisse');
-  body.innerHTML = `<div class="posgrid">
+  body.innerHTML = offlinePanel() + `<div class="posgrid">
     <div>
       <div class="row" style="gap:6px;margin-bottom:10px;flex-wrap:nowrap">${Object.entries(OUTLETS).map(([k, [l, ic]]) => `<button type="button" class="${S.rOutlet === k ? 'primary' : 'ghost'}" data-outlet="${k}" style="flex:1">${l}</button>`).join('')}</div>
       <div class="row" style="gap:6px;margin-bottom:10px;flex-wrap:nowrap">
@@ -3533,7 +3584,9 @@ function openPosPay(total){
       const b = $('ppGo'); b.disabled = true;
       const method = st.mode === 'cash' ? 'cash' : st.mode === 'card' ? 'card' : st.op;
       const items = S.cart.map(c => ({ product_id: c.id, qty: c.qty, variant: c.variant }));
-      const { data, error } = await sb.rpc('pos_checkout_v2', { p_est: S.est, p_outlet: S.rOutlet, p_items: items, p_method: method, p_reference: st.mode === 'mobile' ? st.ref.trim() : null, p_table: S.rTable || null, p_server: S.rServer || null });
+      const payload = { p_est: S.est, p_outlet: S.rOutlet, p_items: items, p_method: method, p_reference: st.mode === 'mobile' ? st.ref.trim() : null, p_table: S.rTable || null, p_server: S.rServer || null };
+      let { data, error } = navigator.onLine ? await sb.rpc('pos_checkout_v2', payload) : { data: null, error: { message: 'offline' } };
+      if (error && isNetErr(error)) { data = offlineSale(payload, { total }); error = null; S.products.forEach(p => { const n = S.cart.filter(c => c.id === p.id).reduce((a, c) => a + c.qty, 0); if (n && p.track_stock) p.stock_qty = Number(p.stock_qty) - n; }); cacheSet('prods_' + S.est, S.products); }
       if (error) { b.disabled = false; return toast(errMsg(error), true); }
       const lines = S.cart.map(c => ({ name: c.name, qty: c.qty, unit_price: c.price })), table = S.rTable, server = S.rServer;
       rememberServer(); S.cart = []; S.rTable = ''; S.holdId = null;
@@ -3541,14 +3594,14 @@ function openPosPay(total){
       const cfg = prnCfg('caisse');
       const doPrint = () => printDocument('caisse', (w) => escTicket(w, sale, lines, { change, drawer: method === 'cash' && cfg.drawer }), () => printPosTicket(sale, lines));
       modal(`<div style="text-align:center"><div style="width:64px;height:64px;border-radius:50%;background:var(--green-l);display:grid;place-items:center;margin:0 auto 10px;font-size:30px">✓</div>
-        <h2 style="font-size:24px;margin-bottom:4px">Ticket n° ${data.number} encaissé</h2><p style="font-family:var(--display);font-size:30px;font-weight:800;margin:4px 0">${money(data.total)}</p>
+        <h2 style="font-size:24px;margin-bottom:4px">Ticket n° ${data.number} encaissé</h2>${data.offline ? '<p class="pill st-past_due" style="display:inline-block">Hors connexion : sera envoyé au retour du réseau</p>' : ''}<p style="font-family:var(--display);font-size:30px;font-weight:800;margin:4px 0">${money(data.total)}</p>
         ${change !== null && change > 0 ? `<p class="muted">Monnaie à rendre : <strong>${money(change)}</strong></p>` : ''}<p class="muted" style="font-size:13px">Stock mis à jour · recette ajoutée à la caisse</p>
         <p style="font-size:13px;margin:4px 0 0"><a href="#" id="tkFmt"> ${esc(PRN_TYPES[cfg.type][1])} · ${cfg.type === 'system' ? esc(PRINT_FMTS.ticket[getFmt('ticket')]) : cfg.width + ' mm'} · changer</a></p></div>
         <div class="row" style="margin-top:14px"><button class="ghost" type="button" id="tkPrint" style="flex:1">Imprimer le ticket</button><button class="primary" data-close style="flex:1">Nouvelle commande</button></div>`);
       $('tkFmt').onclick = (e) => { e.preventDefault(); openPrinterSetup('caisse'); };
       $('tkPrint').onclick = doPrint;
       if (cfg.auto) doPrint(); else if (method === 'cash' && cfg.drawer && cfg.type !== 'system') openDrawer();
-      renderResto();
+      if (!data.offline) renderResto(); else drawPos();
     };
   };
   draw();
