@@ -268,6 +268,7 @@ body.modal-open{overflow:hidden}
         <button type="button" id="navMods">Fonctionnalités utilisées</button>
         <button type="button" id="navCur">Devise</button>
         <button type="button" id="navTheme">Thème de l’application</button>
+        <button type="button" id="navRates">Tarifs automatiques</button>
         <button type="button" id="navLegal">Documents légaux</button>
         <button type="button" id="navRefresh"> Actualiser l’application</button>
         <button type="button" id="navPrint">Impression &amp; reçus</button>
@@ -814,6 +815,8 @@ $('navNotif').onclick = () => openNotifs();
 $('navTheme').onclick = () => openThemes();
 $('navRefresh').onclick = () => refreshApp();
 $('navLegal').onclick = () => openLegal('cgu');
+$('navRates').onclick = () => openRateRules();
+document.addEventListener('click', (e) => { if (e.target.closest('#rateRulesBtn')) openRateRules(); });
 $('navMods').onclick = () => openModules();
 $('navCur').onclick = () => { modal(`<h2 style="font-size:22px;margin-bottom:10px">Devise d’affichage</h2><p class="muted" style="font-size:14px;margin:0 0 10px">Les montants s’affichent dans cette devise (aucune conversion n’est faite).</p><div style="display:grid;gap:6px">${Object.entries(CURRENCIES).map(([k, v]) => `<button type="button" class="${k === S.currency ? '' : 'ghost'}" data-cur="${k}" style="justify-content:space-between;display:flex"><span>${v[0]}</span><strong>${k} · ${v[1]}</strong></button>`).join('')}</div>`); document.querySelectorAll('[data-cur]').forEach(b => b.onclick = () => { closeModal(); setCurrency(b.dataset.cur); }); };
 $('navPrint').onclick = () => openPrintSettings();
@@ -1073,7 +1076,7 @@ async function renderChambres(){
   const f = S._chf || { type: '', st: '' };
   const shown = rooms.filter(r => (!f.type || r.room_type === f.type) && (!f.st || (f.st === 'inactive' ? !r.is_active : r.is_active && r.housekeeping_status === f.st)));
   const hkCls = { clean:'st-active', ready:'st-active', dirty:'st-pending', cleaning:'st-trial', out_of_service:'st-expired' };
-  el.innerHTML = head('Chambres', `<span class="pill st-trial" style="align-self:center">${u.rooms ?? rooms.filter(r => r.is_active).length} / ${u.max_rooms ?? '∞'} utilisées</span>${canEdit ? '<button class="primary" id="addRooms">+ Ajouter des chambres</button>' : ''}`) + readOnlyNote() + `
+  el.innerHTML = head('Chambres', `<span class="pill st-trial" style="align-self:center">${u.rooms ?? rooms.filter(r => r.is_active).length} / ${u.max_rooms ?? '∞'} utilisées</span><button class="ghost" type="button" id="rateRulesBtn">Tarifs automatiques</button>${canEdit ? '<button class="primary" id="addRooms">+ Ajouter des chambres</button>' : ''}`) + readOnlyNote() + `
     <div class="row" style="margin-bottom:16px">
       <select id="fType" style="width:auto"><option value="">Tous les types</option>${types.map(t => `<option ${t === f.type ? 'selected' : ''}>${esc(t)}</option>`).join('')}</select>
       <select id="fSt" style="width:auto"><option value="">Tous les états</option>${opt(HKS, f.st)}<option value="inactive" ${f.st === 'inactive' ? 'selected' : ''}>Désactivées</option></select>
@@ -1597,7 +1600,7 @@ async function openResaForm(pre, refresh){
     if (st.step === 3) { const known = st.gid ? G.find(g => g.id === st.gid) : null;
       main = `<div class="field"><label for="wPh">Téléphone du client</label><input id="wPh" type="tel" value="${esc(st.phone)}" placeholder="Ex. : 07 07 00 00 01" autocomplete="off"><div id="wPhH" class="muted" style="font-size:13px;margin-top:4px">${known ? `✓ Client déjà venu : <strong>${esc(known.full_name)}</strong> — <a href="#" id="wNew">autre client</a>` : 'S’il est déjà venu, sa fiche se remplit toute seule.'}</div></div>
         <div class="field ${known ? 'hidden' : ''}"><label for="wNm">Nom complet</label><input id="wNm" value="${esc(st.name)}" autocomplete="off" list="wGl"><datalist id="wGl">${G.slice(0, 300).map(g => `<option value="${esc(g.full_name)}">${esc(g.phone || '')}</option>`).join('')}</datalist></div>
-        <div class="row"><div class="field" style="flex:1 1 120px"><label for="wRt">Prix / nuit (F)</label><input id="wRt" type="number" min="0" value="${st.rate ?? ''}"></div>
+        <div class="row"><div class="field" style="flex:1 1 120px"><label for="wRt">Prix / nuit (F)</label><input id="wRt" type="number" min="0" value="${st.rate ?? ''}"></div>${st.rateNote ? `<p class="muted" style="flex:1 1 100%;font-size:12px;margin:-6px 0 6px;color:var(--green)">${esc(st.rateNote)}</p>` : ''}
           <div class="field" style="flex:1 1 110px"><label for="wDs">Remise (F) <span title="Au-delà de ${discPct} % de remise, le propriétaire est prévenu automatiquement." style="display:inline-grid;place-items:center;width:17px;height:17px;border-radius:50%;background:var(--ink);color:#fff;font-size:11px;cursor:help">?</span></label><input id="wDs" type="number" min="0" value="${st.disc}"></div>
           <div class="field" style="flex:1 1 130px"><label for="wSr">Origine</label><select id="wSr">${opt(SOURCE, st.src)}</select></div></div>
         <div id="wDW" class="hidden" style="margin:-6px 0 12px;font-size:13px;color:#6B4A00;background:#FFF4E5;border-radius:10px;padding:8px 10px">Remise supérieure à ${discPct} % : le propriétaire sera prévenu.</div>
@@ -1657,7 +1660,16 @@ async function openResaForm(pre, refresh){
     if ($('wDp')) { st.dep = +v('wDp') || 0; st.depM = v('wDm'); st.depR = v('wDr'); } };
   const next = async () => {
     if (st.step === 1) { if (nights() < 1) return toast('La date de départ doit suivre la date d’arrivée.', true); await loadBusy(); if (st.room && st.busy.has(st.room)) st.room = null; st.step = 2; return draw(); }
-    if (st.step === 2) { if (!st.room) return toast('Choisissez une chambre.', true); if (st.rate == null) st.rate = roomOf(st.room).base_rate || 0; st.step = 3; return draw(); }
+    if (st.step === 2) { if (!st.room) return toast('Choisissez une chambre.', true);
+      const key = st.room + '|' + st.ci + '|' + st.co;
+      if (st.rateKey !== key) { st.rateKey = key; st.rateNote = null;
+        try { const { data } = await sb.rpc('stay_price', { p_room: st.room, p_in: st.ci, p_out: st.co });
+          if (data && data.adjusted) { st.rate = Number(data.rate); st.disc = Number(data.rounding) || 0;
+            const used = {}; (data.detail || []).forEach(x => { const k = x.rule || 'Tarif normal'; used[k] = (used[k] || 0) + 1; });
+            st.rateNote = 'Tarif automatique appliqué : ' + Object.entries(used).map(([k, n]) => `${k} (${n} nuit${n > 1 ? 's' : ''})`).join(', ') + ' · total ' + money(data.total); }
+          else st.rate = roomOf(st.room).base_rate || 0;
+        } catch (_) { if (st.rate == null) st.rate = roomOf(st.room).base_rate || 0; } }
+      if (st.rate == null) st.rate = roomOf(st.room).base_rate || 0; st.step = 3; return draw(); }
     save();
     const btn = $('wNext'); btn.disabled = true;
     try {
@@ -2751,6 +2763,60 @@ function openPrintSettings(){
   if ($('pfRc')) $('pfRc').onclick = () => openReceiptEditor();
   $('pfTest').onclick = () => printPosTicket({ server: myName(), number: 'TEST', total: 3500, outlet: 'bar', table: 'Table 1', method: 'cash', created_at: new Date().toISOString() }, [{ name: 'Flag 65cl', qty: 2, unit_price: 1000 }, { name: 'Coca-Cola', qty: 3, unit_price: 500 }]);
 }
+/* ================= Tarifs automatiques ================= */
+const WDAYS = [[1, 'Lun'], [2, 'Mar'], [3, 'Mer'], [4, 'Jeu'], [5, 'Ven'], [6, 'Sam'], [7, 'Dim']];
+const ADJ = { percent: 'Majoration / remise en %', amount: 'Ajout / retrait en montant', fixed: 'Prix fixe par nuit' };
+const ruleTxt = (r) => { const v = Number(r.value);
+  const how = r.adjust === 'percent' ? (v >= 0 ? '+' : '−') + Math.abs(v) + ' %' : r.adjust === 'amount' ? (v >= 0 ? '+' : '−') + money(Math.abs(v)) : money(v) + ' / nuit';
+  const when = [(r.weekdays && r.weekdays.length) ? WDAYS.filter(w => r.weekdays.includes(w[0])).map(w => w[1]).join(', ') : null, r.date_from || r.date_to ? `du ${r.date_from ? dfr(r.date_from) : '…'} au ${r.date_to ? dfr(r.date_to) : '…'}` : null].filter(Boolean).join(' · ') || 'Tous les jours';
+  return `${how} · ${when}${r.room_type ? ' · ' + esc(r.room_type) : ' · toutes chambres'}`; };
+async function openRateRules(){
+  if (!hasF('seasonal_rates')) {
+    const pl = (S.plans || []).filter(p => (p.features || []).includes('seasonal_rates') && !p.is_trial && !p.is_quote_based).sort((a, b) => a.monthly_price - b.monthly_price)[0];
+    return modal(`<h2 style="font-size:22px;margin-bottom:6px">Tarifs automatiques</h2><p class="muted">Prix plus élevés le week-end, en haute saison ou les jours de fête, appliqués tout seuls aux réservations et à la réservation en ligne.</p><p><strong>Disponible avec la formule ${esc(pl ? pl.name : 'Premium')}.</strong></p><div class="row"><button class="primary" type="button" onclick="closeModal();go('tarifs')">Voir les formules</button><button class="ghost" data-close>Fermer</button></div>`);
+  }
+  const { data: rules, error } = await sb.from('rate_rules').select('*').eq('establishment_id', S.est).order('priority', { ascending: false }).order('created_at');
+  if (error) return toast(errMsg(error), true);
+  const types = [...new Set((S.rooms || []).map(r => (r.room_type || '').trim() || 'Chambre'))];
+  const mgr = can(['owner', 'admin', 'manager']);
+  modal(`<div class="row between" style="margin-bottom:6px"><h2 style="font-size:22px">Tarifs automatiques</h2><button class="small ghost" data-close style="border:0;font-size:18px" aria-label="Fermer">✕</button></div>
+    <p class="muted" style="font-size:13px;margin:0 0 12px">Appliqués automatiquement aux nouvelles réservations et à la réservation en ligne. Si plusieurs règles tombent le même jour, la plus prioritaire l’emporte.</p>
+    ${(rules || []).map(r => `<div class="card" style="padding:12px;margin-bottom:8px;${r.is_active ? '' : 'opacity:.55'}"><div class="row between" style="flex-wrap:nowrap;gap:8px"><div style="min-width:0"><strong>${esc(r.name)}</strong>${r.priority ? ` <span class="pill st-trial">priorité ${r.priority}</span>` : ''}${r.is_active ? '' : ' <span class="pill st-cancelled">désactivée</span>'}<div class="muted" style="font-size:12px">${ruleTxt(r)}</div></div>
+      ${mgr ? `<div class="row" style="gap:6px;flex-wrap:nowrap"><button class="small ghost" type="button" data-rredit="${esc(r.id)}">Modifier</button><button class="small ghost" type="button" data-rrdel="${esc(r.id)}" style="color:var(--red)" aria-label="Supprimer">✕</button></div>` : ''}</div></div>`).join('') || '<p class="muted">Aucune règle pour le moment.</p>'}
+    ${mgr ? `<div class="muted" style="font-size:12px;font-weight:800;letter-spacing:.08em;margin:14px 0 6px">AJOUT RAPIDE</div><div class="row" style="gap:6px">
+      <button class="small ghost" type="button" data-rrpre="we">Week-end +20 %</button><button class="small ghost" type="button" data-rrpre="hs">Haute saison +15 %</button><button class="small ghost" type="button" data-rrpre="fete">Jour de fête</button><button class="small ghost" type="button" data-rrpre="bs">Basse saison −10 %</button><button class="small" type="button" data-rrpre="">+ Règle personnalisée</button></div>` : ''}`);
+  $('modalBody').style.maxWidth = '620px';
+  const y = new Date().getFullYear();
+  const PRE = { we: { name: 'Week-end', weekdays: [5, 6], adjust: 'percent', value: 20 }, hs: { name: 'Haute saison', date_from: `${y}-12-15`, date_to: `${y + 1}-01-05`, adjust: 'percent', value: 15, priority: 5 },
+    fete: { name: 'Jour de fête', date_from: today(), date_to: today(), adjust: 'percent', value: 30, priority: 10 }, bs: { name: 'Basse saison', date_from: `${y}-06-01`, date_to: `${y}-09-15`, adjust: 'percent', value: -10, priority: 1 }, '': { name: '', adjust: 'percent', value: 10 } };
+  document.querySelectorAll('[data-rrpre]').forEach(b => b.onclick = () => openRateForm(PRE[b.dataset.rrpre], types));
+  document.querySelectorAll('[data-rredit]').forEach(b => b.onclick = () => openRateForm(rules.find(r => r.id === b.dataset.rredit), types));
+  document.querySelectorAll('[data-rrdel]').forEach(b => b.onclick = async () => { const { error } = await sb.from('rate_rules').delete().eq('id', b.dataset.rrdel); if (error) return toast(errMsg(error), true); toast('Règle supprimée.'); openRateRules(); });
+}
+function openRateForm(r, types){
+  const isNew = !r.id; const wd = new Set(r.weekdays || []);
+  modal(`<h2 style="font-size:22px;margin-bottom:12px">${isNew ? 'Nouvelle règle' : 'Modifier la règle'}</h2><form id="rrF">
+    <div class="field"><label for="rrN">Nom</label><input id="rrN" required maxlength="60" value="${esc(r.name || '')}" placeholder="ex. Week-end, Fêtes de fin d’année, CAN 2027"></div>
+    <label>Jours concernés <span class="muted" style="font-weight:400">(aucun = tous les jours)</span></label><div class="row" style="gap:6px;margin:6px 0 12px">${WDAYS.map(([n, l]) => `<button type="button" class="small ${wd.has(n) ? '' : 'ghost'}" data-wd="${n}">${l}</button>`).join('')}</div>
+    <div class="row" style="gap:10px"><div class="field" style="flex:1"><label for="rrF1">Du (facultatif)</label><input id="rrF1" type="date" value="${r.date_from || ''}"></div><div class="field" style="flex:1"><label for="rrF2">Au (facultatif)</label><input id="rrF2" type="date" value="${r.date_to || ''}"></div></div>
+    <div class="field"><label for="rrT">Type de chambre</label><select id="rrT"><option value="">Toutes les chambres</option>${types.map(t => `<option ${t === r.room_type ? 'selected' : ''}>${esc(t)}</option>`).join('')}</select></div>
+    <div class="row" style="gap:10px"><div class="field" style="flex:2"><label for="rrA">Ajustement</label><select id="rrA">${Object.entries(ADJ).map(([k, l]) => `<option value="${k}" ${k === r.adjust ? 'selected' : ''}>${l}</option>`).join('')}</select></div><div class="field" style="flex:1"><label for="rrV">Valeur</label><input id="rrV" inputmode="decimal" required value="${r.value ?? ''}"></div></div>
+    <p class="muted" id="rrEx" style="font-size:13px;margin:-4px 0 10px"></p>
+    <div class="row" style="gap:10px"><div class="field" style="flex:1"><label for="rrP">Priorité</label><input id="rrP" type="number" value="${r.priority ?? 0}"><small class="muted">Plus élevé = appliqué en premier</small></div>
+      <label class="row" style="flex:1;gap:8px;font-weight:600;flex-wrap:nowrap;align-self:center"><input type="checkbox" id="rrOn" ${r.is_active !== false ? 'checked' : ''} style="width:20px;min-height:20px"> Règle active</label></div>
+    <div class="row"><button class="primary" style="flex:1">Enregistrer</button><button type="button" class="ghost" id="rrBack">Retour</button></div></form>`);
+  document.querySelectorAll('[data-wd]').forEach(b => b.onclick = () => { const n = +b.dataset.wd; wd.has(n) ? wd.delete(n) : wd.add(n); b.classList.toggle('ghost', !wd.has(n)); });
+  const base = Math.round((S.rooms || []).reduce((a, x) => a + Number(x.base_rate || 0), 0) / Math.max(1, (S.rooms || []).length)) || 20000;
+  const ex = () => { const v = Number(String($('rrV').value).replace(',', '.')) || 0, a = $('rrA').value; const p = a === 'percent' ? Math.round(base * (1 + v / 100)) : a === 'amount' ? base + v : v; $('rrEx').textContent = `Exemple : une chambre à ${money(base)} passera à ${money(Math.max(0, p))} la nuit.`; };
+  $('rrA').onchange = ex; $('rrV').oninput = ex; ex();
+  $('rrBack').onclick = openRateRules;
+  $('rrF').onsubmit = async (e) => { e.preventDefault();
+    const row = { establishment_id: S.est, name: $('rrN').value.trim(), weekdays: wd.size ? [...wd].sort() : null, date_from: $('rrF1').value || null, date_to: $('rrF2').value || null, room_type: $('rrT').value || null, adjust: $('rrA').value, value: Number(String($('rrV').value).replace(',', '.')), priority: +$('rrP').value || 0, is_active: $('rrOn').checked };
+    if (row.date_from && row.date_to && row.date_to < row.date_from) return toast('La date de fin doit suivre la date de début.', true);
+    const { error } = isNew ? await sb.from('rate_rules').insert(row) : await sb.from('rate_rules').update(row).eq('id', r.id);
+    if (error) return toast(errMsg(error), true); toast('Règle enregistrée.'); openRateRules(); };
+}
+
 /* ================= Restaurant & Bar ================= */
 const OUTLETS = { restaurant: ['Restaurant', 'R'], bar: ['Bar', 'B'] };
 const POS_OPS = [['wave', 'Wave'], ['orange_money', 'Orange'], ['mtn_money', 'MTN'], ['moov_money', 'Moov']];
