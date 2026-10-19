@@ -55,6 +55,8 @@ nav.side details.more .menu{position:absolute;right:0;top:46px;min-width:220px;b
 nav.side details.more .menu button{text-align:left;width:100%;border-radius:10px}
 nav.side details.more .menu button[data-logout]{border-top:1px solid var(--line);border-radius:0 0 10px 10px;margin-top:4px}
 main{flex:1;min-width:0;width:100%;max-width:1360px;margin:0 auto;padding:28px clamp(16px,3vw,36px)}
+@media (max-width:640px){.modal{display:flex!important;align-items:flex-end!important;justify-content:stretch;padding:0!important}.modal .card{width:100%;max-width:none!important;margin:0}.modal .card{border-radius:24px 24px 0 0;max-height:92vh;max-height:92dvh;padding-bottom:max(20px,env(safe-area-inset-bottom))}.modal .card::before{content:"";display:block;width:44px;height:5px;border-radius:3px;background:var(--line);margin:-6px auto 12px}}
+html[data-theme="indigo"] nav.side #navNotif{color:#E8E2F5!important}
 nav.side button.locked::after{content:"";display:inline-block;width:12px;height:12px;margin-left:8px;vertical-align:-1px;background:currentColor;opacity:.45;-webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.5'%3E%3Crect x='5' y='11' width='14' height='10' rx='2'/%3E%3Cpath d='M8 11V8a4 4 0 0 1 8 0v3'/%3E%3C/svg%3E") center/contain no-repeat;mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.5'%3E%3Crect x='5' y='11' width='14' height='10' rx='2'/%3E%3Cpath d='M8 11V8a4 4 0 0 1 8 0v3'/%3E%3C/svg%3E") center/contain no-repeat}
 nav.side select.estsw{margin:0 0 10px;min-height:40px;font-size:14px;font-weight:600}
 @media (max-width:1000px){#mpGrid{grid-template-columns:1fr!important}#mpGrid aside{position:static!important}}
@@ -186,6 +188,7 @@ body.modal-open{overflow:hidden}
     <div class="brand">Horus Hotel</div>
     <div class="org" id="orgLabel"></div>
     <button type="button" id="navSearch" class="navsearch" aria-label="Rechercher une action">Que voulez-vous faire ?<kbd>/</kbd></button>
+    <button type="button" id="navNotif" class="navsearch" style="justify-content:flex-start;gap:10px;color:var(--ink)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10 21h4"></path></svg>Notifications<span id="notifBadge" class="hidden" style="margin-left:auto;min-width:22px;padding:2px 7px;border-radius:999px;background:var(--green);color:#fff;font-size:12px;font-weight:800;text-align:center"></span></button>
     <select id="estSwitch" class="estsw hidden" aria-label="Établissement"></select>
     <button type="button" id="navInstall" class="navsearch" style="color:var(--green);font-weight:700;justify-content:flex-start">⬇ Installer l’application</button>
     <button data-view="dashboard">Accueil</button>
@@ -282,6 +285,59 @@ async function installApp(){
     ${ios ? `<p>Sur iPhone ou iPad (Safari) :</p><ol style="line-height:1.8"><li>Touchez le bouton <strong>Partager</strong> (carré avec une flèche).</li><li>Choisissez <strong>« Sur l’écran d’accueil »</strong>.</li><li>Touchez <strong>Ajouter</strong>.</li></ol>`
       : `<p>Sur Android (Chrome) : menu <strong>⋮</strong> puis <strong>« Installer l’application »</strong> ou « Ajouter à l’écran d’accueil ».</p><p>Sur ordinateur (Chrome ou Edge) : cliquez sur l’icône d’installation <strong>⊕</strong> à droite de la barre d’adresse.</p>`}
     <p class="muted" style="font-size:13px">L’application s’ouvre ensuite en plein écran avec son icône, comme une vraie application.</p><div class="row"><button class="primary" data-close>Compris</button></div>`);
+}
+
+/* ---------- Notifications ---------- */
+const notifSeen = () => { try { return new Set(JSON.parse(localStorage.getItem('hh_seen_' + S.org) || '[]')); } catch (_) { return new Set(); } };
+const notifSave = (s) => { try { localStorage.setItem('hh_seen_' + S.org, JSON.stringify([...s].slice(-400))); } catch (_) {} };
+let NOTIFS = [], NOTIF_TIMER = null, NOTIF_SHOWN = new Set();
+async function collectNotifs(){
+  if (!S.org || !S.est) return [];
+  const t = today(), list = [];
+  const [req, mv, al, ex] = await Promise.all([
+    sb.from('reservation_balances').select('id,guest_name,room_number,check_in,check_out,status,created_at,balance').eq('establishment_id', S.est).in('status', ['pending','confirmed','checked_in']).lte('check_in', addDays(t, 30)).gte('check_out', t).limit(200),
+    Promise.resolve(null),
+    can(['owner','admin']) ? sb.from('owner_alerts').select('id,severity,message,created_at').eq('organization_id', S.org).is('read_at', null).order('created_at', { ascending: false }).limit(30) : { data: [] },
+    can(['owner']) && hasF('expenses') ? sb.from('expenses').select('id,label,amount,created_at').eq('establishment_id', S.est).eq('status', 'pending').limit(20) : { data: [] }
+  ]);
+  (req.data || []).forEach(r => {
+    if (r.status === 'pending') list.push({ key: 'req:' + r.id, icon: 'cal', title: 'Nouvelle demande en ligne', text: `${r.guest_name} · ch. ${r.room_number} · ${dfr(r.check_in)} → ${dfr(r.check_out)}`, at: r.created_at, go: () => openResa(r.id, () => S.view === 'reservations' && renderReservations()) });
+    else if (r.status === 'confirmed' && r.check_in <= t) list.push({ key: 'arr:' + r.id + ':' + t, icon: 'in', title: 'Arrivée prévue aujourd’hui', text: `${r.guest_name} · ch. ${r.room_number}`, at: t + 'T06:00:00', go: () => openResa(r.id, () => {}) });
+    else if (r.status === 'checked_in' && r.check_out <= t) list.push({ key: 'dep:' + r.id + ':' + t, icon: 'out', title: 'Départ aujourd’hui', text: `${r.guest_name} · ch. ${r.room_number}${r.balance > 0 ? ' · solde ' + money(r.balance) : ''}`, at: t + 'T06:00:00', go: () => openResa(r.id, () => {}, true) });
+  });
+  (al.data || []).forEach(a => list.push({ key: 'al:' + a.id, icon: a.severity === 'critical' ? 'warn' : 'bell', title: a.severity === 'critical' ? 'Alerte importante' : 'Alerte de contrôle', text: a.message, at: a.created_at, alertId: a.id, go: () => go('controle') }));
+  (ex.data || []).forEach(x => list.push({ key: 'exp:' + x.id, icon: 'cash', title: 'Dépense à valider', text: `${x.label} · ${money(x.amount)}`, at: x.created_at, go: () => { S.depTab = 'pending'; go('depenses'); } }));
+  return list.sort((a, b) => String(b.at).localeCompare(String(a.at)));
+}
+async function refreshNotifs(silent){
+  try { NOTIFS = await collectNotifs(); } catch (_) { return; }
+  const seen = notifSeen(), unread = NOTIFS.filter(n => !seen.has(n.key));
+  const b = $('notifBadge'); if (b) { b.textContent = unread.length > 99 ? '99+' : unread.length; b.classList.toggle('hidden', !unread.length); }
+  if (!silent && 'Notification' in window && Notification.permission === 'granted') {
+    for (const n of unread.filter(n => !NOTIF_SHOWN.has(n.key)).slice(0, 3)) {
+      NOTIF_SHOWN.add(n.key);
+      try { const reg = navigator.serviceWorker && await navigator.serviceWorker.getRegistration(); if (reg) reg.showNotification(n.title, { body: n.text, icon: 'icon-192.png', tag: n.key }); else new Notification(n.title, { body: n.text, icon: 'icon-192.png', tag: n.key }); } catch (_) {}
+    }
+  } else unread.forEach(n => NOTIF_SHOWN.add(n.key));
+}
+function startNotifs(){ clearInterval(NOTIF_TIMER); refreshNotifs(true); NOTIF_TIMER = setInterval(() => { if (S.org) refreshNotifs(false); }, 60000); }
+async function openNotifs(){
+  const nb = $('navMore'); if (nb) nb.open = false;
+  await refreshNotifs(true);
+  const seen = notifSeen();
+  const IC = { cal: '<rect x="3" y="5" width="18" height="16" rx="2"></rect><path d="M3 10h18M8 3v4M16 3v4"></path>', in: '<path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4M10 17l5-5-5-5M15 12H3"></path>', out: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"></path>', bell: '<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10 21h4"></path>', warn: '<path d="M12 3l10 18H2zM12 10v5M12 18h.01"></path>', cash: '<rect x="2" y="6" width="20" height="12" rx="2"></rect><circle cx="12" cy="12" r="2.5"></circle>' };
+  const perm = 'Notification' in window ? Notification.permission : 'unsupported';
+  modal(`<div class="row between" style="margin-bottom:10px"><h2 style="font-size:24px">Notifications</h2>${NOTIFS.length ? '<button class="small ghost" id="nAll">Tout marquer comme lu</button>' : ''}</div>
+    ${perm === 'default' ? `<div class="row between" style="background:var(--green-l);border-radius:14px;padding:10px 12px;margin-bottom:12px;flex-wrap:nowrap;gap:10px"><span style="font-size:14px">Recevez une alerte sur cet appareil à chaque nouvelle demande ou alerte.</span><button class="small primary" id="nPerm">Activer</button></div>` : perm === 'denied' ? '<p class="muted" style="font-size:13px">Les notifications sont bloquées dans les réglages du navigateur pour ce site.</p>' : ''}
+    ${NOTIFS.length ? `<div style="display:flex;flex-direction:column;gap:6px;max-height:60vh;overflow-y:auto">${NOTIFS.map((n, i) => `<button type="button" data-ni="${i}" style="min-height:0;display:flex;gap:12px;align-items:flex-start;text-align:left;padding:12px;border-radius:14px;border:1px solid var(--line);background:${seen.has(n.key) ? 'transparent' : 'var(--card)'};font-weight:400;color:var(--ink)">
+      <span style="width:36px;height:36px;flex-shrink:0;border-radius:10px;display:grid;place-items:center;background:${n.icon === 'warn' ? 'var(--red-l)' : 'var(--green-l)'};color:${n.icon === 'warn' ? 'var(--red)' : 'var(--green)'}"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">${IC[n.icon]}</svg></span>
+      <span style="flex:1;min-width:0"><strong style="display:block">${esc(n.title)}${seen.has(n.key) ? '' : ' <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--green);vertical-align:2px"></span>'}</strong><span class="muted" style="font-size:13px">${esc(n.text)}</span></span></button>`).join('')}</div>`
+      : emptyState('cal', 'Rien de nouveau', 'Les demandes en ligne, arrivées, départs et alertes apparaîtront ici.', '')}
+    <div class="row" style="margin-top:12px"><button class="ghost" data-close>Fermer</button></div>`);
+  const markAll = async () => { const s = notifSeen(); NOTIFS.forEach(n => s.add(n.key)); notifSave(s); const ids = NOTIFS.filter(n => n.alertId).map(n => n.alertId); if (ids.length) { await sb.rpc('mark_alerts_read', { p_org: S.org, p_ids: ids }); refreshAlertBadge(); } refreshNotifs(true); };
+  const na = $('nAll'); if (na) na.onclick = async () => { await markAll(); openNotifs(); };
+  const np = $('nPerm'); if (np) np.onclick = async () => { const r = await Notification.requestPermission(); toast(r === 'granted' ? 'Notifications activées sur cet appareil.' : 'Notifications non autorisées.', r !== 'granted'); openNotifs(); };
+  document.querySelectorAll('[data-ni]').forEach(x => x.onclick = () => { const n = NOTIFS[+x.dataset.ni]; const s = notifSeen(); s.add(n.key); notifSave(s); closeModal(); refreshNotifs(true); n.go(); });
 }
 
 /* ---------- Authentification ---------- */
@@ -385,6 +441,7 @@ async function loadCommon(){
   S.overview = ov.data; S.plans = pl.data || []; S.providers = pr.data || [];
   renderBanner();
   refreshAlertBadge();
+  startNotifs();
 }
 function renderBanner(){
   const o = S.overview, el = $('banner');
@@ -398,6 +455,7 @@ $('navSearch').onclick = () => openPalette();
 $('navInstall').onclick = () => installApp();
 if (isStandalone()) $('navInstall').classList.add('hidden');
 $('navEsts').onclick = () => openEstablishments();
+$('navNotif').onclick = () => openNotifs();
 $('navTheme').onclick = () => openThemes();
 
 const ROLE_VIEWS = {
@@ -1526,47 +1584,79 @@ function openSimpleMove(kind, done){
 }
 
 function openEncaisser(b, done){
-  const lines = [{ method: 'cash', amount: Number(b.balance), reference: '' }];
-  modal(`<h2 style="font-size:24px;margin-bottom:12px">Encaisser</h2>
-    <div style="background:var(--bg);border-radius:16px;padding:14px;margin-bottom:14px"><strong>${esc(b.guest_name)} · Ch. ${esc(b.room_number)}</strong>
-      <div class="muted" style="font-size:13px;margin-top:2px">${dfr(b.check_in)} → ${dfr(b.check_out)} · total ${money(b.total_amount)} · déjà payé ${money(b.paid)}</div>
-      <div style="font-family:'Bricolage Grotesque',sans-serif;font-size:26px;font-weight:700;color:#8A3E1E;margin-top:6px">Reste ${money(b.balance)}</div></div>
-    <form id="enF"><div style="font-weight:600;margin-bottom:8px">Paiement (un ou plusieurs moyens)</div><div id="enL"></div>
-    <button type="button" class="small ghost" id="enAdd" style="margin:4px 0 12px">+ Ajouter un moyen</button>
-    <div class="row between" style="border-top:1px solid #E2D5C1;padding-top:12px;margin-bottom:12px;font-weight:700"><span>Total encaissé</span><span id="enT"></span></div>
-    <div class="row"><button class="primary" id="enGo">Encaisser</button><button type="button" class="ghost" data-close>Annuler</button></div></form>`);
-  $('modalBody').style.maxWidth = '600px';
+  const bal = Number(b.balance);
+  const st = { mode: 'cash', amount: bal, received: '', op: 'wave', ref: '', mix: [{ method: 'cash', amount: bal, reference: '' }], open: false };
+  const MODES = [['cash', 'Espèces', '<rect x="2" y="6" width="20" height="12" rx="2"></rect><circle cx="12" cy="12" r="2.5"></circle>'], ['mobile', 'Mobile', '<rect x="7" y="2" width="10" height="20" rx="2"></rect><path d="M11 18h2"></path>'], ['card', 'Carte', '<rect x="2" y="5" width="20" height="14" rx="2"></rect><path d="M2 10h20"></path>'], ['mix', 'Mixte', '<path d="M12 2l9 5-9 5-9-5z"></path><path d="M3 12l9 5 9-5M3 17l9 5 9-5"></path>']];
+  const OPS = [['wave', 'Wave'], ['orange_money', 'Orange'], ['mtn_money', 'MTN'], ['moov_money', 'Moov']];
+  const round = (v, s) => Math.ceil(v / s) * s;
+  const chips = () => [bal, ...[...new Set([1000, 2000, 5000, 10000, 20000, 50000].map(s => round(bal, s)))].filter(v => v > bal).sort((x, y) => x - y)].slice(0, 4);
+  const lines = () => st.mode === 'mix' ? st.mix : [{ method: st.mode === 'cash' ? 'cash' : st.mode === 'card' ? 'card' : st.op, amount: +st.amount || 0, reference: st.ref }];
+  const total = () => lines().reduce((a, l) => a + (+l.amount || 0), 0);
+  modal('<div id="ek"></div>'); $('modalBody').style.maxWidth = '560px';
   const draw = () => {
-    $('enL').innerHTML = lines.map((l, i) => `<div class="row" style="gap:8px;margin-bottom:8px;align-items:flex-end;flex-wrap:wrap">
-      <div style="flex:1 1 130px"><label class="sr-only" for="enM${i}">Moyen</label><select id="enM${i}" data-i="${i}" data-f="method">${opt(PMETHOD, l.method)}</select></div>
-      <div style="flex:0 1 120px"><label class="sr-only" for="enA${i}">Montant</label><input id="enA${i}" type="number" min="1" required data-i="${i}" data-f="amount" value="${l.amount || ''}"></div>
-      ${l.method !== 'cash' ? `<div style="flex:1 1 150px"><label class="sr-only" for="enR${i}">Référence</label><input id="enR${i}" data-i="${i}" data-f="reference" maxlength="80" placeholder="N° de transaction${MOMO.includes(l.method) ? ' (obligatoire)' : ''}" ${MOMO.includes(l.method) ? 'required minlength="4"' : ''} value="${esc(l.reference)}"></div>` : ''}
-      ${lines.length > 1 ? `<button type="button" class="small ghost" data-rm="${i}" aria-label="Retirer">✕</button>` : ''}</div>`).join('');
-    $('enL').querySelectorAll('[data-f]').forEach(inp => { inp.oninput = inp.onchange = () => { const l = lines[+inp.dataset.i]; l[inp.dataset.f] = inp.dataset.f === 'amount' ? +inp.value : inp.value; if (inp.dataset.f === 'method') draw(); total(); }; });
-    $('enL').querySelectorAll('[data-rm]').forEach(x => x.onclick = () => { lines.splice(+x.dataset.rm, 1); draw(); total(); });
-    total();
+    const t = total(), change = st.mode === 'cash' && +st.received > 0 ? +st.received - (+st.amount || 0) : null;
+    $('ek').innerHTML = `
+      <div class="row between" style="margin-bottom:14px"><h2 style="font-size:24px">Encaisser</h2><button class="small ghost" data-close aria-label="Fermer" style="border:0;font-size:18px">✕</button></div>
+      <div style="border:1.5px solid var(--gold-l);background:linear-gradient(120deg,var(--gold-l),var(--card) 70%);border-radius:18px;padding:16px 18px;margin-bottom:16px">
+        <div class="row between" style="align-items:flex-start;flex-wrap:nowrap"><div><div style="font-size:12px;font-weight:800;letter-spacing:.14em;color:var(--muted)">À ENCAISSER</div>
+          <button type="button" id="ekDet" style="min-height:0;padding:4px 0;border:0;background:none;color:var(--muted);font-weight:600;font-size:14px">${esc(b.guest_name)} · ch. ${esc(b.room_number)} ${st.open ? '▴' : '▾'}</button></div>
+          <div style="font-family:var(--display);font-weight:800;font-size:30px;white-space:nowrap">${money(bal)}</div></div>
+        ${st.open ? `<div style="font-size:13px;color:var(--muted);border-top:1px dashed var(--line);margin-top:8px;padding-top:8px">${dfr(b.check_in)} → ${dfr(b.check_out)} · total ${money(b.total_amount)} · déjà payé ${money(b.paid)}</div>` : ''}
+      </div>
+      <div style="font-size:12px;font-weight:800;letter-spacing:.12em;color:var(--muted);margin-bottom:8px">MOYEN DE PAIEMENT</div>
+      <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-bottom:14px">${MODES.map(([k, l, ic]) => `<button type="button" data-mode="${k}" aria-pressed="${st.mode === k}" style="min-height:86px;border-radius:16px;border:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;font-weight:600;${st.mode === k ? 'background:var(--ink);color:var(--card)' : 'background:var(--bg);color:var(--ink)'}"><span style="width:38px;height:38px;border-radius:10px;display:grid;place-items:center;background:${st.mode === k ? 'rgba(255,255,255,.14)' : 'var(--card)'}"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">${ic}</svg></span>${l}</button>`).join('')}</div>
+      <div style="background:var(--bg);border-radius:18px;padding:16px;margin-bottom:14px">
+      ${st.mode === 'mix' ? `<div style="font-weight:700;margin-bottom:8px">Répartition</div>${st.mix.map((l, i) => `<div class="row" style="gap:8px;margin-bottom:8px;flex-wrap:wrap"><select data-mi="${i}" data-mf="method" style="flex:1 1 120px">${opt(PMETHOD, l.method)}</select><input data-mi="${i}" data-mf="amount" type="number" min="1" value="${l.amount || ''}" style="flex:0 1 120px" aria-label="Montant">${l.method !== 'cash' ? `<input data-mi="${i}" data-mf="reference" value="${esc(l.reference)}" placeholder="N° transaction" style="flex:1 1 130px">` : ''}${st.mix.length > 1 ? `<button type="button" class="small ghost" data-mrm="${i}" aria-label="Retirer">✕</button>` : ''}</div>`).join('')}<button type="button" class="small ghost" id="ekAdd">+ Ajouter un moyen</button>
+        <div class="row between" style="margin-top:10px;font-weight:700"><span>Total</span><span style="color:${t === bal ? 'var(--ok)' : t > bal ? 'var(--red)' : 'var(--ink)'}">${money(t)}${t < bal ? ' · reste ' + money(bal - t) : t > bal ? ' · trop' : ' · soldé'}</span></div>`
+      : `${st.mode === 'mobile' ? `<div class="row" style="gap:6px;margin-bottom:12px">${OPS.map(([k, l]) => `<button type="button" class="small ${st.op === k ? 'primary' : 'ghost'}" data-op="${k}">${l}</button>`).join('')}</div>` : ''}
+        <label for="ekAmt" style="font-size:15px;color:var(--ink)">Montant à encaisser</label>
+        <div style="position:relative"><input id="ekAmt" type="number" min="1" max="${bal}" value="${st.amount}" style="font-size:22px;font-weight:700;min-height:56px;padding-right:60px"><span class="muted" style="position:absolute;right:14px;top:16px">FCFA</span></div>
+        ${st.amount < bal ? `<div class="muted" style="font-size:13px;margin-top:4px">Paiement partiel · il restera ${money(bal - st.amount)}</div>` : ''}
+        ${st.mode === 'cash' ? `<label for="ekRec" style="font-size:15px;color:var(--ink);margin-top:12px">Montant reçu du client</label>
+          <div style="position:relative"><input id="ekRec" type="number" min="0" value="${st.received}" placeholder="0" style="font-size:18px;min-height:50px;padding-right:60px"><span class="muted" style="position:absolute;right:14px;top:13px">FCFA</span></div>
+          <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;margin-top:8px">${chips().map((v, i) => `<button type="button" class="small ghost" data-rec="${v}" style="background:var(--card)">${i === 0 ? 'Juste' : new Intl.NumberFormat('fr-FR').format(v).replace(/\u202f|\u00a0/g, ' ')}</button>`).join('')}</div>
+          ${change !== null ? `<div class="row between" style="margin-top:10px;font-weight:800;font-size:17px;color:${change >= 0 ? 'var(--ok)' : 'var(--red)'}"><span>${change >= 0 ? 'Monnaie à rendre' : 'Il manque'}</span><span>${money(Math.abs(change))}</span></div>` : ''}`
+        : `<label for="ekRef" style="font-size:15px;color:var(--ink);margin-top:12px">N° de transaction ${st.mode === 'mobile' ? '(obligatoire)' : '(facultatif)'}</label><input id="ekRef" value="${esc(st.ref)}" placeholder="${st.mode === 'mobile' ? 'Ex. : T_24AB93KX' : 'Ex. : n° du ticket'}">`}`}
+      </div>
+      <div class="row" style="border-top:1px solid var(--line);padding-top:14px;flex-wrap:nowrap"><button type="button" class="ghost" data-close style="border:0">Annuler</button>
+        <button type="button" class="primary" id="ekGo" style="flex:1;min-height:56px;font-size:17px">Encaisser · ${money(t)}</button></div>`;
+    bind();
   };
-  const total = () => { const t = lines.reduce((a, l) => a + (+l.amount || 0), 0), r = Number(b.balance) - t;
-    $('enT').innerHTML = `${money(t)} · ${r === 0 ? '<span style="color:var(--ok)">soldé</span>' : r > 0 ? `reste ${money(r)}` : `<span style="color:#8A3E1E">dépasse de ${money(-r)}</span>`}`; };
-  $('enAdd').onclick = () => { const t = lines.reduce((a, l) => a + (+l.amount || 0), 0); lines.push({ method: 'wave', amount: Math.max(0, Number(b.balance) - t), reference: '' }); draw(); };
-  draw();
-  $('enF').onsubmit = async (e) => { e.preventDefault();
-    const t = lines.reduce((a, l) => a + (+l.amount || 0), 0);
-    if (t > Number(b.balance)) return toast('Le total dépasse le solde du client.', true);
-    if (lines.some(l => !(+l.amount > 0))) return toast('Chaque moyen doit avoir un montant.', true);
-    $('enGo').disabled = true;
+  const bind = () => {
+    $('ekDet').onclick = () => { st.open = !st.open; draw(); };
+    document.querySelectorAll('[data-mode]').forEach(x => x.onclick = () => { st.mode = x.dataset.mode; draw(); });
+    document.querySelectorAll('[data-op]').forEach(x => x.onclick = () => { st.op = x.dataset.op; draw(); });
+    const a = $('ekAmt'); if (a) a.onchange = () => { st.amount = Math.min(bal, Math.max(0, +a.value || 0)); draw(); };
+    const r = $('ekRec'); if (r) r.onchange = () => { st.received = r.value; draw(); };
+    document.querySelectorAll('[data-rec]').forEach(x => x.onclick = () => { st.received = x.dataset.rec; draw(); });
+    const rf = $('ekRef'); if (rf) rf.oninput = () => { st.ref = rf.value; };
+    document.querySelectorAll('[data-mi]').forEach(x => x.onchange = () => { const l = st.mix[+x.dataset.mi]; l[x.dataset.mf] = x.dataset.mf === 'amount' ? +x.value : x.value; draw(); });
+    document.querySelectorAll('[data-mrm]').forEach(x => x.onclick = () => { st.mix.splice(+x.dataset.mrm, 1); draw(); });
+    const ad = $('ekAdd'); if (ad) ad.onclick = () => { const t = total(); st.mix.push({ method: 'wave', amount: Math.max(0, bal - t), reference: '' }); draw(); };
+    $('ekGo').onclick = submit;
+  };
+  const submit = async () => {
+    const L = lines().filter(l => +l.amount > 0), t = L.reduce((s, l) => s + +l.amount, 0);
+    if (!L.length) return toast('Indiquez un montant.', true);
+    if (t > bal) return toast('Le total dépasse le solde du client.', true);
+    if (L.some(l => MOMO.includes(l.method) && (l.reference || '').trim().length < 4)) return toast('Saisissez le numéro de transaction Mobile Money.', true);
+    if (st.mode === 'cash' && st.received !== '' && +st.received < t) return toast('Le montant reçu est inférieur au montant encaissé.', true);
+    $('ekGo').disabled = true;
     const group = crypto.randomUUID();
     const label = b.status === 'checked_in' || b.status === 'checked_out' ? 'Paiement séjour' : 'Acompte';
-    const { error } = await sb.from('cash_movements').insert(lines.map(l => ({ establishment_id: b.establishment_id || S.est, reservation_id: b.id, kind: 'payment', method: l.method, amount: +l.amount, reference: (l.reference || '').trim() || null, label, payment_group: group })));
-    if (error) { $('enGo').disabled = false; return toast(errMsg(error), true); }
-    const rest = Number(b.balance) - t, phone = waPhone(b.guest_phone);
+    const { error } = await sb.from('cash_movements').insert(L.map(l => ({ establishment_id: b.establishment_id || S.est, reservation_id: b.id, kind: 'payment', method: l.method, amount: +l.amount, reference: (l.reference || '').trim() || null, label, payment_group: group })));
+    if (error) { $('ekGo').disabled = false; return toast(errMsg(error), true); }
+    const rest = bal - t, phone = waPhone(b.guest_phone), change = st.mode === 'cash' && +st.received > t ? +st.received - t : 0;
     const est = S.ests.find(x => x.id === S.est) || {};
-    const msg = `${est.name || 'Horus Hotel'} — Reçu ${receiptNo(group)}\nClient : ${b.guest_name} (ch. ${b.room_number})\n` + lines.map(l => `${PMETHOD[l.method]} : ${money(l.amount)}`).join('\n') + `\nTotal reçu : ${money(t)}\n${rest > 0 ? 'Reste à payer : ' + money(rest) : 'Séjour soldé'}\nMerci de votre confiance.`;
-    modal(`<h2 style="font-size:24px;margin-bottom:8px">Paiement enregistré</h2><p>${money(t)} reçu de <strong>${esc(b.guest_name)}</strong>. ${rest > 0 ? 'Reste ' + money(rest) + '.' : 'Séjour soldé.'}</p>
-      <div class="row"><button class="primary" id="enP">Imprimer le reçu</button><a class="btn" id="enW" target="_blank" rel="noopener" href="https://wa.me/${phone}?text=${encodeURIComponent(msg)}">Envoyer par WhatsApp</a><button class="ghost" data-close>Fermer</button></div>`);
+    const msg = `${est.name || 'Horus Hotel'} — Reçu ${receiptNo(group)}\nClient : ${b.guest_name} (ch. ${b.room_number})\n` + L.map(l => `${PMETHOD[l.method]} : ${money(l.amount)}`).join('\n') + `\nTotal reçu : ${money(t)}\n${rest > 0 ? 'Reste à payer : ' + money(rest) : 'Séjour soldé'}\nMerci de votre confiance.`;
+    modal(`<div style="text-align:center;padding:8px 0"><div style="width:64px;height:64px;border-radius:50%;background:var(--ok-l);color:var(--ok);display:grid;place-items:center;margin:0 auto 10px;font-size:30px;font-weight:800">✓</div>
+      <h2 style="font-size:24px;margin-bottom:4px">Paiement enregistré</h2><p style="margin:0 0 6px">${money(t)} reçu de <strong>${esc(b.guest_name)}</strong>. ${rest > 0 ? 'Reste ' + money(rest) + '.' : 'Séjour soldé.'}</p>
+      ${change > 0 ? `<p style="font-size:20px;font-weight:800;color:var(--ok);margin:6px 0">Monnaie à rendre : ${money(change)}</p>` : ''}</div>
+      <div class="row" style="justify-content:center;margin-top:8px"><button class="primary" id="enP">Imprimer le reçu</button><a class="btn" target="_blank" rel="noopener" href="https://wa.me/${phone}?text=${encodeURIComponent(msg)}">Envoyer par WhatsApp</a><button class="ghost" data-close>Fermer</button></div>`);
     $('enP').onclick = () => printReceipt(group);
     done();
   };
+  draw();
 }
 
 async function printReceipt(key){
