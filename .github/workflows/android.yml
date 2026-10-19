@@ -49,6 +49,19 @@ jobs:
           else:
               s = s.replace('</manifest>', '    <queries>' + queries + '\n    </queries>\n</manifest>', 1)
           open(p, 'w', encoding='utf-8').write(s)
+          # Tous les plugins compilés avec une version récente d'Android (exigence AndroidX récente)
+          import os
+          kts = 'android/build.gradle.kts'
+          if os.path.exists(kts):
+              open(kts, 'a').write('\nsubprojects {\n    plugins.withId("com.android.library") {\n        extensions.configure<com.android.build.gradle.LibraryExtension>("android") { compileSdk = 36 }\n    }\n}\n')
+          else:
+              open('android/build.gradle', 'a').write('\nsubprojects {\n    plugins.withId("com.android.library") {\n        android { compileSdkVersion 36 }\n    }\n}\n')
+          for f in ['android/app/build.gradle.kts', 'android/app/build.gradle']:
+              if os.path.exists(f):
+                  t = open(f).read()
+                  t = re.sub(r'compileSdk\s*=\s*flutter\.compileSdkVersion', 'compileSdk = 36', t)
+                  t = re.sub(r'compileSdkVersion\s+flutter\.compileSdkVersion', 'compileSdkVersion 36', t)
+                  open(f, 'w').write(t)
           PY
 
       - run: flutter pub get
