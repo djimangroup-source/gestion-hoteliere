@@ -169,6 +169,8 @@ a.btn{display:inline-flex;align-items:center;min-height:44px;border-radius:999px
 .modal{position:fixed;inset:0;background:rgba(27,36,48,.55);display:grid;place-items:center;padding:16px;z-index:40;overflow-y:auto;overscroll-behavior:contain}
 .modal .card{width:100%;max-width:480px;max-height:calc(100vh - 32px);max-height:calc(100dvh - 32px);overflow-y:auto;overscroll-behavior:contain}
 body.modal-open{overflow:hidden}
+.posgrid{display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:16px;align-items:start}.poscart{position:sticky;top:16px}.posfab{display:none}
+@media (max-width:900px){.posgrid{grid-template-columns:1fr}.poscart{position:static}.posfab{display:block;position:fixed;left:16px;right:16px;bottom:calc(76px + env(safe-area-inset-bottom));z-index:30;min-height:54px;box-shadow:0 10px 30px rgba(0,0,0,.25)}}
 .big{font-family:var(--display);font-weight:800;font-size:56px;line-height:1;color:var(--green)}
 @media (max-width:700px){nav.side{max-width:none}}
 </style>
@@ -236,6 +238,7 @@ body.modal-open{overflow:hidden}
     <button data-view="clients">Clients</button>
     <button data-view="chambres">Chambres</button>
     <button data-view="caisse">Caisse</button>
+    <button data-view="resto">Restaurant &amp; Bar</button>
     <button data-view="depenses">Dépenses</button>
     <button data-view="factures">Factures</button>
     <button data-view="rapports">Rapports</button>
@@ -268,6 +271,7 @@ body.modal-open{overflow:hidden}
     <section id="v-planning" class="hidden"></section>
     <section id="v-clients" class="hidden"></section>
     <section id="v-caisse" class="hidden"></section>
+    <section id="v-resto" class="hidden"></section>
     <section id="v-depenses" class="hidden"></section>
     <section id="v-factures" class="hidden"></section>
     <section id="v-mapage" class="hidden"></section>
@@ -299,7 +303,7 @@ const authStore = {
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true, storage: authStore } });
 
 const S = { session:null, member:null, org:null, overview:null, plans:[], providers:[], isAdmin:false, cycle:'monthly', view:'dashboard', signup:false, est:null, ests:[], rooms:[] };
-const VIEWS = ['rapports','controle','equipe','mapage','dashboard','reservations','planning','clients','caisse','depenses','factures','tarifs','abonnement','chambres','admin'];
+const VIEWS = ['resto','rapports','controle','equipe','mapage','dashboard','reservations','planning','clients','caisse','depenses','factures','tarifs','abonnement','chambres','admin'];
 const $ = (id) => document.getElementById(id);
 const esc = (v) => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const fcfa = (n) => n == null ? '—' : new Intl.NumberFormat('fr-FR').format(n).replace(/ | /g,' ') + ' FCFA';
@@ -573,17 +577,18 @@ $('navTheme').onclick = () => openThemes();
 
 const ROLE_VIEWS = {
   owner: null, admin: null,
-  manager: ['dashboard','reservations','planning','clients','chambres','caisse','depenses','factures','rapports','mapage'],
-  receptionist: ['dashboard','reservations','planning','clients','chambres','caisse','factures'],
-  accountant: ['dashboard','reservations','caisse','depenses','factures','rapports'],
+  manager: ['dashboard','reservations','planning','clients','chambres','caisse','resto','depenses','factures','rapports','mapage'],
+  receptionist: ['dashboard','reservations','planning','clients','chambres','caisse','resto','factures'],
+  accountant: ['dashboard','reservations','caisse','resto','depenses','factures','rapports'],
   housekeeping: ['chambres'],
-  staff: ['dashboard','planning']
+  staff: ['resto','dashboard','planning']
 };
-const ROLE_LABEL = { owner:'Propriétaire', admin:'Administrateur', manager:'Gérant', receptionist:'Réceptionniste', housekeeping:'Ménage', accountant:'Comptable', staff:'Employé' };
+const ROLE_LABEL = { owner:'Propriétaire', admin:'Administrateur', manager:'Gérant', receptionist:'Réceptionniste', housekeeping:'Ménage', accountant:'Comptable', staff:'Serveur / Barman' };
 const allowed = (v) => v === 'admin' ? S.isAdmin : (!S.member || !ROLE_VIEWS[S.member.role] || ROLE_VIEWS[S.member.role].includes(v));
 function applyRoleNav(){ document.querySelectorAll('nav.side [data-view]').forEach(b => { if (b.dataset.view !== 'admin') b.classList.toggle('hidden', !allowed(b.dataset.view)); b.classList.toggle('locked', !!lockedView(b.dataset.view)); }); renderEstSwitch(); }
 
-const VIEW_FEATURE = { mapage: ['online_booking', 'La page de présentation et la réservation en ligne', 'Une belle page avec votre logo, vos photos et un formulaire de réservation : vos clients réservent directement, sans commission.'],
+const VIEW_FEATURE = { resto: ['restaurant', 'Le module Restaurant & Bar', 'Vos plats et boissons en photo, une caisse tactile, le stock qui se décompte à chaque vente, les marges et les alertes de réapprovisionnement.'],
+  mapage: ['online_booking', 'La page de présentation et la réservation en ligne', 'Une belle page avec votre logo, vos photos et un formulaire de réservation : vos clients réservent directement, sans commission.'],
   depenses: ['expenses', 'Le module Dépenses', 'Suivez vos charges fixes et opérationnelles, fixez un budget par poste et exigez un justificatif au-delà d’un seuil.'],
   controle: ['owner_control', 'Le contrôle propriétaire', 'Recevez une alerte à chaque remise importante, grosse dépense ou écart de caisse, et consultez le journal de toutes les actions de votre équipe.'],
   factures: ['billing', 'La facturation', 'Éditez des factures numérotées pour vos clients et suivez les soldes.'],
@@ -620,7 +625,7 @@ function renderEstSwitch(){
   const list = S.ests || [];
   s.classList.toggle('hidden', list.length < 2);
   s.innerHTML = list.map(x => `<option value="${x.id}" ${x.id === S.est ? 'selected' : ''}>${esc(x.name)}${x.city ? ' · ' + esc(x.city) : ''}</option>`).join('');
-  s.onchange = () => { S.est = s.value; try { localStorage.setItem('hh_est_' + S.org, S.est); } catch (_) {} TEAM = null; toast('Établissement : ' + (list.find(x => x.id === S.est) || {}).name); go(S.view); };
+  s.onchange = () => { S.est = s.value; S.cart = []; try { localStorage.setItem('hh_est_' + S.org, S.est); } catch (_) {} TEAM = null; toast('Établissement : ' + (list.find(x => x.id === S.est) || {}).name); go(S.view); };
 }
 async function openEstablishments(){
   const nb = $('navMore'); if (nb) nb.open = false;
@@ -651,7 +656,7 @@ function go(view){
   if (typeof syncTabbar === 'function') syncTabbar();
   window.scrollTo(0, 0);
   if (lockedView(view)) return renderLocked(view);
-  ({ rapports: renderRapports, controle: renderControle, equipe: renderEquipe, mapage: renderMaPage, dashboard: renderDashboard, reservations: renderReservations, planning: renderPlanning, clients: renderClients, caisse: renderCaisse, depenses: renderDepenses, factures: renderFactures, tarifs: renderTarifs, abonnement: renderAbonnement, chambres: renderChambres, admin: renderAdmin })[view]();
+  ({ resto: renderResto, rapports: renderRapports, controle: renderControle, equipe: renderEquipe, mapage: renderMaPage, dashboard: renderDashboard, reservations: renderReservations, planning: renderPlanning, clients: renderClients, caisse: renderCaisse, depenses: renderDepenses, factures: renderFactures, tarifs: renderTarifs, abonnement: renderAbonnement, chambres: renderChambres, admin: renderAdmin })[view]();
 }
 
 /* ---------- Tarifs ---------- */
@@ -2154,8 +2159,8 @@ async function renderControle(){
 }
 
 /* ================= Équipe ================= */
-const INVITABLE = { manager:'Gérant', receptionist:'Réceptionniste', housekeeping:'Ménage', accountant:'Comptable', admin:'Administrateur' };
-const ROLE_HELP = { admin:'Tous les accès sauf la gestion du propriétaire', manager:'Activité quotidienne, caisse, factures, page publique (consultation)', receptionist:'Réservations, clients, check-in/out, encaissements', accountant:'Caisse, factures et réservations', housekeeping:'État des chambres uniquement' };
+const INVITABLE = { manager:'Gérant', receptionist:'Réceptionniste', housekeeping:'Ménage', accountant:'Comptable', staff:'Serveur / Barman', admin:'Administrateur' };
+const ROLE_HELP = { admin:'Tous les accès sauf la gestion du propriétaire', manager:'Activité quotidienne, caisse, factures, page publique (consultation)', receptionist:'Réservations, clients, check-in/out, encaissements', accountant:'Caisse, factures et réservations', housekeeping:'État des chambres uniquement', staff:'Caisse du restaurant et du bar uniquement' };
 
 async function renderMyInvites(){
   const box = $('myInvites'); box.innerHTML = '';
@@ -2165,7 +2170,7 @@ async function renderMyInvites(){
   box.querySelectorAll('[data-accept]').forEach(b => b.onclick = async () => { b.disabled = true; const { error } = await sb.rpc('accept_invitation', { p_invitation: b.dataset.accept }); if (error) { b.disabled = false; return toast(errMsg(error), true); } toast('Bienvenue dans l\u2019équipe.'); S.view = 'dashboard'; boot(); });
 }
 
-const STAFF_ROLES = { receptionist:['Réceptionniste','🛎️'], manager:['Gérant','🧭'], housekeeping:['Ménage','🧹'], accountant:['Comptable','📒'], admin:['Administrateur','🔑'] };
+const STAFF_ROLES = { receptionist:['Réceptionniste','🛎️'], manager:['Gérant','🧭'], housekeeping:['Ménage','🧹'], accountant:['Comptable','📒'], staff:['Serveur / Barman','🍹'], admin:['Administrateur','🔑'] };
 const randPin = () => { let p; do { p = String(Math.floor(Math.random() * 10000)).padStart(4, '0'); } while (/^(\d)\1{3}$/.test(p) || p === '1234'); return p; };
 const userSlug = (t) => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().split(/\s+/)[0].replace(/[^a-z0-9]/g, '').slice(0, 20);
 async function staffAdmin(body){
@@ -2280,6 +2285,288 @@ async function renderEquipe(){
       else { const { error } = await sb.from('organization_members').update({ is_active: on }).eq('id', b.dataset.active); if (error) throw new Error(errMsg(error)); }
       toast(on ? 'Compte réactivé.' : 'Compte suspendu.'); await loadCommon(); renderEquipe();
     } catch (err) { toast(err.message, true); b.disabled = false; } });
+}
+
+/* ================= Restaurant & Bar ================= */
+const OUTLETS = { restaurant: ['Restaurant', '🍽️'], bar: ['Bar', '🍹'] };
+const POS_OPS = [['wave', 'Wave'], ['orange_money', 'Orange'], ['mtn_money', 'MTN'], ['moov_money', 'Moov']];
+const UNITS = ['unité', 'bouteille', 'canette', 'verre', 'plat', 'portion', 'kg', 'litre', 'paquet'];
+const PROD_CATS = { restaurant: ['Entrées', 'Plats', 'Grillades', 'Accompagnements', 'Desserts', 'Petit-déjeuner'], bar: ['Bières', 'Sucreries', 'Eaux', 'Vins', 'Spiritueux', 'Cocktails', 'Cafés & thés'] };
+const isMgr = () => can(['owner', 'admin', 'manager']);
+async function uploadProductPhoto(file){
+  if (!/^image\/(jpeg|png|webp)$/.test(file.type)) throw new Error('Format accepté : JPEG, PNG ou WebP.');
+  if (file.size > 3 * 1024 * 1024) throw new Error('Image trop lourde (3 Mo maximum).');
+  const path = `${S.org}/${S.est}/products/${Date.now()}-${Math.random().toString(36).slice(2, 7)}.${file.type.split('/')[1]}`;
+  const { error } = await sb.storage.from('public-media').upload(path, file, { contentType: file.type });
+  if (error) throw error;
+  return sb.storage.from('public-media').getPublicUrl(path).data.publicUrl;
+}
+const prodThumb = (p, size = 64) => p.image_url
+  ? `<img src="${esc(p.image_url)}" alt="" loading="lazy" style="width:100%;height:${size}px;object-fit:cover;border-radius:12px;display:block">`
+  : `<div style="height:${size}px;border-radius:12px;background:var(--green-l);display:grid;place-items:center;font-size:${Math.round(size / 2.4)}px">${OUTLETS[p.outlet] ? OUTLETS[p.outlet][1] : '🍽️'}</div>`;
+const stockTxt = (p) => !p.track_stock ? '' : Number(p.stock_qty) <= 0 ? '<span class="pill st-cancelled">Rupture</span>' : Number(p.stock_qty) <= Number(p.alert_qty) ? `<span class="pill st-past_due">Reste ${+p.stock_qty}</span>` : `<span class="muted" style="font-size:12px">Stock ${+p.stock_qty}</span>`;
+
+async function renderResto(){
+  const el = $('v-resto'); el.innerHTML = '<p class="muted">Chargement…</p>';
+  S.rTab = S.rTab || 'caisse'; S.rOutlet = S.rOutlet || 'restaurant'; S.cart = S.cart || [];
+  if (!isMgr() && !['caisse', 'ventes'].includes(S.rTab)) S.rTab = 'caisse';
+  if (S.rTab === 'ventes' && !can(['owner', 'admin', 'manager', 'accountant'])) S.rTab = 'caisse';
+  const { data: prods, error } = await sb.from('products').select('*').eq('establishment_id', S.est).eq('is_active', true).order('category', { nullsFirst: false }).order('name');
+  if (error) { el.innerHTML = head('Restaurant & Bar') + `<p class="muted">${esc(errMsg(error))}</p>`; return; }
+  S.products = prods || [];
+  const tabs = [['caisse', 'Caisse'], ...(isMgr() ? [['produits', 'Produits'], ['stock', 'Stock']] : []), ...(can(['owner', 'admin', 'manager', 'accountant']) ? [['ventes', 'Ventes']] : [])];
+  const low = S.products.filter(p => p.track_stock && Number(p.stock_qty) <= Number(p.alert_qty)).length;
+  el.innerHTML = head('Restaurant & Bar', isMgr() ? `<button class="small" type="button" id="rNewProd">+ Produit</button>` : '') + readOnlyNote() + `
+    <div class="row" style="gap:6px;margin-bottom:16px;overflow-x:auto;flex-wrap:nowrap">${tabs.map(([k, l]) => `<button type="button" class="small ${S.rTab === k ? '' : 'ghost'}" data-rtab="${k}" style="white-space:nowrap">${l}${k === 'stock' && low ? ` <span class="pill st-past_due" style="margin-left:4px">${low}</span>` : ''}</button>`).join('')}</div>
+    <div id="rBody"></div>`;
+  el.querySelectorAll('[data-rtab]').forEach(b => b.onclick = () => { S.rTab = b.dataset.rtab; renderResto(); });
+  if ($('rNewProd')) $('rNewProd').onclick = () => openProductForm(null);
+  ({ caisse: drawPos, produits: drawProducts, stock: drawStock, ventes: drawSales })[S.rTab]();
+}
+
+/* ----- Caisse (prise de commande) ----- */
+function drawPos(){
+  const body = $('rBody');
+  const list = S.products.filter(p => p.outlet === S.rOutlet);
+  const cats = [...new Set(list.map(p => p.category || 'Autres'))];
+  if (S.rCat && !cats.includes(S.rCat)) S.rCat = null;
+  const shown = list.filter(p => !S.rCat || (p.category || 'Autres') === S.rCat).filter(p => !S.rQ || p.name.toLowerCase().includes(S.rQ.toLowerCase()));
+  const qtyIn = (id) => (S.cart.find(c => c.id === id) || {}).qty || 0;
+  const total = S.cart.reduce((a, c) => a + c.qty * c.price, 0), count = S.cart.reduce((a, c) => a + c.qty, 0);
+  if (!S.products.length) {
+    body.innerHTML = `<div class="card" style="text-align:center;padding:36px"><div style="font-size:42px">🍽️🍹</div><h2 style="font-size:22px;margin:8px 0">Ajoutez votre carte</h2><p class="muted">Créez vos plats et boissons avec leur photo, leur prix d’achat et leur prix de vente. Le stock se décompte tout seul à chaque vente.</p>${isMgr() ? '<button class="primary" type="button" id="rFirst">+ Ajouter un produit</button>' : '<p class="muted">Demandez au gérant d’ajouter les produits.</p>'}</div>`;
+    if ($('rFirst')) $('rFirst').onclick = () => openProductForm(null);
+    return;
+  }
+  body.innerHTML = `<div class="posgrid">
+    <div>
+      <div class="row" style="gap:6px;margin-bottom:10px;flex-wrap:nowrap">${Object.entries(OUTLETS).map(([k, [l, ic]]) => `<button type="button" class="${S.rOutlet === k ? 'primary' : 'ghost'}" data-outlet="${k}" style="flex:1">${ic} ${l}</button>`).join('')}</div>
+      <input id="rQ" type="search" placeholder="Rechercher un produit…" value="${esc(S.rQ || '')}" style="margin-bottom:10px">
+      <div class="row" style="gap:6px;margin-bottom:12px;overflow-x:auto;flex-wrap:nowrap"><button type="button" class="small ${!S.rCat ? '' : 'ghost'}" data-rcat="">Tout</button>${cats.map(c => `<button type="button" class="small ${S.rCat === c ? '' : 'ghost'}" data-rcat="${esc(c)}" style="white-space:nowrap">${esc(c)}</button>`).join('')}</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(132px,1fr));gap:10px">
+        ${shown.map(p => { const out = p.track_stock && Number(p.stock_qty) - qtyIn(p.id) <= 0, q = qtyIn(p.id);
+          return `<button type="button" data-add="${esc(p.id)}" ${out ? 'disabled' : ''} style="position:relative;display:flex;flex-direction:column;gap:6px;align-items:stretch;text-align:left;padding:8px;border-radius:16px;border:1.5px solid ${q ? 'var(--green)' : 'var(--line)'};background:var(--card);min-height:0;${out ? 'opacity:.45' : ''}">
+            ${prodThumb(p, 84)}<strong style="font-size:14px;line-height:1.2">${esc(p.name)}</strong>
+            <span class="row between" style="gap:4px"><span style="font-weight:800;color:var(--green)">${money(p.sale_price)}</span>${stockTxt(p)}</span>
+            ${q ? `<span style="position:absolute;top:4px;right:4px;min-width:26px;height:26px;border-radius:13px;background:var(--green);color:#fff;font-weight:800;display:grid;place-items:center">${q}</span>` : ''}</button>`; }).join('') || '<p class="muted">Aucun produit.</p>'}
+      </div>
+    </div>
+    <div class="card poscart" id="rCart">
+      <div class="row between"><h3 style="font-size:18px">Commande</h3>${S.cart.length ? '<button type="button" class="small ghost" id="rClear" style="border:0">Vider</button>' : ''}</div>
+      <input id="rTable" placeholder="Table / chambre / client (facultatif)" value="${esc(S.rTable || '')}" maxlength="30" style="margin:8px 0">
+      <div style="max-height:46vh;overflow-y:auto">${S.cart.map(c => `<div class="row between" style="padding:8px 0;border-bottom:1px dashed var(--line);flex-wrap:nowrap;gap:8px">
+          <div style="min-width:0"><strong style="display:block;font-size:14px">${esc(c.name)}</strong><span class="muted" style="font-size:12px">${money(c.price)}</span></div>
+          <div class="row" style="gap:4px;flex-wrap:nowrap"><button type="button" class="small ghost" data-dec="${esc(c.id)}" aria-label="Retirer un" style="min-width:36px;padding:0">−</button><strong style="min-width:22px;text-align:center">${c.qty}</strong><button type="button" class="small ghost" data-inc="${esc(c.id)}" aria-label="Ajouter un" style="min-width:36px;padding:0">+</button></div>
+          <strong style="min-width:76px;text-align:right">${money(c.qty * c.price)}</strong></div>`).join('') || '<p class="muted" style="text-align:center;padding:18px 0">Touchez un produit pour l’ajouter.</p>'}</div>
+      <div class="row between" style="margin:12px 0"><span class="muted">${count} article${count > 1 ? 's' : ''}</span><span style="font-family:var(--display);font-size:28px;font-weight:800">${money(total)}</span></div>
+      <button class="primary" type="button" id="rPay" style="width:100%;min-height:54px;font-size:17px" ${S.cart.length ? '' : 'disabled'}>Encaisser · ${money(total)}</button>
+    </div></div>
+    ${S.cart.length ? `<button type="button" class="primary posfab" id="rFab">🧾 ${count} · ${money(total)}</button>` : ''}`;
+  body.querySelectorAll('[data-outlet]').forEach(b => b.onclick = () => { S.rOutlet = b.dataset.outlet; S.rCat = null; drawPos(); });
+  body.querySelectorAll('[data-rcat]').forEach(b => b.onclick = () => { S.rCat = b.dataset.rcat || null; drawPos(); });
+  $('rQ').oninput = () => { S.rQ = $('rQ').value; clearTimeout(S.rQt); S.rQt = setTimeout(() => { drawPos(); const q = $('rQ'); q.focus(); q.setSelectionRange(q.value.length, q.value.length); }, 250); };
+  $('rTable').oninput = () => { S.rTable = $('rTable').value; };
+  const bump = (id, d) => { const p = S.products.find(x => x.id === id); let c = S.cart.find(x => x.id === id);
+    if (!c && d > 0) { c = { id, name: p.name, price: Number(p.sale_price), qty: 0 }; S.cart.push(c); }
+    if (!c) return; if (d > 0 && p.track_stock && c.qty + 1 > Number(p.stock_qty)) return toast(`Stock insuffisant pour ${p.name}.`, true);
+    c.qty += d; if (c.qty <= 0) S.cart = S.cart.filter(x => x.id !== id); drawPos(); };
+  body.querySelectorAll('[data-add]').forEach(b => b.onclick = () => bump(b.dataset.add, 1));
+  body.querySelectorAll('[data-inc]').forEach(b => b.onclick = () => bump(b.dataset.inc, 1));
+  body.querySelectorAll('[data-dec]').forEach(b => b.onclick = () => bump(b.dataset.dec, -1));
+  if ($('rClear')) $('rClear').onclick = () => { S.cart = []; drawPos(); };
+  if ($('rFab')) $('rFab').onclick = () => $('rCart').scrollIntoView({ behavior: 'smooth' });
+  $('rPay').onclick = () => openPosPay(total);
+}
+function openPosPay(total){
+  const st = { mode: 'cash', received: '', op: 'wave', ref: '' };
+  const round = (v, s) => Math.ceil(v / s) * s;
+  const chips = [...new Set([round(total, 500), round(total, 1000), round(total, 2000), round(total, 5000), round(total, 10000)])].filter(v => v >= total).slice(0, 4);
+  modal('<div id="pp"></div>'); $('modalBody').style.maxWidth = '520px';
+  const draw = () => {
+    const change = st.mode === 'cash' && +st.received >= total ? +st.received - total : null;
+    $('pp').innerHTML = `<div class="row between" style="margin-bottom:12px"><h2 style="font-size:24px">Encaisser</h2><button class="small ghost" data-close aria-label="Fermer" style="border:0;font-size:18px">✕</button></div>
+      <div style="border-radius:18px;padding:16px 18px;margin-bottom:14px;background:var(--green-l)"><div style="font-size:12px;font-weight:800;letter-spacing:.14em;color:var(--muted)">${esc(OUTLETS[S.rOutlet][0].toUpperCase())}${S.rTable ? ' · ' + esc(S.rTable) : ''}</div><div style="font-family:var(--display);font-weight:800;font-size:34px">${money(total)}</div></div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px">${[['cash', '💵', 'Espèces'], ['mobile', '📱', 'Mobile'], ['card', '💳', 'Carte']].map(([k, ic, l]) => `<button type="button" data-pm="${k}" style="min-height:72px;display:flex;flex-direction:column;gap:2px;align-items:center;justify-content:center;border-radius:14px;border:2px solid ${st.mode === k ? 'var(--green)' : 'var(--line)'};background:${st.mode === k ? 'var(--green-l)' : 'var(--card)'};font-weight:700"><span style="font-size:22px">${ic}</span>${l}</button>`).join('')}</div>
+      ${st.mode === 'cash' ? `<label for="ppGiven">Montant reçu</label><input id="ppGiven" inputmode="numeric" value="${esc(st.received)}" placeholder="${total}">
+        <div class="row" style="gap:6px;margin:8px 0">${chips.map(v => `<button type="button" class="small ghost" data-given="${v}">${money(v)}</button>`).join('')}</div>
+        ${change !== null ? `<div class="row between card" style="background:var(--gold-l);margin:8px 0"><strong>Monnaie à rendre</strong><strong style="font-size:22px">${money(change)}</strong></div>` : ''}` : ''}
+      ${st.mode === 'mobile' ? `<div class="row" style="gap:6px;margin-bottom:8px">${POS_OPS.map(([k, l]) => `<button type="button" class="small ${st.op === k ? '' : 'ghost'}" data-op="${k}">${l}</button>`).join('')}</div>
+        <label for="ppRef">Référence de la transaction</label><input id="ppRef" value="${esc(st.ref)}" placeholder="ex. T-24AB91" autocapitalize="characters">` : ''}
+      <button class="primary" type="button" id="ppGo" style="width:100%;min-height:54px;font-size:17px;margin-top:14px">Valider · ${money(total)}</button>`;
+    $('pp').querySelectorAll('[data-pm]').forEach(b => b.onclick = () => { st.mode = b.dataset.pm; draw(); });
+    $('pp').querySelectorAll('[data-op]').forEach(b => b.onclick = () => { st.op = b.dataset.op; draw(); });
+    $('pp').querySelectorAll('[data-given]').forEach(b => b.onclick = () => { st.received = b.dataset.given; draw(); });
+    if ($('ppGiven')) $('ppGiven').onchange = () => { st.received = $('ppGiven').value.replace(/\D/g, ''); draw(); };
+    if ($('ppRef')) $('ppRef').oninput = () => { st.ref = $('ppRef').value; };
+    $('ppGo').onclick = async () => {
+      if (st.mode === 'cash' && st.received && +st.received < total) return toast('Le montant reçu est inférieur au total.', true);
+      if (st.mode === 'mobile' && st.ref.trim().length < 4) return toast('Saisissez la référence Mobile Money.', true);
+      const b = $('ppGo'); b.disabled = true;
+      const method = st.mode === 'cash' ? 'cash' : st.mode === 'card' ? 'card' : st.op;
+      const items = S.cart.map(c => ({ product_id: c.id, qty: c.qty }));
+      const { data, error } = await sb.rpc('pos_checkout', { p_est: S.est, p_outlet: S.rOutlet, p_items: items, p_method: method, p_reference: st.mode === 'mobile' ? st.ref.trim() : null, p_table: S.rTable || null });
+      if (error) { b.disabled = false; return toast(errMsg(error), true); }
+      const lines = S.cart.slice(), table = S.rTable;
+      S.cart = []; S.rTable = '';
+      modal(`<div style="text-align:center"><div style="width:64px;height:64px;border-radius:50%;background:var(--green-l);display:grid;place-items:center;margin:0 auto 10px;font-size:30px">✓</div>
+        <h2 style="font-size:24px;margin-bottom:4px">Ticket n° ${data.number} encaissé</h2><p style="font-family:var(--display);font-size:30px;font-weight:800;margin:4px 0">${money(data.total)}</p>
+        ${change !== null && change > 0 ? `<p class="muted">Monnaie rendue : <strong>${money(change)}</strong></p>` : ''}<p class="muted" style="font-size:13px">Stock mis à jour · recette ajoutée à la caisse</p></div>
+        <div class="row" style="margin-top:14px"><button class="ghost" type="button" id="tkPrint" style="flex:1">Imprimer le ticket</button><button class="primary" data-close style="flex:1">Nouvelle commande</button></div>`);
+      $('tkPrint').onclick = () => printPosTicket({ number: data.number, total: data.total, outlet: S.rOutlet, table, method, created_at: new Date().toISOString() }, lines.map(c => ({ name: c.name, qty: c.qty, unit_price: c.price })));
+      renderResto();
+    };
+  };
+  draw();
+}
+const PAY_NAME = { cash: 'Espèces', orange_money: 'Orange Money', mtn_money: 'MTN MoMo', moov_money: 'Moov Money', wave: 'Wave', card: 'Carte', bank_transfer: 'Virement' };
+function printPosTicket(s, items){
+  const w = window.open('', '_blank'); if (!w) return toast("Autorisez l'ouverture de fenêtres pour imprimer.", true);
+  const est = (S.ests || []).find(x => x.id === S.est) || {};
+  w.document.write(`<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>Ticket ${s.number}</title><style>body{font:13px/1.45 ui-monospace,Menlo,monospace;color:#111;max-width:300px;margin:16px auto;padding:0 10px}h1{font-size:16px;margin:0;text-align:center}.c{text-align:center}table{width:100%;border-collapse:collapse;margin:10px 0}td{padding:3px 0;vertical-align:top}.r{text-align:right}.t td{border-top:1px dashed #000;font-weight:700;font-size:15px;padding-top:6px}.m{color:#555;font-size:11px}</style></head><body>
+    <h1>${esc(est.name || 'Horus Hotel')}</h1><div class="c m">${esc(est.city || '')}</div>
+    <p class="c">${esc(OUTLETS[s.outlet] ? OUTLETS[s.outlet][0] : '')} · Ticket n° ${s.number}<br>${new Date(s.created_at).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })}${s.table ? '<br>' + esc(s.table) : ''}</p>
+    <table>${items.map(i => `<tr><td>${+i.qty} × ${esc(i.name)}</td><td class="r">${money(i.qty * i.unit_price)}</td></tr>`).join('')}<tr class="t"><td>TOTAL</td><td class="r">${money(s.total)}</td></tr></table>
+    <p class="m">Payé par ${esc(PAY_NAME[s.method] || s.method)}</p><p class="c">Merci de votre visite !</p>${S.overview && S.overview.plan && S.overview.plan.slug === 'decouverte' ? '<p class="c m">Propulsé par Horus Hotel</p>' : ''}
+    <script>window.onload=()=>{window.print();}<\/script></body></html>`);
+  w.document.close();
+}
+
+/* ----- Produits ----- */
+function drawProducts(){
+  const body = $('rBody');
+  const by = (o) => S.products.filter(p => p.outlet === o);
+  const margin = (p) => Number(p.sale_price) > 0 ? Math.round((Number(p.sale_price) - Number(p.purchase_price)) / Number(p.sale_price) * 100) : 0;
+  body.innerHTML = Object.entries(OUTLETS).map(([o, [l, ic]]) => `<h3 style="font-size:18px;margin:6px 0 10px">${ic} ${l} <span class="muted" style="font-size:14px">· ${by(o).length} produit(s)</span></h3>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;margin-bottom:20px">${by(o).map(p => `<div class="card" style="padding:10px;display:flex;gap:10px;flex-direction:column">
+      ${prodThumb(p, 110)}
+      <div><strong>${esc(p.name)}</strong><div class="muted" style="font-size:12px">${esc(p.category || 'Sans catégorie')} · ${esc(p.unit)}</div></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px;font-size:12px"><div><div class="muted">Achat</div><strong>${money(p.purchase_price)}</strong></div><div><div class="muted">Vente</div><strong style="color:var(--green)">${money(p.sale_price)}</strong></div><div><div class="muted">Marge</div><strong>${margin(p)} %</strong></div></div>
+      <div class="row between">${p.track_stock ? `<span><span class="muted" style="font-size:12px">Stock </span><strong>${+p.stock_qty}</strong></span>${stockTxt(p).includes('pill') ? stockTxt(p) : ''}` : '<span class="muted" style="font-size:12px">Stock non suivi</span>'}</div>
+      <div class="row" style="gap:6px"><button class="small" type="button" data-edit="${esc(p.id)}" style="flex:1">Modifier</button>${p.track_stock ? `<button class="small ghost" type="button" data-sin="${esc(p.id)}" style="flex:1">+ Stock</button>` : ''}</div>
+    </div>`).join('') || `<p class="muted">Aucun produit. <a href="#" data-newo="${o}">Ajouter</a></p>`}</div>`).join('');
+  body.querySelectorAll('[data-edit]').forEach(b => b.onclick = () => openProductForm(S.products.find(p => p.id === b.dataset.edit)));
+  body.querySelectorAll('[data-sin]').forEach(b => b.onclick = () => openStockEntry(S.products.find(p => p.id === b.dataset.sin), 'purchase'));
+  body.querySelectorAll('[data-newo]').forEach(a => a.onclick = (e) => { e.preventDefault(); S.rOutlet = a.dataset.newo; openProductForm(null); });
+}
+function openProductForm(p){
+  const isNew = !p; p = p || { outlet: S.rOutlet || 'restaurant', unit: S.rOutlet === 'bar' ? 'bouteille' : 'plat', track_stock: true, alert_qty: 5, purchase_price: 0 };
+  let img = p.image_url || null;
+  const cats = [...new Set([...(PROD_CATS.restaurant), ...(PROD_CATS.bar), ...S.products.map(x => x.category).filter(Boolean)])];
+  modal(`<div class="eyebrow">${isNew ? 'Nouveau produit' : 'Modifier le produit'}</div><h2 style="font-size:24px;margin:4px 0 12px">${isNew ? 'Ajouter à la carte' : esc(p.name)}</h2>
+    <form id="pfForm">
+      <div class="row" style="gap:6px;margin-bottom:12px;flex-wrap:nowrap">${Object.entries(OUTLETS).map(([k, [l, ic]]) => `<label class="card" style="flex:1;padding:10px;margin:0;cursor:pointer;display:flex;gap:8px;align-items:center"><input type="radio" name="pfOut" value="${k}" ${p.outlet === k ? 'checked' : ''} style="width:18px;min-height:18px">${ic} ${l}</label>`).join('')}</div>
+      <div class="row" style="gap:12px;align-items:flex-start;flex-wrap:nowrap;margin-bottom:12px">
+        <label for="pfImg" id="pfImgBox" style="flex:none;width:96px;height:96px;border-radius:16px;border:2px dashed var(--line);display:grid;place-items:center;cursor:pointer;overflow:hidden;background:var(--card);margin:0">${img ? `<img src="${esc(img)}" alt="" style="width:100%;height:100%;object-fit:cover">` : '<span class="muted" style="font-size:12px;text-align:center">📷<br>Photo</span>'}</label>
+        <input id="pfImg" type="file" accept="image/jpeg,image/png,image/webp" class="sr-only">
+        <div style="flex:1"><div class="field"><label for="pfName">Nom</label><input id="pfName" required maxlength="80" value="${esc(p.name || '')}" placeholder="ex. Poulet braisé, Flag 65cl"></div></div>
+      </div>
+      <div class="row" style="gap:10px"><div class="field" style="flex:1 1 150px"><label for="pfCat">Catégorie</label><input id="pfCat" list="pfCats" maxlength="40" value="${esc(p.category || '')}" placeholder="ex. Plats, Bières"><datalist id="pfCats">${cats.map(c => `<option value="${esc(c)}">`).join('')}</datalist></div>
+        <div class="field" style="flex:1 1 110px"><label for="pfUnit">Unité</label><select id="pfUnit">${UNITS.map(u => `<option ${u === p.unit ? 'selected' : ''}>${u}</option>`).join('')}</select></div></div>
+      <div class="row" style="gap:10px"><div class="field" style="flex:1"><label for="pfBuy">Prix d’achat fournisseur</label><input id="pfBuy" inputmode="numeric" value="${+p.purchase_price || ''}" placeholder="0"></div>
+        <div class="field" style="flex:1"><label for="pfSell">Prix de vente</label><input id="pfSell" inputmode="numeric" required value="${p.sale_price != null ? +p.sale_price : ''}" placeholder="0"></div></div>
+      <p class="muted" id="pfMargin" style="margin:-6px 0 12px;font-size:13px"></p>
+      <label class="row" style="gap:8px;font-weight:600;flex-wrap:nowrap;margin-bottom:10px"><input type="checkbox" id="pfTrack" ${p.track_stock ? 'checked' : ''} style="width:20px;min-height:20px"> Suivre le stock (boissons, produits achetés)</label>
+      <div class="row" id="pfStockRow" style="gap:10px">${isNew ? `<div class="field" style="flex:1"><label for="pfInit">Stock de départ</label><input id="pfInit" inputmode="decimal" placeholder="0"></div>` : ''}
+        <div class="field" style="flex:1"><label for="pfAlert">Alerte quand il reste</label><input id="pfAlert" inputmode="decimal" value="${+p.alert_qty || 0}"></div></div>
+      <button class="primary" style="width:100%" id="pfBtn">${isNew ? 'Ajouter le produit' : 'Enregistrer'}</button>
+      ${!isNew ? `<div class="row" style="margin-top:10px;gap:6px">${p.track_stock ? `<button type="button" class="small ghost" id="pfInv" style="flex:1">Inventaire</button><button type="button" class="small ghost" id="pfLoss" style="flex:1">Perte / casse</button>` : ''}<button type="button" class="small ghost" id="pfDel" style="flex:1;color:var(--red)">Retirer de la carte</button></div>` : ''}
+    </form>`);
+  const num = (id) => Number(String($(id).value || '0').replace(/\s/g, '').replace(',', '.')) || 0;
+  const mg = () => { const b = num('pfBuy'), s = num('pfSell'); $('pfMargin').textContent = s > 0 ? `Marge : ${money(s - b)} par ${$('pfUnit').value} (${Math.round((s - b) / s * 100)} %)` : ''; };
+  ['pfBuy', 'pfSell'].forEach(i => $(i).oninput = mg); $('pfUnit').onchange = mg; mg();
+  const tr = () => { $('pfStockRow').style.display = $('pfTrack').checked ? '' : 'none'; }; $('pfTrack').onchange = tr; tr();
+  $('pfImg').onchange = async () => { const f = $('pfImg').files[0]; if (!f) return; $('pfImgBox').innerHTML = '<span class="muted" style="font-size:12px">Envoi…</span>';
+    try { img = await uploadProductPhoto(f); $('pfImgBox').innerHTML = `<img src="${esc(img)}" alt="" style="width:100%;height:100%;object-fit:cover">`; } catch (e) { toast(errMsg(e), true); $('pfImgBox').innerHTML = '<span class="muted" style="font-size:12px">📷<br>Photo</span>'; } };
+  $('pfForm').onsubmit = async (e) => { e.preventDefault(); const b = $('pfBtn'); b.disabled = true;
+    const row = { outlet: document.querySelector('[name=pfOut]:checked').value, name: $('pfName').value.trim(), category: $('pfCat').value.trim() || null, unit: $('pfUnit').value,
+      purchase_price: num('pfBuy'), sale_price: num('pfSell'), track_stock: $('pfTrack').checked, alert_qty: num('pfAlert'), image_url: img };
+    let res;
+    if (isNew) res = await sb.from('products').insert({ ...row, establishment_id: S.est }).select('id').single();
+    else res = await sb.from('products').update(row).eq('id', p.id).select('id').single();
+    if (res.error) { b.disabled = false; return toast(errMsg(res.error), true); }
+    if (isNew && row.track_stock && $('pfInit') && num('pfInit') > 0) {
+      const { error } = await sb.rpc('stock_entry', { p_product: res.data.id, p_kind: 'purchase', p_qty: num('pfInit'), p_unit_cost: row.purchase_price, p_supplier: null, p_note: 'Stock de départ' });
+      if (error) toast(errMsg(error), true);
+    }
+    closeModal(); toast(isNew ? 'Produit ajouté.' : 'Produit enregistré.'); S.rOutlet = row.outlet; renderResto(); };
+  if ($('pfInv')) $('pfInv').onclick = () => openStockEntry(p, 'adjust');
+  if ($('pfLoss')) $('pfLoss').onclick = () => openStockEntry(p, 'loss');
+  if ($('pfDel')) $('pfDel').onclick = async () => { const { error } = await sb.from('products').update({ is_active: false }).eq('id', p.id); if (error) return toast(errMsg(error), true); closeModal(); toast('Produit retiré de la carte. L’historique est conservé.'); renderResto(); };
+}
+function openStockEntry(p, kind){
+  const T = { purchase: ['Entrée de stock', 'Quantité reçue', 'Enregistrer l’entrée'], adjust: ['Inventaire', 'Quantité comptée en réalité', 'Corriger le stock'], loss: ['Perte / casse', 'Quantité perdue', 'Enregistrer la perte'] }[kind];
+  modal(`<div class="eyebrow">${esc(p.name)} · stock actuel ${+p.stock_qty} ${esc(p.unit)}</div><h2 style="font-size:24px;margin:4px 0 12px">${T[0]}</h2>
+    <form id="seForm"><div class="field"><label for="seQty">${T[1]}</label><input id="seQty" inputmode="decimal" required style="font-size:22px"></div>
+    ${kind === 'purchase' ? `<div class="row" style="gap:10px"><div class="field" style="flex:1"><label for="seCost">Prix d’achat unitaire</label><input id="seCost" inputmode="numeric" value="${+p.purchase_price || ''}"></div><div class="field" style="flex:1"><label for="seSup">Fournisseur</label><input id="seSup" maxlength="80" placeholder="ex. Solibra"></div></div><p class="muted" id="seTot" style="margin:-6px 0 12px;font-size:13px"></p>` : ''}
+    <div class="field"><label for="seNote">${kind === 'loss' ? 'Raison (obligatoire)' : 'Note'}</label><input id="seNote" maxlength="200" ${kind === 'loss' ? 'required placeholder="ex. bouteille cassée"' : ''}></div>
+    <button class="primary" style="width:100%" id="seBtn">${T[2]}</button>
+    ${kind === 'purchase' ? '<p class="muted" style="font-size:12px;margin:10px 0 0">Pour suivre la sortie d’argent, enregistrez aussi l’achat dans Dépenses.</p>' : ''}</form>`);
+  const n = (id) => Number(String(($(id) || {}).value || '0').replace(/\s/g, '').replace(',', '.')) || 0;
+  if ($('seTot')) { const f = () => { $('seTot').textContent = n('seQty') && n('seCost') ? `Montant de l’achat : ${money(n('seQty') * n('seCost'))}` : ''; }; $('seQty').oninput = f; $('seCost').oninput = f; }
+  $('seForm').onsubmit = async (e) => { e.preventDefault(); const b = $('seBtn'); b.disabled = true;
+    const { data, error } = await sb.rpc('stock_entry', { p_product: p.id, p_kind: kind, p_qty: n('seQty'), p_unit_cost: kind === 'purchase' ? n('seCost') : null, p_supplier: $('seSup') ? $('seSup').value : null, p_note: $('seNote').value });
+    if (error) { b.disabled = false; return toast(errMsg(error), true); }
+    closeModal(); toast(`Stock de ${p.name} : ${+data} ${p.unit}.`); renderResto(); };
+}
+
+/* ----- Stock ----- */
+async function drawStock(){
+  const body = $('rBody'); body.innerHTML = '<p class="muted">Chargement…</p>';
+  const tracked = S.products.filter(p => p.track_stock);
+  const low = tracked.filter(p => Number(p.stock_qty) <= Number(p.alert_qty)).sort((a, b) => a.stock_qty - b.stock_qty);
+  const value = tracked.reduce((a, p) => a + Math.max(0, Number(p.stock_qty)) * Number(p.purchase_price), 0);
+  const { data: mv } = await sb.from('stock_movements').select('*').eq('establishment_id', S.est).order('created_at', { ascending: false }).limit(60);
+  const name = (id) => (S.products.find(p => p.id === id) || {}).name || 'Produit retiré';
+  const K = { purchase: ['Entrée', 'st-active'], sale: ['Vente', 'st-trial'], adjust: ['Inventaire', 'st-past_due'], loss: ['Perte', 'st-cancelled'], cancel: ['Annulation', 'st-trial'] };
+  body.innerHTML = `<div class="kpis" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;margin-bottom:16px">
+      <div class="card kpi"><div class="l muted">Valeur du stock (prix d’achat)</div><div style="font-family:var(--display);font-size:26px;font-weight:800">${money(value)}</div></div>
+      <div class="card kpi"><div class="l muted">Produits suivis</div><div style="font-family:var(--display);font-size:26px;font-weight:800">${tracked.length}</div></div>
+      <div class="card kpi"><div class="l muted">À réapprovisionner</div><div style="font-family:var(--display);font-size:26px;font-weight:800;color:${low.length ? 'var(--red)' : 'inherit'}">${low.length}</div></div></div>
+    ${low.length ? `<div class="card" style="margin-bottom:16px;border-color:var(--gold-l)"><h3 style="font-size:18px;margin-bottom:8px">⚠️ À commander</h3>${low.map(p => `<div class="row between" style="padding:8px 0;border-bottom:1px solid var(--line)"><span><strong>${esc(p.name)}</strong> <span class="muted">· reste ${+p.stock_qty} ${esc(p.unit)} (alerte ${+p.alert_qty})</span></span><button class="small" type="button" data-sin="${esc(p.id)}">+ Stock</button></div>`).join('')}</div>` : ''}
+    <div class="card" style="margin-bottom:16px"><h3 style="font-size:18px;margin-bottom:8px">État du stock</h3><div class="tablewrap"><table class="table"><thead><tr><th>Produit</th><th>Stock</th><th>Prix d’achat</th><th>Valeur</th><th></th></tr></thead><tbody>
+      ${tracked.map(p => `<tr><td>${esc(p.name)} <span class="muted">${esc(OUTLETS[p.outlet][1])}</span></td><td><strong>${+p.stock_qty}</strong> ${esc(p.unit)}</td><td>${money(p.purchase_price)}</td><td>${money(Math.max(0, p.stock_qty) * p.purchase_price)}</td>
+        <td style="text-align:right;white-space:nowrap"><button class="small ghost" type="button" data-sin="${esc(p.id)}">+ Entrée</button> <button class="small ghost" type="button" data-inv="${esc(p.id)}">Inventaire</button></td></tr>`).join('') || '<tr><td colspan="5" class="muted">Aucun produit suivi.</td></tr>'}
+    </tbody></table></div></div>
+    <div class="card"><h3 style="font-size:18px;margin-bottom:8px">Mouvements récents</h3>${(mv || []).map(m => `<div class="row between" style="padding:7px 0;border-bottom:1px dashed var(--line);flex-wrap:nowrap;gap:8px">
+      <span style="min-width:0"><span class="pill ${K[m.kind][1]}">${K[m.kind][0]}</span> <strong>${esc(name(m.product_id))}</strong>${m.supplier ? ` <span class="muted">· ${esc(m.supplier)}</span>` : ''}${m.note ? ` <span class="muted">· ${esc(m.note)}</span>` : ''}<br><span class="muted" style="font-size:12px">${new Date(m.created_at).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })}</span></span>
+      <span style="text-align:right;white-space:nowrap"><strong style="color:${m.qty < 0 ? 'var(--red)' : 'var(--green)'}">${m.qty > 0 ? '+' : ''}${+m.qty}</strong><br><span class="muted" style="font-size:12px">reste ${+m.balance_after}</span></span></div>`).join('') || '<p class="muted">Aucun mouvement.</p>'}</div>`;
+  body.querySelectorAll('[data-sin]').forEach(b => b.onclick = () => openStockEntry(S.products.find(p => p.id === b.dataset.sin), 'purchase'));
+  body.querySelectorAll('[data-inv]').forEach(b => b.onclick = () => openStockEntry(S.products.find(p => p.id === b.dataset.inv), 'adjust'));
+}
+
+/* ----- Ventes ----- */
+async function drawSales(){
+  const body = $('rBody'); body.innerHTML = '<p class="muted">Chargement…</p>';
+  S.rFrom = S.rFrom || today(); S.rTo = S.rTo || today();
+  const [sum, sales] = await Promise.all([
+    sb.rpc('pos_summary', { p_est: S.est, p_from: S.rFrom, p_to: S.rTo }),
+    sb.from('pos_sales').select('*, pos_sale_items(name,qty,unit_price)').eq('establishment_id', S.est).gte('created_at', S.rFrom + 'T00:00:00').lte('created_at', S.rTo + 'T23:59:59').order('created_at', { ascending: false }).limit(200)
+  ]);
+  if (sum.error) { body.innerHTML = `<p class="muted">${esc(errMsg(sum.error))}</p>`; return; }
+  const s = sum.data, marge = s.sales - s.cost;
+  body.innerHTML = `<div class="row" style="gap:8px;margin-bottom:14px;align-items:flex-end">
+      <div><label for="rFrom">Du</label><input type="date" id="rFrom" value="${S.rFrom}"></div><div><label for="rTo">Au</label><input type="date" id="rTo" value="${S.rTo}"></div>
+      <button class="small ghost" type="button" data-rper="0">Aujourd’hui</button><button class="small ghost" type="button" data-rper="6">7 jours</button><button class="small ghost" type="button" data-rper="29">30 jours</button></div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin-bottom:16px">
+      <div class="card kpi dark"><div class="l">Ventes</div><div style="font-family:var(--display);font-size:28px;font-weight:800">${money(s.sales)}</div><div class="muted" style="font-size:12px">${s.tickets} ticket(s)</div></div>
+      <div class="card kpi"><div class="l muted">Coût des produits</div><div style="font-family:var(--display);font-size:24px;font-weight:800">${money(s.cost)}</div></div>
+      <div class="card kpi"><div class="l muted">Marge brute</div><div style="font-family:var(--display);font-size:24px;font-weight:800;color:var(--green)">${money(marge)}</div><div class="muted" style="font-size:12px">${s.sales > 0 ? Math.round(marge / s.sales * 100) : 0} %</div></div>
+      <div class="card kpi"><div class="l muted">Restaurant · Bar</div><div style="font-weight:800;font-size:16px;margin-top:6px">${money((s.by_outlet || {}).restaurant || 0)}<br>${money((s.by_outlet || {}).bar || 0)}</div></div></div>
+    ${(s.top || []).length ? `<div class="card" style="margin-bottom:16px"><h3 style="font-size:18px;margin-bottom:8px">Meilleures ventes</h3>${s.top.map((t, i) => `<div class="row between" style="padding:6px 0;border-bottom:1px dashed var(--line)"><span>${i + 1}. <strong>${esc(t.name)}</strong> <span class="muted">× ${+t.qty}</span></span><span>${money(t.amount)} <span class="muted" style="font-size:12px">· marge ${money(t.margin)}</span></span></div>`).join('')}</div>` : ''}
+    <div class="card"><h3 style="font-size:18px;margin-bottom:8px">Tickets</h3>${(sales.data || []).map(t => `<div style="padding:9px 0;border-bottom:1px solid var(--line);${t.status === 'cancelled' ? 'opacity:.55' : ''}">
+      <div class="row between" style="flex-wrap:nowrap"><span><strong>N° ${t.number}</strong> <span class="muted">· ${esc(OUTLETS[t.outlet][1])} ${new Date(t.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}${t.table_label ? ' · ' + esc(t.table_label) : ''} · ${esc(PAY_NAME[t.method] || t.method)}</span></span>
+        <strong style="${t.status === 'cancelled' ? 'text-decoration:line-through' : ''}">${money(t.total)}</strong></div>
+      <div class="muted" style="font-size:12px">${(t.pos_sale_items || []).map(i => `${+i.qty} × ${esc(i.name)}`).join(', ')}${t.status === 'cancelled' ? ` · <strong>Annulé</strong> : ${esc(t.cancel_reason || '')}` : ''}</div>
+      <div class="row" style="gap:6px;margin-top:4px"><button class="small ghost" type="button" data-tprint="${esc(t.id)}">Imprimer</button>${t.status === 'paid' && isMgr() ? `<button class="small ghost" type="button" data-tcancel="${esc(t.id)}" style="color:var(--red)">Annuler</button>` : ''}</div></div>`).join('') || '<p class="muted">Aucune vente sur la période.</p>'}</div>`;
+  const reload = () => { S.rFrom = $('rFrom').value || today(); S.rTo = $('rTo').value || S.rFrom; drawSales(); };
+  $('rFrom').onchange = reload; $('rTo').onchange = reload;
+  body.querySelectorAll('[data-rper]').forEach(b => b.onclick = () => { S.rTo = today(); S.rFrom = addDays(today(), -Number(b.dataset.rper)); drawSales(); });
+  body.querySelectorAll('[data-tprint]').forEach(b => b.onclick = () => { const t = sales.data.find(x => x.id === b.dataset.tprint); printPosTicket({ ...t, table: t.table_label }, t.pos_sale_items || []); });
+  body.querySelectorAll('[data-tcancel]').forEach(b => b.onclick = () => { const t = sales.data.find(x => x.id === b.dataset.tcancel);
+    modal(`<h2 style="font-size:22px;margin-bottom:8px">Annuler le ticket n° ${t.number} ?</h2><p class="muted">Le stock sera remis et un remboursement de ${money(t.total)} sera inscrit en caisse. Le propriétaire en sera informé dans le journal.</p>
+      <form id="tcForm"><div class="field"><label for="tcWhy">Raison</label><input id="tcWhy" required minlength="3" maxlength="200" placeholder="ex. erreur de saisie"></div><div class="row"><button type="button" class="ghost" data-close style="flex:1">Retour</button><button class="primary" style="flex:1;background:var(--red);border-color:var(--red)">Annuler le ticket</button></div></form>`);
+    $('tcForm').onsubmit = async (e) => { e.preventDefault(); const { error } = await sb.rpc('pos_cancel_sale', { p_sale: t.id, p_reason: $('tcWhy').value }); if (error) return toast(errMsg(error), true); closeModal(); toast('Ticket annulé, stock remis.'); renderResto(); };
+  });
 }
 
 /* ================= Ma page publique (espace propriétaire) ================= */
