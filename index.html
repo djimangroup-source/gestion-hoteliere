@@ -239,6 +239,7 @@ body.modal-open{overflow:hidden}
     <div class="brand">Horus Hotel</div>
     <div class="org" id="orgLabel"></div>
     <button type="button" id="navSearch" class="navsearch" aria-label="Rechercher une action">Que voulez-vous faire ?<kbd>/</kbd></button>
+    <button type="button" id="navAsk" class="navsearch" style="justify-content:flex-start;gap:8px;color:var(--ink)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"></path></svg>Assistant</button>
     <button type="button" id="navNotif" class="navsearch" style="justify-content:flex-start;gap:10px;color:var(--ink)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10 21h4"></path></svg>Notifications<span id="notifBadge" class="hidden" style="margin-left:auto;min-width:22px;padding:2px 7px;border-radius:999px;background:var(--green);color:#fff;font-size:12px;font-weight:800;text-align:center"></span></button>
     <button type="button" id="navClock" class="navsearch hidden" style="justify-content:flex-start;gap:8px;color:var(--ink)"></button>
     <select id="estSwitch" class="estsw hidden" aria-label="Établissement"></select>
@@ -811,6 +812,7 @@ function openTab(t){
 function openMore(){
   const pilot = groupViews('pilot').map(v => [VIEW_LABEL[v], () => go(v)]);
   if (canAna()) pilot.unshift(['Résultat & analyse', () => openAnalysis(6)]);
+  pilot.unshift(['Assistant', () => openAssistant()]);
   pilot.push(['Avis clients', () => openReviews()]);
   if (moduleOn('pointage')) pilot.unshift([CLOCK.state === 'in' ? 'Pointer mon départ' : 'Pointer mon arrivée', () => toggleClock()]);
   const settings = [...document.querySelectorAll('nav.side .menu button')].filter(b => !b.classList.contains('hidden')).map(b => [b.textContent.trim(), () => b.click()]);
@@ -828,6 +830,7 @@ $('navNotif').onclick = () => openNotifs();
 $('navTheme').onclick = () => openThemes();
 $('navRefresh').onclick = () => refreshApp();
 $('navClock').onclick = () => toggleClock();
+$('navAsk').onclick = () => openAssistant();
 $('navLegal').onclick = () => openLegal('cgu');
 $('navRates').onclick = () => openRateRules();
 $('navDir').onclick = async () => {
@@ -2786,6 +2789,106 @@ function openPrintSettings(){
   if ($('pfRc')) $('pfRc').onclick = () => openReceiptEditor();
   $('pfTest').onclick = () => printPosTicket({ server: myName(), number: 'TEST', total: 3500, outlet: 'bar', table: 'Table 1', method: 'cash', created_at: new Date().toISOString() }, [{ name: 'Flag 65cl', qty: 2, unit_price: 1000 }, { name: 'Coca-Cola', qty: 3, unit_price: 500 }]);
 }
+/* ================= Assistant intégré (questions en français sur vos chiffres) ================= */
+const ASK_SUGG = ['Combien j’ai encaissé aujourd’hui ?', 'Ventes du bar cette semaine', 'Taux d’occupation ce mois', 'Qui n’a pas fini de payer ?', 'Quels produits sont en rupture ?', 'Dépenses du mois dernier', 'Arrivées de demain', 'Meilleures ventes ce mois'];
+const askNorm = (t) => String(t || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[’']/g, ' ');
+function askPeriod(q){
+  const t = today(), d = new Date(t + 'T00:00:00'), iso2 = (x) => iso(x);
+  const monday = (x) => { const y = new Date(x); const k = (y.getDay() + 6) % 7; y.setDate(y.getDate() - k); return y; };
+  if (/\bhier\b/.test(q)) { const h = addDays(t, -1); return [h, h, 'hier']; }
+  if (/\bdemain\b/.test(q)) { const h = addDays(t, 1); return [h, h, 'demain']; }
+  if (/semaine (derniere|passee)/.test(q)) { const m = monday(d); m.setDate(m.getDate() - 7); const e = new Date(m); e.setDate(e.getDate() + 6); return [iso2(m), iso2(e), 'la semaine dernière']; }
+  if (/semaine/.test(q)) { const m = monday(d); return [iso2(m), t, 'cette semaine']; }
+  if (/mois (dernier|passe|precedent)/.test(q)) { const a = new Date(d.getFullYear(), d.getMonth() - 1, 1), b = new Date(d.getFullYear(), d.getMonth(), 0); return [iso2(a), iso2(b), 'le mois dernier']; }
+  if (/\bmois\b/.test(q)) return [t.slice(0, 8) + '01', t, 'ce mois-ci'];
+  if (/\bannee\b|\ban\b/.test(q)) return [t.slice(0, 4) + '-01-01', t, 'cette année'];
+  const m = q.match(/(\d+) derniers jours/); if (m) return [addDays(t, -(+m[1] - 1)), t, `les ${m[1]} derniers jours`];
+  return [t, t, 'aujourd’hui'];
+}
+async function askAnswer(raw){
+  const q = askNorm(raw); const [from, to, pl] = askPeriod(q); const range = (c) => [c + '>=' , from, to];
+  const inRange = (qb, col) => qb.gte(col, from + 'T00:00:00').lte(col, to + 'T23:59:59');
+  // Restaurant / bar
+  if (/\b(bar|restaurant|resto|boisson|plat|ticket)/.test(q) && !/stock|rupture/.test(q)) {
+    if (/meilleur|top|plus vendu/.test(q)) return askTop(from, to, pl);
+    const { data } = await inRange(sb.from('pos_sales').select('outlet,total,cost_total').eq('establishment_id', S.est).eq('status', 'paid'), 'created_at');
+    const rows = data || []; const want = /\bbar\b/.test(q) ? 'bar' : /restaurant|resto|plat/.test(q) ? 'restaurant' : null;
+    const f = rows.filter(r => !want || r.outlet === want); const tot = f.reduce((a, r) => a + Number(r.total), 0), cost = f.reduce((a, r) => a + Number(r.cost_total), 0);
+    return `${want === 'bar' ? 'Le bar' : want === 'restaurant' ? 'Le restaurant' : 'Le restaurant et le bar'} : <strong>${money(tot)}</strong> de ventes ${pl} (${f.length} ticket${f.length > 1 ? 's' : ''}), marge brute <strong>${money(tot - cost)}</strong>.`;
+  }
+  if (/meilleur|top|plus vendu/.test(q)) return askTop(from, to, pl);
+  // Impayés
+  if (/impaye|doit|pas (fini|encore) (de )?pay|reste a (payer|encaisser)|solde|dette/.test(q)) {
+    const { data } = await sb.from('reservation_balances').select('guest_name,room_number,balance,status,check_out').eq('establishment_id', S.est).gt('balance', 0).in('status', ['checked_in', 'checked_out', 'confirmed']).order('balance', { ascending: false }).limit(20);
+    const l = data || []; if (!l.length) return 'Aucun client n’a de solde à payer. 👍'.replace(' 👍', '');
+    return `${l.length} client(s) doivent au total <strong>${money(l.reduce((a, r) => a + Number(r.balance), 0))}</strong> :<ul>${l.slice(0, 8).map(r => `<li>${esc(r.guest_name)} · ch. ${esc(r.room_number)} : <strong>${money(r.balance)}</strong>${r.status === 'checked_out' ? ' (parti)' : ''}</li>`).join('')}</ul>`;
+  }
+  // Stock
+  if (/stock|rupture|racheter|commander|manque/.test(q)) {
+    const [p, sp] = await Promise.all([sb.from('products').select('name,stock_qty,alert_qty,unit,track_stock').eq('establishment_id', S.est).eq('is_active', true), sb.from('supplies').select('name,qty,alert_qty,unit').eq('establishment_id', S.est).eq('is_active', true)]);
+    const lowP = (p.data || []).filter(x => x.track_stock && Number(x.stock_qty) <= Number(x.alert_qty)), lowS = (sp.data || []).filter(x => Number(x.qty) <= Number(x.alert_qty));
+    if (!lowP.length && !lowS.length) return 'Tout est en stock : aucun produit ni article sous son seuil d’alerte.';
+    return `${lowP.length + lowS.length} article(s) à racheter :<ul>${[...lowP.map(x => [x.name, x.stock_qty, x.unit, 'resto/bar']), ...lowS.map(x => [x.name, x.qty, x.unit, 'chambres'])].map(([n, v, u, w]) => `<li>${esc(n)} : reste <strong>${+v} ${esc(u)}</strong> <span class="muted">(${w})</span></li>`).join('')}</ul>`;
+  }
+  // Dépenses
+  if (/depense|charge|achete|sortie d argent|coute/.test(q)) {
+    const { data } = await sb.from('expenses').select('category,amount').eq('establishment_id', S.est).in('status', ['paid', 'pending']).gte('paid_on', from).lte('paid_on', to);
+    const l = data || []; const tot = l.reduce((a, r) => a + Number(r.amount), 0); const by = {}; l.forEach(r => by[r.category] = (by[r.category] || 0) + Number(r.amount));
+    return `Dépenses ${pl} : <strong>${money(tot)}</strong>${Object.keys(by).length ? '<ul>' + Object.entries(by).sort((a, b) => b[1] - a[1]).slice(0, 6).map(([c, v]) => `<li>${esc(c)} : ${money(v)}</li>`).join('') + '</ul>' : '.'}`;
+  }
+  // Arrivées / départs
+  if (/arrivee|arrive|depart|part |check/.test(q)) {
+    const day = from; const isDep = /depart|part /.test(q);
+    const { data } = await sb.from('reservation_balances').select('guest_name,room_number,status,check_in,check_out').eq('establishment_id', S.est).eq(isDep ? 'check_out' : 'check_in', day).not('status', 'in', '(cancelled,no_show)');
+    const l = data || []; if (!l.length) return `Aucun${isDep ? ' départ' : 'e arrivée'} prévu${isDep ? '' : 'e'} ${pl}.`;
+    return `${l.length} ${isDep ? 'départ(s)' : 'arrivée(s)'} ${pl} :<ul>${l.map(r => `<li>${esc(r.guest_name)} · ch. ${esc(r.room_number)}</li>`).join('')}</ul>`;
+  }
+  // Occupation
+  if (/occup|rempli|chambres? (libre|prise|occupee)|taux/.test(q)) {
+    const rooms = (S.rooms || []).length; if (!rooms) return 'Aucune chambre enregistrée.';
+    const { data } = await sb.from('reservations').select('check_in,check_out,status').eq('establishment_id', S.est).in('status', ['confirmed', 'checked_in', 'checked_out']).lt('check_in', addDays(to, 1)).gt('check_out', from);
+    let nights = 0; const days = Math.round((new Date(to) - new Date(from)) / 864e5) + 1;
+    (data || []).forEach(r => { const a = r.check_in > from ? r.check_in : from, b = r.check_out < addDays(to, 1) ? r.check_out : addDays(to, 1); nights += Math.max(0, Math.round((new Date(b) - new Date(a)) / 864e5)); });
+    return `Taux d’occupation ${pl} : <strong>${Math.round(nights / (rooms * days) * 100)} %</strong> (${nights} nuitée${nights > 1 ? 's' : ''} sur ${rooms * days} possibles).`;
+  }
+  // Réservations à venir
+  if (/reservation|reserve/.test(q)) {
+    const { data, count } = await sb.from('reservations').select('id', { count: 'exact' }).eq('establishment_id', S.est).gte('check_in', from).lte('check_in', from === to ? addDays(to, 30) : to).not('status', 'in', '(cancelled,no_show)');
+    return `<strong>${count ?? (data || []).length}</strong> réservation(s) ${from === to ? 'dans les 30 prochains jours' : pl}.`;
+  }
+  // Encaissements / chiffre d'affaires (par défaut pour les questions d'argent)
+  if (/encaiss|gagne|chiffre|vente|recette|argent|revenu|combien|caisse|ca\b/.test(q)) {
+    const { data } = await inRange(sb.from('cash_movements').select('kind,method,amount').eq('establishment_id', S.est), 'created_at');
+    const l = data || []; const inn = l.filter(m => ['payment', 'income'].includes(m.kind)); const out = l.filter(m => ['expense', 'refund'].includes(m.kind));
+    const tot = inn.reduce((a, m) => a + Number(m.amount), 0); const by = {}; inn.forEach(m => by[m.method] = (by[m.method] || 0) + Number(m.amount));
+    return `Encaissé ${pl} : <strong>${money(tot)}</strong>${Object.keys(by).length ? ' (' + Object.entries(by).map(([k, v]) => `${PAY_NAME[k] || k} ${money(v)}`).join(', ') + ')' : ''}. Sorties de caisse : ${money(out.reduce((a, m) => a + Number(m.amount), 0))}.`;
+  }
+  return 'Je n’ai pas compris cette question. Essayez par exemple : « combien j’ai encaissé cette semaine », « ventes du bar ce mois », « qui n’a pas fini de payer », « taux d’occupation », « produits en rupture », « dépenses du mois dernier », « arrivées de demain ».';
+}
+async function askTop(from, to, pl){
+  const { data, error } = await sb.rpc('pos_summary', { p_est: S.est, p_from: from, p_to: to });
+  if (error) return 'Les meilleures ventes sont réservées au gérant et au comptable.';
+  const t = data.top || []; if (!t.length) return `Aucune vente au restaurant ou au bar ${pl}.`;
+  return `Meilleures ventes ${pl} :<ol>${t.slice(0, 5).map(x => `<li>${esc(x.name)} : ${+x.qty} vendu(s), ${money(x.amount)}</li>`).join('')}</ol>`;
+}
+function openAssistant(){
+  modal(`<div class="row between" style="margin-bottom:6px"><h2 style="font-size:22px">Assistant</h2><button class="small ghost" data-close style="border:0;font-size:18px" aria-label="Fermer">✕</button></div>
+    <p class="muted" style="margin:0 0 10px;font-size:13px">Posez une question sur vos chiffres, en français.</p>
+    <div id="askLog" style="max-height:52vh;overflow-y:auto;display:flex;flex-direction:column;gap:8px;margin-bottom:10px"></div>
+    <div class="row" id="askSugg" style="gap:6px;margin-bottom:10px">${ASK_SUGG.map(s => `<button type="button" class="small ghost" data-ask="${esc(s)}">${esc(s)}</button>`).join('')}</div>
+    <form id="askF" class="row" style="gap:8px;flex-wrap:nowrap"><input id="askQ" placeholder="ex. Combien j’ai gagné au bar cette semaine ?" autocomplete="off" style="flex:1;min-width:0"><button class="primary" style="min-width:90px">Demander</button></form>`);
+  $('modalBody').style.maxWidth = '600px';
+  const log = $('askLog');
+  const send = async (txt) => { txt = (txt || '').trim(); if (!txt) return; $('askQ').value = '';
+    log.insertAdjacentHTML('beforeend', `<div style="align-self:flex-end;background:var(--ink);color:var(--card);padding:8px 12px;border-radius:14px 14px 4px 14px;max-width:85%">${esc(txt)}</div>`);
+    const id = 'a' + Date.now(); log.insertAdjacentHTML('beforeend', `<div id="${id}" style="align-self:flex-start;background:var(--green-l);padding:10px 12px;border-radius:14px 14px 14px 4px;max-width:92%">…</div>`); log.scrollTop = log.scrollHeight;
+    let ans; try { ans = await askAnswer(txt); } catch (e) { ans = 'Impossible de répondre pour le moment : ' + esc(errMsg(e)); }
+    $(id).innerHTML = ans; log.scrollTop = log.scrollHeight; };
+  $('askF').onsubmit = (e) => { e.preventDefault(); send($('askQ').value); };
+  document.querySelectorAll('[data-ask]').forEach(b => b.onclick = () => send(b.dataset.ask));
+  setTimeout(() => $('askQ').focus(), 50);
+}
+
 /* ================= Inventaire hébergement ================= */
 const SUP_CATS = ['Linge', 'Produits d’accueil', 'Entretien', 'Minibar', 'Fournitures'];
 const SUP_PRESETS = [['Draps 2 places', 'Linge', 'pièce'], ['Taies d’oreiller', 'Linge', 'pièce'], ['Serviettes de bain', 'Linge', 'pièce'], ['Tapis de bain', 'Linge', 'pièce'], ['Savons', 'Produits d’accueil', 'pièce'], ['Gel douche', 'Produits d’accueil', 'flacon'], ['Papier toilette', 'Produits d’accueil', 'rouleau'], ['Eau minérale 50 cl', 'Minibar', 'bouteille'], ['Javel', 'Entretien', 'litre'], ['Sacs poubelle', 'Entretien', 'paquet']];
