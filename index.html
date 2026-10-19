@@ -203,7 +203,7 @@ body.modal-open{overflow:hidden}
       <button class="primary" style="width:100%" id="authBtn">Se connecter</button>
     </form>
     <div class="row" style="margin-top:12px"><button type="button" class="ghost" id="magicBtn" style="flex:1 1 200px">Recevoir un lien de connexion par e-mail</button></div>
-    <p style="margin:10px 0 0;font-size:14px"><a href="#" id="forgotLink">Mot de passe oublié ?</a></p>
+    <p style="margin:10px 0 0;font-size:14px" class="row between"><a href="#" id="forgotLink">Mot de passe oublié ?</a><a href="#" onclick="event.preventDefault();refreshApp()" class="muted">🔄 Actualiser l’application</a></p>
     <p class="muted" style="margin:16px 0 0;font-size:14px"><span id="authSwitchTxt">Pas encore de compte ?</span> <a href="#" id="authSwitch">Créer un compte – 30 jours gratuits</a></p>
     </div>
   </div>
@@ -221,7 +221,7 @@ body.modal-open{overflow:hidden}
       <div class="field"><label for="estCity">Ville</label><input id="estCity"></div>
       <button class="primary" style="width:100%">Commencer l'essai gratuit</button>
     </form>
-    <p style="margin:14px 0 0" class="row between"><a href="#" data-logout>Se déconnecter</a><a href="#" id="onboardAdmin" class="hidden">Accéder à l'administration →</a></p>
+    <p style="margin:14px 0 0" class="row between"><a href="#" data-logout>Se déconnecter</a><a href="#" onclick="event.preventDefault();refreshApp()">Actualiser</a><a href="#" id="onboardAdmin" class="hidden">Accéder à l'administration →</a></p>
   </div>
 </div>
 
@@ -252,6 +252,7 @@ body.modal-open{overflow:hidden}
         <button type="button" id="navMods">Fonctionnalités utilisées</button>
         <button type="button" id="navCur">Devise</button>
         <button type="button" id="navTheme">Thème de l’application</button>
+        <button type="button" id="navRefresh">🔄 Actualiser l’application</button>
         <button type="button" id="navPrint">Impression &amp; reçus</button>
         <button data-view="equipe">Équipe</button>
         <button data-view="abonnement">Mon abonnement</button>
@@ -329,7 +330,35 @@ function show(id){ ['auth','onboard','app','public'].forEach(x => $(x).classList
 
 /* ---------- Installation de l'application ---------- */
 let INSTALL_EVT = null;
-if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});
+if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).catch(() => {});
+/* ---------- Mise à jour de l'application sans réinstaller ni perdre la connexion ---------- */
+const APP_VERSION = '2026.10.19-4';
+async function refreshApp(){
+  toast('Actualisation…');
+  try { const reg = navigator.serviceWorker && await navigator.serviceWorker.getRegistration(); if (reg) { await reg.update(); if (reg.waiting) reg.waiting.postMessage('skipWaiting'); } } catch (_) {}
+  try { if (window.caches) { const ks = await caches.keys(); await Promise.all(ks.map(k => caches.delete(k))); } } catch (_) {}
+  try { await fetch(location.pathname + '?r=' + Date.now(), { cache: 'reload' }); } catch (_) {}
+  location.replace(location.pathname + location.search.replace(/([?&])(r|v)=[^&]*&?/g, '$1').replace(/[?&]$/, '') + location.hash);
+}
+let updShown = false;
+async function checkUpdate(){
+  if (updShown || !navigator.onLine || location.protocol !== 'https:') return;
+  try {
+    const t = await fetch(location.pathname + '?check=' + Date.now(), { cache: 'no-store' }).then(r => r.ok ? r.text() : '');
+    const m = t.match(/const APP_VERSION = '([^']+)'/);
+    if (m && m[1] !== APP_VERSION) {
+      updShown = true;
+      const d = document.createElement('div');
+      d.setAttribute('role', 'status');
+      d.style.cssText = 'position:fixed;left:50%;transform:translateX(-50%);bottom:calc(90px + env(safe-area-inset-bottom));z-index:60;max-width:92vw;display:flex;gap:12px;align-items:center;padding:10px 12px 10px 18px;border-radius:999px;background:var(--ink);color:#fff;box-shadow:0 10px 30px rgba(0,0,0,.3);font-weight:600';
+      d.innerHTML = '<span>✨ Nouvelle version disponible</span><button type="button" class="primary small" style="min-height:36px">Actualiser</button><button type="button" aria-label="Plus tard" style="background:none;border:0;color:#fff;min-height:36px;padding:0 6px">✕</button>';
+      d.children[1].onclick = refreshApp; d.children[2].onclick = () => d.remove();
+      document.body.appendChild(d);
+    }
+  } catch (_) {}
+}
+setTimeout(checkUpdate, 4000); setInterval(checkUpdate, 15 * 60 * 1000);
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') checkUpdate(); });
 const isStandalone = () => window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
 window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); INSTALL_EVT = e; const b = $('navInstall'); if (b) b.classList.remove('hidden'); });
 window.addEventListener('appinstalled', () => { INSTALL_EVT = null; const b = $('navInstall'); if (b) b.classList.add('hidden'); toast('Horus Hotel est installé : retrouvez-le sur votre écran d’accueil.'); });
@@ -580,6 +609,7 @@ if (isStandalone()) $('navInstall').classList.add('hidden');
 $('navEsts').onclick = () => openEstablishments();
 $('navNotif').onclick = () => openNotifs();
 $('navTheme').onclick = () => openThemes();
+$('navRefresh').onclick = () => refreshApp();
 $('navMods').onclick = () => openModules();
 $('navCur').onclick = () => { modal(`<h2 style="font-size:22px;margin-bottom:10px">Devise d’affichage</h2><p class="muted" style="font-size:14px;margin:0 0 10px">Les montants s’affichent dans cette devise (aucune conversion n’est faite).</p><div style="display:grid;gap:6px">${Object.entries(CURRENCIES).map(([k, v]) => `<button type="button" class="${k === S.currency ? '' : 'ghost'}" data-cur="${k}" style="justify-content:space-between;display:flex"><span>${v[0]}</span><strong>${k} · ${v[1]}</strong></button>`).join('')}</div>`); document.querySelectorAll('[data-cur]').forEach(b => b.onclick = () => { closeModal(); setCurrency(b.dataset.cur); }); };
 $('navPrint').onclick = () => openPrintSettings();
