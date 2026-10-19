@@ -362,7 +362,7 @@ if (window.HorusApp && window.HorusApp.postMessage) {
   window.__nativeOpen = nativeOpen;
 }
 /* ---------- Mise à jour de l'application sans réinstaller ni perdre la connexion ---------- */
-const APP_VERSION = '2026.10.19-8';
+const APP_VERSION = '2026.10.19-9';
 async function refreshApp(){
   toast('Actualisation…');
   try { const reg = navigator.serviceWorker && await navigator.serviceWorker.getRegistration(); if (reg) { await reg.update(); if (reg.waiting) reg.waiting.postMessage('skipWaiting'); } } catch (_) {}
@@ -1777,7 +1777,7 @@ async function renderCaisse(){
       </div>
     </div>` +
     (hist.length ? `<div class="card"><h3 style="font-size:20px;margin-bottom:10px">Dernières clôtures</h3><div class="tablewrap"><table class="table"><thead><tr><th>Ouverte</th><th>Clôturée</th><th>Par</th><th style="text-align:right">Compté</th><th>Écart</th><th></th></tr></thead><tbody>
-      ${hist.map((h, i) => { const g = h.gap; return `<tr><td>${new Date(h.opened_at).toLocaleString('fr-FR', { dateStyle:'short', timeStyle:'short' })}</td><td>${h.closed_at ? new Date(h.closed_at).toLocaleString('fr-FR', { dateStyle:'short', timeStyle:'short' }) : ''}</td><td>${esc(who(h.closed_by))}</td><td style="text-align:right">${money(h.counted_balance)}</td><td>${h.gap_reason ? `<span class="pill st-pending">${esc(h.gap_reason)}</span>` : '<span class="pill st-active">Aucun</span>'}</td><td><button class="small ghost" data-hist="${i}">Rapport</button></td></tr>`; }).join('')}
+      ${hist.map((h, i) => { const g = h.gap; return `<tr><td>${new Date(h.opened_at).toLocaleString('fr-FR', { dateStyle:'short', timeStyle:'short' })}</td><td>${h.closed_at ? new Date(h.closed_at).toLocaleString('fr-FR', { dateStyle:'short', timeStyle:'short' }) : ''}</td><td>${esc(who(h.closed_by))}</td><td style="text-align:right">${money(h.counted_balance)}</td><td>${h.gap_reason ? `<span class="pill st-pending">${esc(h.gap_reason)}</span>` : '<span class="pill st-active">Aucun</span>'}</td><td><button class="small ghost" data-hist="${i}">Rapport</button> <button class="small ghost" type="button" data-histz="${i}">Ticket Z</button></td></tr>`; }).join('')}
       </tbody></table></div></div>` : '');
 
   const o = $('kOpen'); if (o) o.onsubmit = async (e) => { e.preventDefault(); const { error } = await sb.from('cash_sessions').insert({ establishment_id: S.est, opening_balance: +$('kFund').value || 0 }); if (error) return toast(errMsg(error), true); toast('Caisse ouverte.'); renderCaisse(); };
@@ -1787,6 +1787,7 @@ async function renderCaisse(){
   el.querySelectorAll('[data-rcpt]').forEach(b => b.onclick = () => printReceipt(b.dataset.rcpt));
   el.querySelectorAll('[data-just]').forEach(b => b.onclick = () => viewReceipt(b.dataset.just));
   el.querySelectorAll('[data-hist]').forEach(b => b.onclick = () => printClosure(hist[+b.dataset.hist]));
+  el.querySelectorAll('[data-histz]').forEach(b => b.onclick = () => printZ(hist[+b.dataset.histz]));
   $('kPay').onclick = () => {
     if (!bal.length) return toast('Aucun client avec un solde à encaisser.', true);
     if (bal.length === 1) return openEncaisser(bal[0], renderCaisse);
@@ -1914,30 +1915,80 @@ async function printReceipt(key){
   w.document.close();
 }
 
+const GAP_REASONS = ['Erreur de monnaie rendue', 'Dépense non enregistrée', 'Erreur de saisie', 'Paiement noté en espèces par erreur', 'Billet manquant / perte'];
 function openClosure(sess, expected, done){
-  modal(`<h2 style="font-size:24px;margin-bottom:4px">Clôture de caisse</h2><p class="muted" style="margin:0 0 12px">Comptez les billets et les pièces.</p>
-    <form id="clF"><div style="display:grid;grid-template-columns:1fr 110px 1fr;gap:8px;align-items:center">
-      ${DENOMS.map(d => `<label for="cd${d}" style="margin:0">${money(d)}</label><input id="cd${d}" type="number" min="0" step="1" value="0" data-d="${d}"><span class="r" id="cs${d}" style="text-align:right;font-weight:600">0 F</span>`).join('')}
-      <label for="cdC" style="margin:0">Pièces (total)</label><input id="cdC" type="number" min="0" value="0"><span id="csC" style="text-align:right;font-weight:600">0 F</span></div>
-    <div style="border-top:1px solid #E2D5C1;margin-top:12px;padding-top:10px">
-      <div class="row between"><span>Compté</span><strong id="clC">0 F</strong></div>
-      <div class="row between"><span>Attendu</span><strong>${money(expected)}</strong></div>
-      <div class="row between" id="clGap"><span>Écart</span><strong id="clD"></strong></div></div>
-    <div class="field" id="clRW" style="margin-top:10px"><label for="clR">Motif de l'écart (obligatoire)</label><input id="clR" maxlength="300"></div>
-    <p class="muted" style="font-size:13px">Le propriétaire est alerté en cas d'écart et reçoit le résumé dans Contrôle.</p>
-    <div class="row"><button class="primary" id="clGo">Clôturer</button><button type="button" class="ghost" data-close>Annuler</button></div></form>`);
-  const calc = () => { let t = 0; DENOMS.forEach(d => { const v = d * (+$('cd' + d).value || 0); t += v; $('cs' + d).textContent = money(v); }); const c = +$('cdC').value || 0; t += c; $('csC').textContent = money(c);
-    const g = t - expected; $('clC').textContent = money(t); $('clD').textContent = g === 0 ? 'Aucun' : (g > 0 ? '+' : '−') + money(Math.abs(g)); $('clD').style.color = g < 0 ? '#8A3E1E' : g > 0 ? 'var(--amber)' : 'var(--ok)';
-    $('clRW').classList.toggle('hidden', g === 0); $('clR').required = g !== 0; return t; };
-  $('clF').querySelectorAll('input[type=number]').forEach(i => i.oninput = calc); calc();
-  $('clF').onsubmit = async (e) => { e.preventDefault(); const t = calc(); $('clGo').disabled = true;
-    const detail = {}; DENOMS.forEach(d => detail[d] = +$('cd' + d).value || 0); detail.pieces = +$('cdC').value || 0;
-    const { data, error } = await sb.from('cash_sessions').update({ status: 'closed', counted_balance: t, counted_detail: detail, gap_reason: t !== expected ? $('clR').value.trim() : null }).eq('id', sess.id).select('*').single();
+  const st = { reason: '', other: '' };
+  modal(`<h2 style="font-size:24px;margin-bottom:12px">Clôture de caisse</h2>
+    <div class="row between card" style="background:var(--green-l);margin:0 0 14px;padding:14px 16px"><span style="font-weight:600">Attendu en espèces</span><strong style="font-family:var(--display);font-size:26px">${money(expected)}</strong></div>
+    <form id="clF"><label for="clAmt" style="font-weight:700">Espèces comptées dans le tiroir</label>
+      <div class="row" style="gap:8px;flex-wrap:nowrap;margin-top:6px"><input id="clAmt" inputmode="numeric" autocomplete="off" placeholder="Montant compté" style="flex:1;min-width:0;font-size:24px;font-weight:700;min-height:56px">
+        <button type="button" class="ghost" id="clExact" style="white-space:nowrap;min-height:56px">✓ Montant exact</button></div>
+      <div id="clRes" style="margin:14px 0"></div>
+      <p class="muted" style="font-size:12px;margin:0 0 12px">En cas d’écart, le propriétaire est alerté et le retrouve dans Contrôle.</p>
+      <div class="row"><button class="primary" id="clGo" style="flex:1;min-height:52px">Clôturer la caisse</button><button type="button" class="ghost" data-close>Annuler</button></div></form>`);
+  const val = () => { const v = String($('clAmt').value).replace(/[^\d]/g, ''); return v === '' ? null : Number(v); };
+  const draw = () => {
+    const t = val(), box = $('clRes');
+    if (t === null) { box.innerHTML = ''; return; }
+    const g = t - expected;
+    if (g === 0) { box.innerHTML = `<div class="card" style="background:#E3F4E8;border-color:#BFE3CB;margin:0;padding:14px 16px;font-weight:700;color:#1F6B3A">✅ Caisse juste — aucun écart</div>`; return; }
+    box.innerHTML = `<div class="card" style="background:${g < 0 ? '#FDE8E4' : '#FFF4E0'};border-color:${g < 0 ? '#F2C2B8' : '#F3D8A6'};margin:0;padding:14px 16px">
+        <div class="row between" style="flex-wrap:nowrap"><strong>⚠️ ${g < 0 ? 'Il manque' : 'Il y a en trop'}</strong><strong style="font-size:22px;color:${g < 0 ? 'var(--red)' : '#9A5B00'}">${g < 0 ? '−' : '+'}${money(Math.abs(g))}</strong></div>
+        <div style="font-size:13px;font-weight:700;margin:10px 0 6px">Motif de l’écart</div>
+        <div class="row" style="gap:6px">${[...GAP_REASONS, 'Autre…'].map(r => `<button type="button" class="small ${st.reason === r ? '' : 'ghost'}" data-gr="${esc(r)}">${esc(r)}</button>`).join('')}</div>
+        ${st.reason === 'Autre…' ? `<input id="clOther" maxlength="300" placeholder="Précisez le motif" value="${esc(st.other)}" style="margin-top:8px">` : ''}</div>`;
+    box.querySelectorAll('[data-gr]').forEach(b => b.onclick = () => { st.reason = b.dataset.gr; draw(); if ($('clOther')) $('clOther').focus(); });
+    if ($('clOther')) $('clOther').oninput = () => { st.other = $('clOther').value; };
+  };
+  $('clAmt').oninput = () => { const v = val(); $('clAmt').value = v === null ? '' : new Intl.NumberFormat('fr-FR').format(v).replace(/[  ]/g, ' '); draw(); };
+  $('clExact').onclick = () => { $('clAmt').value = new Intl.NumberFormat('fr-FR').format(expected).replace(/[  ]/g, ' '); draw(); };
+  setTimeout(() => $('clAmt').focus(), 50);
+  $('clF').onsubmit = async (e) => { e.preventDefault();
+    const t = val(); if (t === null) return toast('Saisissez le montant compté, ou touchez « Montant exact ».', true);
+    let reason = null;
+    if (t !== expected) { reason = st.reason === 'Autre…' ? st.other.trim() : st.reason; if (!reason) return toast('Choisissez le motif de l’écart.', true); }
+    $('clGo').disabled = true;
+    const { data, error } = await sb.from('cash_sessions').update({ status: 'closed', counted_balance: t, counted_detail: { mode: 'montant' }, gap_reason: reason }).eq('id', sess.id).select('*').single();
     if (error) { $('clGo').disabled = false; return toast(errMsg(error), true); }
-    modal(`<h2 style="font-size:24px;margin-bottom:8px">Caisse clôturée</h2><p>Compté ${money(t)} · attendu ${money(expected)}${t !== expected ? ' · écart ' + money(t - expected) : ' · aucun écart'}.</p>
-      <div class="row"><button class="primary" id="clP">Imprimer le rapport de clôture</button><button class="ghost" data-close>Fermer</button></div>`);
+    const g = t - expected;
+    modal(`<div style="text-align:center"><div style="width:64px;height:64px;border-radius:50%;background:${g === 0 ? '#E3F4E8' : '#FFF4E0'};display:grid;place-items:center;margin:0 auto 10px;font-size:30px">${g === 0 ? '✓' : '!'}</div>
+      <h2 style="font-size:24px;margin-bottom:6px">Caisse clôturée</h2>
+      <p style="margin:0">Compté <strong>${money(t)}</strong> · attendu ${money(expected)}</p>
+      <p style="margin:4px 0 0;font-weight:700;color:${g === 0 ? '#1F6B3A' : g < 0 ? 'var(--red)' : '#9A5B00'}">${g === 0 ? 'Aucun écart' : 'Écart ' + (g < 0 ? '−' : '+') + money(Math.abs(g)) + ' · ' + esc(reason)}</p></div>
+      <div class="row" style="margin-top:16px"><button class="primary" id="clZ" style="flex:1">🧾 Imprimer le ticket Z</button><button class="ghost" id="clP" style="flex:1">Rapport détaillé</button></div>
+      <button class="ghost" data-close style="width:100%;margin-top:8px">Fermer</button>
+      <p class="muted" style="font-size:12px;text-align:center;margin:10px 0 0">Le résumé reste consultable dans l’historique des clôtures.</p>`);
+    $('clZ').onclick = () => printZ(data);
     $('clP').onclick = () => printClosure(data);
+    if (prnCfg('caisse').auto) printZ(data);
     done(); };
+}
+async function closureData(s){
+  const { data: mv } = await sb.from('cash_movements').select('*').eq('establishment_id', s.establishment_id).gte('created_at', s.opened_at).lte('created_at', s.closed_at || new Date().toISOString()).order('created_at');
+  const rows = mv || [], cash = rows.filter(m => m.session_id === s.id);
+  const sum = (arr, k) => arr.filter(m => k.includes(m.kind)).reduce((a, m) => a + Number(m.amount), 0);
+  const expected = Number(s.opening_balance) + sum(cash, ['payment','income']) - sum(cash, OUT_KINDS);
+  const byM = Object.keys(PMETHOD).map(k => [k, sum(rows.filter(m => m.method === k), ['payment','income'])]).filter(x => x[1] > 0);
+  return { rows, cash, sum, expected, byM, totalIn: sum(rows, ['payment','income']) };
+}
+async function printZ(s){
+  await teamNames();
+  const d = await closureData(s); const est = S.ests.find(x => x.id === s.establishment_id) || {};
+  const gap = Number(s.counted_balance || 0) - d.expected;
+  const html = () => { const w = window.open('', '_blank'); if (!w) return toast("Autorisez l'ouverture de fenêtres pour imprimer.", true);
+    w.document.write(`<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>Ticket Z</title><style>body{font:13px/1.45 ui-monospace,Menlo,monospace;max-width:300px;margin:12px auto;padding:0 8px}h1{text-align:center;font-size:18px;margin:0}table{width:100%;border-collapse:collapse}td{padding:2px 0}.r{text-align:right}.t td{border-top:1px dashed #000;font-weight:700}${printCss('ticket')}</style></head><body>
+      <h1>${esc(est.name || '')}</h1><p style="text-align:center">TICKET Z · CLÔTURE<br>${new Date(s.closed_at || Date.now()).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })}<br>par ${esc(who(s.closed_by))}</p>
+      <table><tr><td colspan="2"><b>Encaissements</b></td></tr>${d.byM.map(([k, v]) => `<tr><td>${PMETHOD[k]}</td><td class="r">${money(v)}</td></tr>`).join('')}<tr class="t"><td>Total</td><td class="r">${money(d.totalIn)}</td></tr></table>
+      <table><tr><td colspan="2"><b>Espèces</b></td></tr><tr><td>Fond de caisse</td><td class="r">${money(s.opening_balance)}</td></tr><tr><td>Dépenses</td><td class="r">−${money(d.sum(d.cash, ['expense']))}</td></tr><tr><td>Remboursements</td><td class="r">−${money(d.sum(d.cash, ['refund']))}</td></tr><tr><td>Versements</td><td class="r">−${money(d.sum(d.cash, ['deposit']))}</td></tr>
+      <tr class="t"><td>Attendu</td><td class="r">${money(d.expected)}</td></tr><tr><td>Compté</td><td class="r">${money(s.counted_balance)}</td></tr><tr><td><b>Écart</b></td><td class="r"><b>${gap === 0 ? '0' : (gap < 0 ? '−' : '+') + money(Math.abs(gap))}</b></td></tr></table>
+      ${s.gap_reason ? `<p>Motif : ${esc(s.gap_reason)}</p>` : ''}<p>${d.rows.length} opération(s)</p><p style="margin-top:30px">Signature : ______________</p><script>window.onload=()=>window.print()<\/script></body></html>`); w.document.close(); };
+  printDocument('caisse', (width) => { const e = new Esc(width).align('center').bold(true).size(1, 2).line(est.name || 'Horus Hotel').size(1, 1).line('TICKET Z - CLOTURE').bold(false)
+      .line(new Date(s.closed_at || Date.now()).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })).line('par ' + who(s.closed_by)).align('left').rule().bold(true).line('ENCAISSEMENTS').bold(false);
+    d.byM.forEach(([k, v]) => e.pair(PMETHOD[k], moneyTxt(v))); e.rule().bold(true).pair('TOTAL', moneyTxt(d.totalIn)).bold(false).rule().bold(true).line('ESPECES').bold(false)
+      .pair('Fond de caisse', moneyTxt(s.opening_balance)).pair('Depenses', '-' + moneyTxt(d.sum(d.cash, ['expense']))).pair('Remboursements', '-' + moneyTxt(d.sum(d.cash, ['refund']))).pair('Versements', '-' + moneyTxt(d.sum(d.cash, ['deposit'])))
+      .rule().pair('Attendu', moneyTxt(d.expected)).pair('Compte', moneyTxt(s.counted_balance)).bold(true).pair('ECART', gap === 0 ? '0' : (gap < 0 ? '-' : '+') + moneyTxt(Math.abs(gap))).bold(false);
+    if (s.gap_reason) e.wrap('Motif : ' + s.gap_reason);
+    return e.line(d.rows.length + ' operation(s)').raw(0x0A, 0x0A).line('Signature : ____________').feed(4).cut().bytes(); }, html);
 }
 
 async function printClosure(s){
