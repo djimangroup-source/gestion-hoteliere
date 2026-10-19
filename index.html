@@ -79,7 +79,7 @@ main{flex:1;min-width:0;width:100%;max-width:1360px;margin:0 auto;padding:28px c
 html[data-theme="indigo"] .mtop,html[data-theme="indigo"] .tabbar{background:#1B1F3B;color:#E8E2F5}
 html[data-theme="indigo"] .mtop .brand,html[data-theme="indigo"] .mtop button{color:#E8E2F5}
 html[data-theme="indigo"] .tabbar button{color:#B9B3D1}html[data-theme="indigo"] .tabbar button.on{color:#E39B34}html[data-theme="indigo"] .tabbar button.on svg{background:rgba(227,155,52,.18)}
-@media (max-width:640px){.modal:not(.hidden){display:flex!important;align-items:flex-end!important;justify-content:stretch;padding:0!important}.modal .card{width:100%;max-width:none!important;margin:0}.modal .card{border-radius:24px 24px 0 0;max-height:92vh;max-height:92dvh;padding-bottom:max(20px,env(safe-area-inset-bottom))}.modal .card::before{content:"";display:block;width:44px;height:5px;border-radius:3px;background:var(--line);margin:-6px auto 12px}}
+@media (max-width:640px){.modal:not(.hidden){display:flex!important;align-items:flex-end!important;justify-content:stretch;padding:0!important}#modalBody{width:100%;max-width:none!important;margin:0}#modalBody{border-radius:24px 24px 0 0;max-height:92vh;max-height:92dvh;padding-bottom:max(20px,env(safe-area-inset-bottom))}#modalBody::before{content:"";display:block;width:44px;height:5px;border-radius:3px;background:var(--line);margin:-6px auto 12px}}
 html[data-theme="indigo"] nav.side #navNotif{color:#E8E2F5!important}
 nav.side button.locked::after{content:"";display:inline-block;width:12px;height:12px;margin-left:8px;vertical-align:-1px;background:currentColor;opacity:.45;-webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.5'%3E%3Crect x='5' y='11' width='14' height='10' rx='2'/%3E%3Cpath d='M8 11V8a4 4 0 0 1 8 0v3'/%3E%3C/svg%3E") center/contain no-repeat;mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.5'%3E%3Crect x='5' y='11' width='14' height='10' rx='2'/%3E%3Cpath d='M8 11V8a4 4 0 0 1 8 0v3'/%3E%3C/svg%3E") center/contain no-repeat}
 nav.side select.estsw{margin:0 0 10px;min-height:40px;font-size:14px;font-weight:600}
@@ -94,7 +94,9 @@ nav.side button.navsearch kbd{font:600 11px/1 var(--body,inherit);border:1px sol
   nav.side{position:sticky;top:0;align-self:flex-start;height:100vh;width:236px;flex:0 0 236px;flex-direction:column;flex-wrap:nowrap;align-items:stretch;gap:2px;padding:20px 14px;border-bottom:0;border-right:1px solid var(--line);overflow-y:auto}
   nav.side .brand{margin:0 6px 4px}
   nav.side .org{display:block!important;max-width:none;margin:0 8px 14px;white-space:normal}
-  nav.side > button,nav.side details.more summary{width:100%;justify-content:flex-start;text-align:left;border-radius:12px;min-height:42px;font-size:14.5px;padding:0 14px}
+  nav.side .ngroup{display:flex;flex-direction:column;gap:2px;margin-top:8px}nav.side .ngroup.hidden{display:none}
+  nav.side .ghead{display:flex!important;align-items:center;font-size:11.5px!important;font-weight:800!important;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)!important;min-height:30px!important;justify-content:space-between!important}nav.side .ghead::after{content:'▾';font-size:11px;margin-left:auto}nav.side .ngroup.collapsed .ghead::after{content:'▸'}nav.side .ngroup.collapsed > button:not(.ghead){display:none}nav.side .ngroup > button:not(.ghead){padding-left:22px!important}
+  nav.side > button,nav.side .ngroup > button,nav.side details.more summary{width:100%;justify-content:flex-start;text-align:left;border-radius:12px;min-height:42px;font-size:14.5px;padding:0 14px}
   nav.side details.more{margin-top:auto;padding-top:10px;border-top:1px solid var(--line)}
   nav.side details.more summary::after{margin-left:auto}
   nav.side details.more .menu{position:static;box-shadow:none;border:0;background:transparent;padding:4px 0 0;min-width:0}
@@ -173,6 +175,8 @@ body.modal-open{overflow:hidden}
 .posgrid{display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:16px;align-items:start}.poscart{position:sticky;top:16px}.posfab{display:none}
 @media (max-width:900px){.posgrid{grid-template-columns:1fr}.poscart{position:static}.posfab{display:block;position:fixed;left:16px;right:16px;bottom:calc(76px + env(safe-area-inset-bottom));z-index:30;min-height:54px;box-shadow:0 10px 30px rgba(0,0,0,.25)}}
 @media (max-width:700px){.rcgrid{grid-template-columns:1fr!important}}
+.subnav{display:none}
+@media (max-width:899px){.subnav:not(.hidden){display:flex;gap:6px;overflow-x:auto;margin:0 0 14px;padding-bottom:2px}.subnav button{flex:0 0 auto;min-height:38px;padding:0 14px;border-radius:999px;font-size:14px}}
 .big{font-family:var(--display);font-weight:800;font-size:56px;line-height:1;color:var(--green)}
 @media (max-width:700px){nav.side{max-width:none}}
 </style>
@@ -234,17 +238,25 @@ body.modal-open{overflow:hidden}
     <select id="estSwitch" class="estsw hidden" aria-label="Établissement"></select>
     <button type="button" id="navInstall" class="navsearch" style="color:var(--green);font-weight:700;justify-content:flex-start">⬇ Installer l’application</button>
     <button data-view="dashboard">Accueil</button>
-    <button data-view="controle">Contrôle <span id="alertBadge" class="hidden" style="display:inline-block;min-width:20px;padding:0 6px;border-radius:999px;background:var(--green);color:#fff;font-size:12px;line-height:20px"></span></button>
-    <button data-view="reservations">Réservations</button>
-    <button data-view="planning">Planning</button>
-    <button data-view="clients">Clients</button>
-    <button data-view="chambres">Chambres</button>
-    <button data-view="caisse">Caisse</button>
-    <button data-view="resto">Restaurant &amp; Bar</button>
-    <button data-view="depenses">Dépenses</button>
-    <button data-view="factures">Factures</button>
-    <button data-view="rapports">Rapports</button>
-    <button data-view="mapage">Ma page de présentation</button>
+    <div class="ngroup" data-group="heberg"><button type="button" class="ghead" aria-expanded="true">🏨 Hébergement</button>
+      <button data-view="reservations">Réservations</button>
+      <button data-view="planning">Planning</button>
+      <button data-view="chambres">Chambres</button>
+      <button data-view="clients">Clients</button></div>
+    <div class="ngroup" data-group="argent"><button type="button" class="ghead" aria-expanded="true">💰 Argent</button>
+      <button data-view="caisse">Caisse</button>
+      <button data-view="depenses">Dépenses</button>
+      <button data-view="factures">Factures</button></div>
+    <div class="ngroup" data-group="resto"><button type="button" class="ghead" aria-expanded="true">🍽️ Restaurant &amp; Bar</button>
+      <button data-view="resto" data-rtab="caisse">Caisse resto</button>
+      <button data-view="resto" data-rtab="produits" data-mgr="1">Produits</button>
+      <button data-view="resto" data-rtab="stock" data-mgr="1">Stock</button>
+      <button data-view="resto" data-rtab="ventes" data-acc="1">Ventes</button></div>
+    <div class="ngroup" data-group="pilot"><button type="button" class="ghead" aria-expanded="true">📊 Pilotage</button>
+      <button type="button" id="navAna" data-ana="1">Résultat &amp; analyse</button>
+      <button data-view="rapports">Rapports</button>
+      <button data-view="controle">Contrôle <span id="alertBadge" class="hidden" style="display:inline-block;min-width:20px;padding:0 6px;border-radius:999px;background:var(--green);color:#fff;font-size:12px;line-height:20px"></span></button>
+      <button data-view="mapage">Ma page de présentation</button></div>
     <details class="more" id="navMore">
       <summary>Réglages</summary>
       <div class="menu">
@@ -265,12 +277,13 @@ body.modal-open{overflow:hidden}
   <header id="mTop" class="mtop"><div class="brand">Horus Hotel</div><button type="button" id="mSearch" aria-label="Rechercher une action"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-4-4"></path></svg></button><button type="button" id="mNotif" aria-label="Notifications" style="position:relative"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10 21h4"></path></svg><span id="mNotifBadge" class="hidden"></span></button></header>
   <nav id="tabbar" class="tabbar" aria-label="Navigation rapide">
     <button data-tab="dashboard"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11l9-8 9 8v10h-6v-6H9v6H3z"></path></svg>Accueil</button>
-    <button data-tab="reservations"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"></rect><path d="M3 10h18M8 3v4M16 3v4"></path></svg>Réservations</button>
-    <button data-tab="caisse"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="6" width="20" height="12" rx="2"></rect><circle cx="12" cy="12" r="2.5"></circle></svg>Caisse</button>
-    <button data-tab="chambres"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 18V7M21 18v-6H3M7 12V9h5v3"></path></svg>Chambres</button>
+    <button data-tab="heberg"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 18V7M21 18v-6H3M7 12V9h5v3"></path></svg>Hébergement</button>
+    <button data-tab="argent"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="6" width="20" height="12" rx="2"></rect><circle cx="12" cy="12" r="2.5"></circle></svg>Argent</button>
+    <button data-tab="resto"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3v8M5 3v5a2 2 0 0 0 4 0V3M7 11v10M17 21V3c-2 1-3 4-3 7h3"></path></svg>Resto</button>
     <button data-tab="more"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.5"></circle><circle cx="12" cy="12" r="1.5"></circle><circle cx="19" cy="12" r="1.5"></circle></svg>Plus</button>
   </nav>
   <main>
+    <div id="subnav" class="subnav hidden" aria-label="Sous-menu"></div>
     <div id="banner"></div>
     <section id="v-dashboard" class="hidden"></section>
     <section id="v-reservations" class="hidden"></section>
@@ -332,7 +345,7 @@ function show(id){ ['auth','onboard','app','public'].forEach(x => $(x).classList
 let INSTALL_EVT = null;
 if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).catch(() => {});
 /* ---------- Mise à jour de l'application sans réinstaller ni perdre la connexion ---------- */
-const APP_VERSION = '2026.10.19-4';
+const APP_VERSION = '2026.10.19-5';
 async function refreshApp(){
   toast('Actualisation…');
   try { const reg = navigator.serviceWorker && await navigator.serviceWorker.getRegistration(); if (reg) { await reg.update(); if (reg.waiting) reg.waiting.postMessage('skipWaiting'); } } catch (_) {}
@@ -405,7 +418,7 @@ async function refreshNotifs(silent){
     }
   } else unread.forEach(n => NOTIF_SHOWN.add(n.key));
 }
-function startNotifs(){ clearInterval(NOTIF_TIMER); refreshNotifs(true); NOTIF_TIMER = setInterval(() => { if (S.org) refreshNotifs(false); }, 60000); }
+function startNotifs(){ clearInterval(NOTIF_TIMER); if (typeof moduleOn === 'function' && !moduleOn('notifs')) return; refreshNotifs(true); NOTIF_TIMER = setInterval(() => { if (S.org) refreshNotifs(false); }, 60000); }
 async function openNotifs(){
   const nb = $('navMore'); if (nb) nb.open = false;
   await refreshNotifs(true);
@@ -588,21 +601,59 @@ function renderBanner(){
   el.innerHTML = `<div class="banner ${cls}" role="alert"><span>${esc(o.alert)}</span><button class="small primary" data-go="tarifs">Choisir une formule</button></div>`;
 }
 document.addEventListener('click', e => { const g = e.target.closest('[data-go]'); if (g) go(g.dataset.go); const m = $('navMore'); if (m && m.open && !e.target.closest('#navMore')) m.open = false; });
-document.querySelectorAll('nav.side [data-view]').forEach(b => b.addEventListener('click', () => go(b.dataset.view)));
+document.querySelectorAll('nav.side [data-view]').forEach(b => b.addEventListener('click', () => { if (b.dataset.rtab) S.rTab = b.dataset.rtab; go(b.dataset.view); }));
+$('navAna').onclick = () => openAnalysis(6);
+document.querySelectorAll('nav.side .ghead').forEach(h => { const g = h.parentElement; try { if (localStorage.getItem('hh_grp_' + g.dataset.group) === '0') g.classList.add('collapsed'); } catch (_) {}
+  h.onclick = () => { g.classList.toggle('collapsed'); h.setAttribute('aria-expanded', !g.classList.contains('collapsed')); try { localStorage.setItem('hh_grp_' + g.dataset.group, g.classList.contains('collapsed') ? '0' : '1'); } catch (_) {} }; });
 $('navSearch').onclick = () => openPalette();
 $('mSearch').onclick = () => openPalette();
 $('mNotif').onclick = () => openNotifs();
+const GROUPS = { heberg: ['reservations','planning','chambres','clients'], argent: ['caisse','depenses','factures'], resto: ['resto'], pilot: ['controle','rapports','mapage'] };
+const VIEW_LABEL = { reservations:'Réservations', planning:'Planning', chambres:'Chambres', clients:'Clients', caisse:'Caisse', depenses:'Dépenses', factures:'Factures', resto:'Restaurant & Bar', controle:'Contrôle', rapports:'Rapports', mapage:'Ma page' };
+const groupOf = (v) => Object.keys(GROUPS).find(g => GROUPS[g].includes(v));
+const groupViews = (g) => GROUPS[g].filter(allowed);
+const canAna = () => can(['owner','admin','manager','accountant']);
+function applyNavExtras(){
+  const mgr = can(['owner','admin','manager']), acc = can(['owner','admin','manager','accountant']);
+  document.querySelectorAll('nav.side [data-mgr]').forEach(b => { if (!mgr) b.classList.add('hidden'); });
+  document.querySelectorAll('nav.side [data-acc]').forEach(b => { if (!acc) b.classList.add('hidden'); });
+  const na = $('navAna'); if (na) na.classList.toggle('hidden', !canAna());
+  document.querySelectorAll('nav.side .ngroup').forEach(g => g.classList.toggle('hidden', ![...g.querySelectorAll('button:not(.ghead)')].some(b => !b.classList.contains('hidden'))));
+  const notifOn = moduleOn('notifs'); ['navNotif','mNotif'].forEach(id => { const e = $(id); if (e) e.classList.toggle('hidden', !notifOn); });
+  if (!notifOn) clearInterval(NOTIF_TIMER);
+  const multiOn = moduleOn('multi'); const es = $('estSwitch'); if (es && !multiOn) es.classList.add('hidden'); const ne = $('navEsts'); if (ne) ne.classList.toggle('hidden', !multiOn);
+}
+function drawSubnav(){
+  const box = $('subnav'); if (!box) return;
+  const g = groupOf(S.view), list = g ? groupViews(g) : [];
+  if (list.length < 2) { box.classList.add('hidden'); box.innerHTML = ''; return; }
+  box.classList.remove('hidden');
+  box.innerHTML = list.map(v => `<button type="button" class="${v === S.view ? '' : 'ghost'}" data-sub="${v}">${esc(VIEW_LABEL[v] || v)}</button>`).join('');
+  box.querySelectorAll('[data-sub]').forEach(b => b.onclick = () => go(b.dataset.sub));
+}
 function syncTabbar(){
-  const main = ['dashboard','reservations','caisse','chambres'];
-  document.querySelectorAll('#tabbar [data-tab]').forEach(b => { const v = b.dataset.tab; if (v !== 'more') b.classList.toggle('hidden', !allowed(v)); b.classList.toggle('on', v === S.view || (v === 'more' && !main.includes(S.view))); });
+  document.querySelectorAll('#tabbar [data-tab]').forEach(b => { const t = b.dataset.tab;
+    if (t !== 'more' && t !== 'dashboard') b.classList.toggle('hidden', !groupViews(t).length);
+    b.classList.toggle('on', t === S.view || t === groupOf(S.view) || (t === 'more' && S.view !== 'dashboard' && !['heberg','argent','resto'].includes(groupOf(S.view)))); });
   const s = $('notifBadge'), m = $('mNotifBadge'); if (s && m) { m.textContent = s.textContent; m.classList.toggle('hidden', s.classList.contains('hidden')); }
 }
-function openMore(){
-  const items = [...document.querySelectorAll('nav.side > button[data-view], nav.side .menu button')].filter(b => !b.classList.contains('hidden') && !['dashboard','reservations','caisse','chambres'].includes(b.dataset.view));
-  modal(`<h2 style="font-size:22px;margin-bottom:12px">Plus</h2><div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px">${items.map((b, i) => `<button type="button" data-mi="${i}" class="ghost" style="min-height:56px;border-radius:16px;justify-content:flex-start;text-align:left;${b.dataset.logout !== undefined ? 'color:var(--red)' : ''}">${esc(b.textContent.trim())}</button>`).join('')}</div>`);
-  document.querySelectorAll('[data-mi]').forEach(x => x.onclick = () => { const b = items[+x.dataset.mi]; closeModal(); b.click(); });
+function openTab(t){
+  if (t === 'more') return openMore();
+  if (t === 'dashboard') return go('dashboard');
+  const list = groupViews(t); if (!list.length) return;
+  let last = null; try { last = localStorage.getItem('hh_tab_' + t); } catch (_) {}
+  go(list.includes(last) ? last : list[0]);
 }
-document.querySelectorAll('#tabbar [data-tab]').forEach(b => b.onclick = () => b.dataset.tab === 'more' ? openMore() : go(b.dataset.tab));
+function openMore(){
+  const pilot = groupViews('pilot').map(v => [VIEW_LABEL[v], () => go(v)]);
+  if (canAna()) pilot.unshift(['Résultat & analyse', () => openAnalysis(6)]);
+  const settings = [...document.querySelectorAll('nav.side .menu button')].filter(b => !b.classList.contains('hidden')).map(b => [b.textContent.trim(), () => b.click()]);
+  const sec = (title, items) => items.length ? `<h3 style="font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:14px 0 6px">${title}</h3><div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px">${items.map(([l], i) => `<button type="button" class="ghost" data-mi="${title}|${i}" style="min-height:52px;border-radius:14px;justify-content:flex-start;text-align:left;white-space:normal">${esc(l)}</button>`).join('')}</div>` : '';
+  const map = { 'Pilotage': pilot, 'Réglages': settings };
+  modal(`<h2 style="font-size:22px">Plus</h2>${sec('Pilotage', pilot)}${sec('Réglages', settings)}`);
+  document.querySelectorAll('[data-mi]').forEach(x => x.onclick = () => { const [t, i] = x.dataset.mi.split('|'); closeModal(); map[t][+i][1](); });
+}
+document.querySelectorAll('#tabbar [data-tab]').forEach(b => b.onclick = () => openTab(b.dataset.tab));
 
 $('navInstall').onclick = () => installApp();
 if (isStandalone()) $('navInstall').classList.add('hidden');
@@ -624,7 +675,7 @@ const ROLE_VIEWS = {
 };
 const ROLE_LABEL = { owner:'Propriétaire', admin:'Administrateur', manager:'Gérant', receptionist:'Réceptionniste', housekeeping:'Ménage', accountant:'Comptable', staff:'Serveur / Barman' };
 const allowed = (v) => v === 'admin' ? S.isAdmin : (moduleOn(v) && (!S.member || !ROLE_VIEWS[S.member.role] || ROLE_VIEWS[S.member.role].includes(v)));
-function applyRoleNav(){ document.querySelectorAll('nav.side [data-view]').forEach(b => { if (b.dataset.view !== 'admin') b.classList.toggle('hidden', !allowed(b.dataset.view)); b.classList.toggle('locked', !!lockedView(b.dataset.view)); }); renderEstSwitch(); }
+function applyRoleNav(){ document.querySelectorAll('nav.side [data-view]').forEach(b => { if (b.dataset.view !== 'admin') b.classList.toggle('hidden', !allowed(b.dataset.view)); b.classList.toggle('locked', !!lockedView(b.dataset.view)); }); renderEstSwitch(); applyNavExtras(); }
 
 const VIEW_FEATURE = { resto: ['restaurant', 'Le module Restaurant & Bar', 'Vos plats et boissons en photo, une caisse tactile, le stock qui se décompte à chaque vente, les marges et les alertes de réapprovisionnement.'],
   mapage: ['online_booking', 'La page de présentation et la réservation en ligne', 'Une belle page avec votre logo, vos photos et un formulaire de réservation : vos clients réservent directement, sans commission.'],
@@ -689,7 +740,9 @@ function go(view){
   if (S.org && !allowed(view)) view = (ROLE_VIEWS[S.member.role] || ['dashboard']).find(allowed) || 'dashboard';
   if (!S.org && view !== 'admin') view = 'admin';
   S.view = view;
-  document.querySelectorAll('nav.side [data-view]').forEach(b => b.classList.toggle('active', b.dataset.view === view));
+  document.querySelectorAll('nav.side [data-view]').forEach(b => b.classList.toggle('active', b.dataset.view === view && (!b.dataset.rtab || b.dataset.rtab === (S.rTab || 'caisse'))));
+  if (typeof drawSubnav === 'function') drawSubnav();
+  try { const gg = typeof groupOf === 'function' && groupOf(view); if (gg) localStorage.setItem('hh_tab_' + gg, view); } catch (_) {}
   const more = $('navMore'); if (more) { more.open = false; more.classList.toggle('active', !!more.querySelector(`[data-view="${view}"]`)); }
   VIEWS.forEach(v => $('v-'+v).classList.toggle('hidden', v !== view));
   if (typeof syncTabbar === 'function') syncTabbar();
@@ -1107,7 +1160,7 @@ async function renderDashboard(){
     if (rm.housekeeping_status === 'out_of_service') st = 'oos';
     else if (stay) { st = stay.check_out === t ? 'departing' : 'occupied'; resa = stay; }
     else if (arr) { st = 'arriving'; resa = arr; }
-    else if (['dirty','cleaning'].includes(rm.housekeeping_status)) st = 'dirty';
+    else if (moduleOn('menage') && ['dirty','cleaning'].includes(rm.housekeeping_status)) st = 'dirty';
     return { rm, st, resa };
   });
   const countSt = (s) => live.filter(x => x.st === s).length;
@@ -1189,7 +1242,7 @@ async function dashGuide(R){
   if (pend.length) { const h = Math.round((Date.now() - new Date(pend[0].created_at)) / 36e5); rem.push(['#B4532A', `${pend.length} demande(s) en ligne en attente${h >= 1 ? ' depuis ' + h + ' h' : ''}`, 'Traiter', 'reservations', 'requests']); }
   if (cashRole && !sess.data) rem.push(['#C9A227', 'La caisse n’est pas encore ouverte aujourd’hui', 'Ouvrir', 'caisse']);
   const arrRooms = new Set((R || []).filter(r => r.check_in === t && ['pending','confirmed'].includes(r.status)).map(r => r.room_id));
-  S.rooms.filter(r => arrRooms.has(r.id) && ['dirty','cleaning'].includes(r.housekeeping_status)).forEach(r => rem.push(['#6E5A4A', `Chambre ${esc(r.number)} à nettoyer avant l’arrivée du jour`, 'Chambres', 'chambres']));
+  S.rooms.filter(r => moduleOn('menage') && arrRooms.has(r.id) && ['dirty','cleaning'].includes(r.housekeeping_status)).forEach(r => rem.push(['#6E5A4A', `Chambre ${esc(r.number)} à nettoyer avant l’arrivée du jour`, 'Chambres', 'chambres']));
   const unpaidOut = (R || []).filter(r => r.status === 'checked_in' && r.check_out === t && r.balance > 0);
   if (unpaidOut.length) rem.push(['#8A3E1E', `${unpaidOut.length} départ(s) aujourd’hui avec un solde impayé`, 'Encaisser', 'caisse']);
   (dues.data || []).forEach(d => rem.push(['#2B1E16', `${esc(d.label)} (${money(d.amount)}) à payer le ${dfr(d.due_date)}`, 'Voir', 'depenses']));
@@ -1384,7 +1437,7 @@ async function openResaForm(pre, refresh){
             <div style="height:110px;${photo(r)}"></div><div style="padding:10px 12px"><div class="row between"><strong style="font-size:17px">${esc(r.number)}</strong>${sel ? '<span style="color:var(--green);font-weight:700;font-size:13px">Choisie ✓</span>' : ''}</div>
             <div class="muted" style="font-size:12.5px">${esc([r.room_type, x.bed_type && BEDS[x.bed_type], ...(x.amenities || []).slice(0, 2), x.size_m2 && x.size_m2 + ' m²'].filter(Boolean).join(' · '))}</div>
             <div style="margin-top:4px;font-weight:700">${money(r.base_rate)} <span class="muted" style="font-weight:400">/ nuit</span></div>
-            ${['dirty','cleaning'].includes(r.housekeeping_status) ? '<div style="font-size:12px;color:#8A3E1E;margin-top:2px">À nettoyer avant l’arrivée</div>' : ''}${small ? `<div style="font-size:12px;color:#8A3E1E;margin-top:2px">Prévue pour ${r.capacity} personne(s)</div>` : ''}</div></button>`; }).join('')}
+            ${moduleOn('menage') && ['dirty','cleaning'].includes(r.housekeeping_status) ? '<div style="font-size:12px;color:#8A3E1E;margin-top:2px">À nettoyer avant l’arrivée</div>' : ''}${small ? `<div style="font-size:12px;color:#8A3E1E;margin-top:2px">Prévue pour ${r.capacity} personne(s)</div>` : ''}</div></button>`; }).join('')}
         ${off.map(r => `<div style="border-radius:18px;border:1px dashed #C9B596;background:var(--bg);padding:14px;color:var(--muted);font-size:14px"><strong style="color:var(--ink)">${esc(r.number)} · ${r.housekeeping_status === 'out_of_service' ? 'hors service' : 'occupée'}</strong><br>${r.housekeeping_status === 'out_of_service' ? 'Indisponible' : 'Déjà réservée sur ces dates'}</div>`).join('')}
         </div>${!free.length ? '<p style="color:#8A3E1E;font-weight:600;margin-top:12px">Aucune chambre libre sur ces dates : modifiez les dates.</p>' : ''}`; }
     if (st.step === 3) { const known = st.gid ? G.find(g => g.id === st.gid) : null;
@@ -2233,7 +2286,7 @@ function showCredentials(name, code, username, pin){
   $('crCopy').onclick = async () => { try { await navigator.clipboard.writeText(msg); toast('Accès copiés.'); } catch (_) { toast('Copie impossible.', true); } };
 }
 function openStaffForm(isOwner, done){
-  const roles = Object.entries(STAFF_ROLES).filter(([k]) => isOwner || k !== 'admin');
+  const roles = Object.entries(STAFF_ROLES).filter(([k]) => (isOwner || k !== 'admin') && (k !== 'housekeeping' || moduleOn('menage')) && (k !== 'staff' || moduleOn('resto')));
   const pin = randPin();
   modal(`<div class="eyebrow">Nouveau compte · sans e-mail</div><h2 style="font-size:24px;margin:4px 0 14px">Ajouter un employé</h2>
     <form id="sfForm"><div class="field"><label for="sfName">Nom et prénom</label><input id="sfName" required maxlength="80" placeholder="ex. Awa Koné"></div>
@@ -2330,8 +2383,9 @@ async function renderEquipe(){
 
 /* ================= Modules à cocher, devise, résultat & analyse ================= */
 const CURRENCIES = { XOF: ['Franc CFA (UEMOA)', 'F', 0], XAF: ['Franc CFA (CEMAC)', 'F', 0], GNF: ['Franc guinéen', 'FG', 0], CDF: ['Franc congolais', 'FC', 0], MGA: ['Ariary', 'Ar', 0], MAD: ['Dirham marocain', 'DH', 2], NGN: ['Naira', '₦', 0], GHS: ['Cedi', 'GH₵', 2], EUR: ['Euro', '€', 2], USD: ['Dollar US', '$', 2] };
-const MODULES = { planning: 'Planning', clients: 'Clients', resto: 'Restaurant & Bar', depenses: 'Dépenses', factures: 'Factures', rapports: 'Rapports', mapage: 'Ma page de présentation', controle: 'Contrôle propriétaire' };
-const MODULE_HELP = { planning: 'Vue calendrier des chambres', clients: 'Fichier clients et historique', resto: 'Caisse restaurant/bar, produits et stock', depenses: 'Charges fixes, opérationnelles, budget', factures: 'Factures numérotées', rapports: 'Rapports financiers et exports', mapage: 'Page publique et réservation en ligne', controle: 'Alertes et journal des actions' };
+const MODULES = { planning: 'Planning', clients: 'Clients', menage: 'Ménage (état des chambres)', resto: 'Restaurant & Bar', depenses: 'Dépenses', factures: 'Factures', rapports: 'Rapports', mapage: 'Ma page de présentation', controle: 'Contrôle propriétaire', notifs: 'Notifications', multi: 'Plusieurs établissements', equipe: 'Équipe' };
+const MODULE_GROUPS = [['🏨 Hébergement', ['planning','clients','menage']], ['💰 Argent', ['depenses','factures']], ['🍽️ Restaurant & Bar', ['resto']], ['📊 Pilotage', ['rapports','controle','mapage']], ['⚙️ Organisation', ['notifs','multi','equipe']]];
+const MODULE_HELP = { planning: 'Vue calendrier des chambres', clients: 'Fichier clients et historique', resto: 'Caisse restaurant/bar, produits et stock', depenses: 'Charges fixes, opérationnelles, budget', factures: 'Factures numérotées', rapports: 'Rapports financiers et exports', mapage: 'Page publique et réservation en ligne', controle: 'Alertes et journal des actions', menage: 'Statuts « à nettoyer » et rappels de ménage', notifs: 'La cloche et les alertes en direct', multi: 'Sélecteur d’établissement (si vous en avez plusieurs)', equipe: 'Comptes du personnel et invitations' };
 const moduleOn = (v) => !MODULES[v] || !S.modules || S.modules.includes(v);
 async function loadOrgPrefs(){
   const { data } = await sb.from('organizations').select('display_currency,enabled_modules').eq('id', S.org).maybeSingle();
@@ -2340,10 +2394,12 @@ async function loadOrgPrefs(){
 function openModules(){
   const owner = can(['owner', 'admin']);
   modal(`<h2 style="font-size:22px;margin-bottom:4px">Fonctionnalités utilisées</h2><p class="muted" style="margin:0 0 12px;font-size:14px">Cochez ce dont votre établissement se sert : le menu n’affiche que ces modules. Rien n’est supprimé, vous pouvez les réactiver à tout moment.</p>
-    <div style="display:grid;gap:6px">${Object.entries(MODULES).map(([k, l]) => `<label class="card" style="margin:0;padding:10px 12px;display:flex;gap:10px;align-items:center;cursor:${owner ? 'pointer' : 'default'}"><input type="checkbox" data-mod="${k}" ${moduleOn(k) ? 'checked' : ''} ${owner ? '' : 'disabled'} style="width:20px;min-height:20px"><span><strong>${esc(l)}</strong>${lockedView(k) ? ' <span class="pill st-trial">formule supérieure</span>' : ''}<br><span class="muted" style="font-size:12px">${esc(MODULE_HELP[k])}</span></span></label>`).join('')}</div>
-    <p class="muted" style="font-size:12px;margin:10px 0 0">Toujours affichés : Accueil, Réservations, Chambres, Caisse et Réglages.</p>
+    ${MODULE_GROUPS.map(([gt, keys]) => `<div style="margin-bottom:12px"><label class="row between" style="flex-wrap:nowrap;margin-bottom:6px"><strong style="font-size:15px">${gt}</strong>${owner && keys.length > 1 ? `<span class="row" style="gap:6px;font-size:13px;flex-wrap:nowrap"><input type="checkbox" data-grp="${keys.join(',')}" ${keys.every(moduleOn) ? 'checked' : ''} style="width:18px;min-height:18px"> tout</span>` : ''}</label>
+      <div style="display:grid;gap:6px">${keys.map(k => `<label class="card" style="margin:0;padding:10px 12px;display:flex;gap:10px;align-items:center;cursor:${owner ? 'pointer' : 'default'}"><input type="checkbox" data-mod="${k}" ${moduleOn(k) ? 'checked' : ''} ${owner ? '' : 'disabled'} style="width:20px;min-height:20px"><span><strong>${esc(MODULES[k])}</strong>${lockedView(k) ? ' <span class="pill st-trial">formule supérieure</span>' : ''}<br><span class="muted" style="font-size:12px">${esc(MODULE_HELP[k])}</span></span></label>`).join('')}</div></div>`).join('')}
+    <p class="muted" style="font-size:12px;margin:10px 0 0">Toujours affichés : Accueil, Réservations, Chambres, Caisse et Réglages. Le propriétaire garde toujours l’accès à Réglages → Fonctionnalités.</p>
     ${owner ? '<button class="primary" id="modSave" style="width:100%;margin-top:12px">Enregistrer</button>' : '<p class="muted">Seul le propriétaire peut modifier ce choix.</p>'}`);
   if (!owner) return;
+  document.querySelectorAll('[data-grp]').forEach(g => g.onchange = () => g.dataset.grp.split(',').forEach(k => { document.querySelector(`[data-mod="${k}"]`).checked = g.checked; }));
   $('modSave').onclick = async () => { const list = [...document.querySelectorAll('[data-mod]')].filter(c => c.checked).map(c => c.dataset.mod);
     const val = list.length === Object.keys(MODULES).length ? null : list;
     const { error } = await sb.from('organizations').update({ enabled_modules: val }).eq('id', S.org); if (error) return toast(errMsg(error), true);
