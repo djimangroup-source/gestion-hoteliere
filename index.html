@@ -187,6 +187,7 @@ body.modal-open{overflow:hidden}
   <div class="card">
     <div class="eyebrow">Horus Hotel · Gestion hôtelière &amp; résidences</div>
     <h1 id="authTitle" style="font-size:30px;margin:6px 0 14px">Connexion</h1>
+    <div id="savedProfiles"></div>
     <div class="row" id="authTabs" role="tablist" style="gap:6px;margin-bottom:16px;background:var(--line);padding:4px;border-radius:999px;flex-wrap:nowrap">
       <button type="button" role="tab" data-amode="mail" class="small" style="flex:1;border:0">Propriétaire (e-mail)</button>
       <button type="button" role="tab" data-amode="staff" class="small ghost" style="flex:1;border:0">Personnel</button>
@@ -207,7 +208,7 @@ body.modal-open{overflow:hidden}
       <button class="primary" style="width:100%" id="authBtn">Se connecter</button>
     </form>
     <div class="row" style="margin-top:12px"><button type="button" class="ghost" id="magicBtn" style="flex:1 1 200px">Recevoir un lien de connexion par e-mail</button></div>
-    <p style="margin:10px 0 0;font-size:14px" class="row between"><a href="#" id="forgotLink">Mot de passe oublié ?</a><a href="#" onclick="event.preventDefault();refreshApp()" class="muted">🔄 Actualiser l’application</a></p>
+    <p style="margin:10px 0 0;font-size:14px" class="row between"><a href="#" id="forgotLink">Mot de passe oublié ?</a><a href="#" onclick="event.preventDefault();refreshApp()" class="muted"> Actualiser l’application</a></p>
     <p class="muted" style="margin:16px 0 0;font-size:14px"><span id="authSwitchTxt">Pas encore de compte ?</span> <a href="#" id="authSwitch">Créer un compte – 30 jours gratuits</a></p>
     </div>
   </div>
@@ -236,23 +237,23 @@ body.modal-open{overflow:hidden}
     <button type="button" id="navSearch" class="navsearch" aria-label="Rechercher une action">Que voulez-vous faire ?<kbd>/</kbd></button>
     <button type="button" id="navNotif" class="navsearch" style="justify-content:flex-start;gap:10px;color:var(--ink)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10 21h4"></path></svg>Notifications<span id="notifBadge" class="hidden" style="margin-left:auto;min-width:22px;padding:2px 7px;border-radius:999px;background:var(--green);color:#fff;font-size:12px;font-weight:800;text-align:center"></span></button>
     <select id="estSwitch" class="estsw hidden" aria-label="Établissement"></select>
-    <button type="button" id="navInstall" class="navsearch" style="color:var(--green);font-weight:700;justify-content:flex-start">⬇ Installer l’application</button>
+    <button type="button" id="navInstall" class="navsearch" style="color:var(--green);font-weight:700;justify-content:flex-start"> Installer l’application</button>
     <button data-view="dashboard">Accueil</button>
-    <div class="ngroup" data-group="heberg"><button type="button" class="ghead" aria-expanded="true">🏨 Hébergement</button>
+    <div class="ngroup" data-group="heberg"><button type="button" class="ghead" aria-expanded="true"> Hébergement</button>
       <button data-view="reservations">Réservations</button>
       <button data-view="planning">Planning</button>
       <button data-view="chambres">Chambres</button>
       <button data-view="clients">Clients</button></div>
-    <div class="ngroup" data-group="argent"><button type="button" class="ghead" aria-expanded="true">💰 Argent</button>
+    <div class="ngroup" data-group="argent"><button type="button" class="ghead" aria-expanded="true"> Argent</button>
       <button data-view="caisse">Caisse</button>
       <button data-view="depenses">Dépenses</button>
       <button data-view="factures">Factures</button></div>
-    <div class="ngroup" data-group="resto"><button type="button" class="ghead" aria-expanded="true">🍽️ Restaurant &amp; Bar</button>
+    <div class="ngroup" data-group="resto"><button type="button" class="ghead" aria-expanded="true"> Restaurant &amp; Bar</button>
       <button data-view="resto" data-rtab="caisse">Caisse resto</button>
       <button data-view="resto" data-rtab="produits" data-mgr="1">Produits</button>
       <button data-view="resto" data-rtab="stock" data-mgr="1">Stock</button>
       <button data-view="resto" data-rtab="ventes" data-acc="1">Ventes</button></div>
-    <div class="ngroup" data-group="pilot"><button type="button" class="ghead" aria-expanded="true">📊 Pilotage</button>
+    <div class="ngroup" data-group="pilot"><button type="button" class="ghead" aria-expanded="true"> Pilotage</button>
       <button type="button" id="navAna" data-ana="1">Résultat &amp; analyse</button>
       <button data-view="rapports">Rapports</button>
       <button data-view="controle">Contrôle <span id="alertBadge" class="hidden" style="display:inline-block;min-width:20px;padding:0 6px;border-radius:999px;background:var(--green);color:#fff;font-size:12px;line-height:20px"></span></button>
@@ -264,7 +265,7 @@ body.modal-open{overflow:hidden}
         <button type="button" id="navMods">Fonctionnalités utilisées</button>
         <button type="button" id="navCur">Devise</button>
         <button type="button" id="navTheme">Thème de l’application</button>
-        <button type="button" id="navRefresh">🔄 Actualiser l’application</button>
+        <button type="button" id="navRefresh"> Actualiser l’application</button>
         <button type="button" id="navPrint">Impression &amp; reçus</button>
         <button type="button" id="navPrn">Imprimantes thermiques</button>
         <button data-view="equipe">Équipe</button>
@@ -362,7 +363,7 @@ if (window.HorusApp && window.HorusApp.postMessage) {
   window.__nativeOpen = nativeOpen;
 }
 /* ---------- Mise à jour de l'application sans réinstaller ni perdre la connexion ---------- */
-const APP_VERSION = '2026.10.19-9';
+const APP_VERSION = '2026.10.19-10';
 async function refreshApp(){
   toast('Actualisation…');
   try { const reg = navigator.serviceWorker && await navigator.serviceWorker.getRegistration(); if (reg) { await reg.update(); if (reg.waiting) reg.waiting.postMessage('skipWaiting'); } } catch (_) {}
@@ -381,7 +382,7 @@ async function checkUpdate(){
       const d = document.createElement('div');
       d.setAttribute('role', 'status');
       d.style.cssText = 'position:fixed;left:50%;transform:translateX(-50%);bottom:calc(90px + env(safe-area-inset-bottom));z-index:60;max-width:92vw;display:flex;gap:12px;align-items:center;padding:10px 12px 10px 18px;border-radius:999px;background:var(--ink);color:#fff;box-shadow:0 10px 30px rgba(0,0,0,.3);font-weight:600';
-      d.innerHTML = '<span>✨ Nouvelle version disponible</span><button type="button" class="primary small" style="min-height:36px">Actualiser</button><button type="button" aria-label="Plus tard" style="background:none;border:0;color:#fff;min-height:36px;padding:0 6px">✕</button>';
+      d.innerHTML = '<span> Nouvelle version disponible</span><button type="button" class="primary small" style="min-height:36px">Actualiser</button><button type="button" aria-label="Plus tard" style="background:none;border:0;color:#fff;min-height:36px;padding:0 6px">✕</button>';
       d.children[1].onclick = refreshApp; d.children[2].onclick = () => d.remove();
       document.body.appendChild(d);
     }
@@ -460,9 +461,32 @@ function renderAuth(){
   $('authTitle').textContent = S.signup ? 'Créer un compte' : 'Connexion';
   $('authBtn').textContent = S.signup ? 'Créer mon compte' : 'Se connecter';
   $('authSwitchTxt').textContent = S.signup ? 'Déjà inscrit ?' : 'Pas encore de compte ?';
+  renderProfiles();
   $('authSwitch').textContent = S.signup ? 'Se connecter' : 'Créer un compte – 30 jours gratuits';
   $('password').autocomplete = S.signup ? 'new-password' : 'current-password';
   try { const last = localStorage.getItem('hh_last_email'); if (last && !$('email').value) { $('email').value = last; } $('remember').checked = authStore.remember(); } catch (_) {}
+}
+/* ---------- Profils enregistrés sur cet appareil (sans mot de passe) ---------- */
+const getProfiles = () => { try { return JSON.parse(localStorage.getItem('hh_profiles') || '[]'); } catch (_) { return []; } };
+const setProfiles = (l) => { try { localStorage.setItem('hh_profiles', JSON.stringify(l.slice(0, 6))); } catch (_) {} };
+function saveProfile(pr){ const k = pr.type === 'staff' ? 's:' + pr.code + ':' + pr.user : 'm:' + pr.email; const old = getProfiles().find(x => x.k === k) || {}; setProfiles([{ ...old, ...pr, k, at: Date.now() }, ...getProfiles().filter(x => x.k !== k)]); }
+function renderProfiles(){
+  const box = $('savedProfiles'); if (!box) return;
+  const list = getProfiles();
+  if (!list.length || S.signup) { box.innerHTML = ''; return; }
+  const ini = (t) => String(t || '?').split(/[\s.@]+/).filter(Boolean).slice(0, 2).map(x => x[0].toUpperCase()).join('');
+  box.innerHTML = `<div class="muted" style="font-size:12px;font-weight:800;letter-spacing:.08em;margin-bottom:8px">PROFILS ENREGISTRÉS</div>
+    <div style="display:grid;gap:8px;margin-bottom:16px">${list.map(x => `<div class="row" style="flex-wrap:nowrap;gap:10px;border:1px solid var(--line);border-radius:14px;padding:8px 10px;background:var(--card)">
+      <button type="button" data-prof="${esc(x.k)}" style="flex:1;display:flex;gap:12px;align-items:center;text-align:left;border:0;background:none;padding:2px;min-height:48px;min-width:0">
+        <span style="width:42px;height:42px;flex:none;border-radius:50%;background:${x.type === 'staff' ? 'var(--ink)' : 'var(--green)'};color:#fff;display:grid;place-items:center;font-weight:800">${esc(ini(x.name || x.user || x.email))}</span>
+        <span style="min-width:0"><strong style="display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(x.name || x.user || x.email)}</strong><span class="muted" style="font-size:12px;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${x.type === 'staff' ? 'Personnel · ' + esc(x.code) + ' · ' + esc(x.user) : esc(x.email)}${x.org ? ' · ' + esc(x.org) : ''}</span></span></button>
+      <button type="button" data-unprof="${esc(x.k)}" aria-label="Retirer ce profil" title="Retirer ce profil" style="border:0;background:none;color:var(--muted);min-height:40px;width:36px;padding:0">✕</button></div>`).join('')}</div>
+    <div class="muted" style="font-size:12px;margin:-6px 0 12px">Ou connectez-vous avec un autre compte :</div>`;
+  box.querySelectorAll('[data-prof]').forEach(b => b.onclick = () => { const x = getProfiles().find(y => y.k === b.dataset.prof); if (!x) return;
+    if (x.type === 'staff') { setAuthMode('staff'); $('sCode').value = x.code; $('sUser').value = x.user; $('sPin').value = ''; setTimeout(() => $('sPin').focus(), 40); }
+    else { setAuthMode('mail'); $('email').value = x.email; $('password').value = ''; setTimeout(() => $('password').focus(), 40); }
+    toast('Saisissez ' + (x.type === 'staff' ? 'votre code' : 'votre mot de passe') + ' pour ' + (x.name || x.user || x.email) + '.'); });
+  box.querySelectorAll('[data-unprof]').forEach(b => b.onclick = () => { setProfiles(getProfiles().filter(y => y.k !== b.dataset.unprof)); renderProfiles(); });
 }
 /* ---------- Connexion du personnel : code hôtel + identifiant + code à 4 chiffres ---------- */
 const staffEmail = (code, user) => `${user}.${code}@staff.horushotel.app`;
@@ -486,6 +510,7 @@ $('staffForm').addEventListener('submit', async e => {
     try { localStorage.setItem('hh_remember', $('sRemember').checked ? '1' : '0'); localStorage.setItem('hh_staff_code', code); } catch (_) {}
     const { error } = await sb.auth.signInWithPassword({ email: staffEmail(code, user), password: staffPass(code, user, pin) });
     if (error) throw error;
+    saveProfile({ type: 'staff', code, user });
   } catch (err) { $('sPin').value = ''; toast(/Invalid login/i.test(err.message) ? 'Code hôtel, identifiant ou code incorrect.' : /banned/i.test(err.message) ? 'Ce compte est suspendu. Contactez votre responsable.' : errMsg(err), true); }
   finally { btn.disabled = false; }
 });
@@ -548,6 +573,7 @@ $('authForm').addEventListener('submit', async e => {
       const { error } = await sb.auth.signInWithPassword({ email, password });
       if (error) throw error;
       try { localStorage.setItem('hh_last_email', email); } catch (_) {}
+      saveProfile({ type: 'mail', email: email.toLowerCase() });
       try { if (window.PasswordCredential && navigator.credentials) await navigator.credentials.store(new PasswordCredential({ id: email, password, name: email })); } catch (_) {}
     }
   } catch (err) { toast(err.message === 'Invalid login credentials' ? 'Identifiants incorrects.' : errMsg(err), true); }
@@ -572,7 +598,7 @@ async function boot(){
   if (PUBLIC_SLUG) return renderPublicPage(PUBLIC_SLUG);
   const { data: { session } } = await sb.auth.getSession();
   S.session = session;
-  if (!session) { renderAuth(); show('auth'); setTimeout(() => { const f = $('email').value ? $('password') : $('email'); if (f) f.focus(); }, 50); return; }
+  if (!session) { renderAuth(); renderProfiles(); show('auth'); setTimeout(() => { const f = $('email').value ? $('password') : $('email'); if (f) f.focus(); }, 50); return; }
   const [mem, adm] = await Promise.all([
     sb.from('organization_members').select('organization_id, role, username, display_name, must_change_password, organizations(name)').eq('user_id', session.user.id).eq('is_active', true).limit(1),
     sb.rpc('is_platform_admin')
@@ -591,6 +617,7 @@ async function boot(){
     return show('onboard');
   }
   S.org = S.member.organization_id;
+  try { const em = (session.user.email || '').toLowerCase(), md = session.user.user_metadata || {}; const k = md.staff ? 's:' + md.staff_code + ':' + md.username : 'm:' + em; const l = getProfiles(); const x = l.find(y => y.k === k); if (x) { x.name = S.member.display_name || (md.staff ? md.username : em.split('@')[0]); x.org = S.member.organizations ? S.member.organizations.name : ''; setProfiles(l); } } catch (_) {}
   $('orgLabel').textContent = (S.member.organizations ? S.member.organizations.name : '') + ' · ' + (ROLE_LABEL[S.member.role] || '');
   applyRoleNav();
   show('app');
@@ -1931,9 +1958,9 @@ function openClosure(sess, expected, done){
     const t = val(), box = $('clRes');
     if (t === null) { box.innerHTML = ''; return; }
     const g = t - expected;
-    if (g === 0) { box.innerHTML = `<div class="card" style="background:#E3F4E8;border-color:#BFE3CB;margin:0;padding:14px 16px;font-weight:700;color:#1F6B3A">✅ Caisse juste — aucun écart</div>`; return; }
+    if (g === 0) { box.innerHTML = `<div class="card" style="background:#E3F4E8;border-color:#BFE3CB;margin:0;padding:14px 16px;font-weight:700;color:#1F6B3A"> Caisse juste — aucun écart</div>`; return; }
     box.innerHTML = `<div class="card" style="background:${g < 0 ? '#FDE8E4' : '#FFF4E0'};border-color:${g < 0 ? '#F2C2B8' : '#F3D8A6'};margin:0;padding:14px 16px">
-        <div class="row between" style="flex-wrap:nowrap"><strong>⚠️ ${g < 0 ? 'Il manque' : 'Il y a en trop'}</strong><strong style="font-size:22px;color:${g < 0 ? 'var(--red)' : '#9A5B00'}">${g < 0 ? '−' : '+'}${money(Math.abs(g))}</strong></div>
+        <div class="row between" style="flex-wrap:nowrap"><strong> ${g < 0 ? 'Il manque' : 'Il y a en trop'}</strong><strong style="font-size:22px;color:${g < 0 ? 'var(--red)' : '#9A5B00'}">${g < 0 ? '−' : '+'}${money(Math.abs(g))}</strong></div>
         <div style="font-size:13px;font-weight:700;margin:10px 0 6px">Motif de l’écart</div>
         <div class="row" style="gap:6px">${[...GAP_REASONS, 'Autre…'].map(r => `<button type="button" class="small ${st.reason === r ? '' : 'ghost'}" data-gr="${esc(r)}">${esc(r)}</button>`).join('')}</div>
         ${st.reason === 'Autre…' ? `<input id="clOther" maxlength="300" placeholder="Précisez le motif" value="${esc(st.other)}" style="margin-top:8px">` : ''}</div>`;
@@ -1955,7 +1982,7 @@ function openClosure(sess, expected, done){
       <h2 style="font-size:24px;margin-bottom:6px">Caisse clôturée</h2>
       <p style="margin:0">Compté <strong>${money(t)}</strong> · attendu ${money(expected)}</p>
       <p style="margin:4px 0 0;font-weight:700;color:${g === 0 ? '#1F6B3A' : g < 0 ? 'var(--red)' : '#9A5B00'}">${g === 0 ? 'Aucun écart' : 'Écart ' + (g < 0 ? '−' : '+') + money(Math.abs(g)) + ' · ' + esc(reason)}</p></div>
-      <div class="row" style="margin-top:16px"><button class="primary" id="clZ" style="flex:1">🧾 Imprimer le ticket Z</button><button class="ghost" id="clP" style="flex:1">Rapport détaillé</button></div>
+      <div class="row" style="margin-top:16px"><button class="primary" id="clZ" style="flex:1"> Imprimer le ticket Z</button><button class="ghost" id="clP" style="flex:1">Rapport détaillé</button></div>
       <button class="ghost" data-close style="width:100%;margin-top:8px">Fermer</button>
       <p class="muted" style="font-size:12px;text-align:center;margin:10px 0 0">Le résumé reste consultable dans l’historique des clôtures.</p>`);
     $('clZ').onclick = () => printZ(data);
@@ -2333,7 +2360,7 @@ async function renderMyInvites(){
   box.querySelectorAll('[data-accept]').forEach(b => b.onclick = async () => { b.disabled = true; const { error } = await sb.rpc('accept_invitation', { p_invitation: b.dataset.accept }); if (error) { b.disabled = false; return toast(errMsg(error), true); } toast('Bienvenue dans l\u2019équipe.'); S.view = 'dashboard'; boot(); });
 }
 
-const STAFF_ROLES = { receptionist:['Réceptionniste','🛎️'], manager:['Gérant','🧭'], housekeeping:['Ménage','🧹'], accountant:['Comptable','📒'], staff:['Serveur / Barman','🍹'], admin:['Administrateur','🔑'] };
+const STAFF_ROLES = { receptionist:['Réceptionniste',''], manager:['Gérant',''], housekeeping:['Ménage',''], accountant:['Comptable',''], staff:['Serveur / Barman',''], admin:['Administrateur',''] };
 const randPin = () => { let p; do { p = String(Math.floor(Math.random() * 10000)).padStart(4, '0'); } while (/^(\d)\1{3}$/.test(p) || p === '1234'); return p; };
 const userSlug = (t) => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().split(/\s+/)[0].replace(/[^a-z0-9]/g, '').slice(0, 20);
 async function staffAdmin(body){
@@ -2361,7 +2388,7 @@ function openStaffForm(isOwner, done){
     <form id="sfForm"><div class="field"><label for="sfName">Nom et prénom</label><input id="sfName" required maxlength="80" placeholder="ex. Awa Koné"></div>
     <div class="field"><label for="sfUser">Identifiant de connexion</label><input id="sfUser" required pattern="[a-z0-9]{2,20}" maxlength="20" autocapitalize="none" spellcheck="false"><small class="muted">Lettres minuscules et chiffres, sans espace.</small></div>
     <label>Poste</label><div id="sfRoles" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:8px;margin:6px 0 6px">
-      ${roles.map(([k, [l, ic]], i) => `<label class="card" style="padding:10px;cursor:pointer;display:flex;gap:8px;align-items:center;margin:0"><input type="radio" name="sfRole" value="${k}" ${i === 0 ? 'checked' : ''} style="width:18px;min-height:18px"><span>${ic} ${l}</span></label>`).join('')}</div>
+      ${roles.map(([k, [l, ic]], i) => `<label class="card" style="padding:10px;cursor:pointer;display:flex;gap:8px;align-items:center;margin:0"><input type="radio" name="sfRole" value="${k}" ${i === 0 ? 'checked' : ''} style="width:18px;min-height:18px"><span>${l}</span></label>`).join('')}</div>
     <p class="muted" id="sfHelp" style="font-size:13px;margin:0 0 12px"></p>
     ${(S.ests || []).length > 1 ? `<div class="field"><label for="sfEst">Établissement</label><select id="sfEst"><option value="">Tous</option>${S.ests.map(e => `<option value="${esc(e.id)}">${esc(e.name)}</option>`).join('')}</select></div>` : ''}
     <div class="field"><label for="sfPin">Code provisoire (4 chiffres)</label><input id="sfPin" value="${pin}" inputmode="numeric" pattern="\\d{4}" maxlength="4" required style="letter-spacing:8px;font-size:20px;text-align:center"></div>
@@ -2401,7 +2428,7 @@ async function renderEquipe(){
   const card = (m) => `<div class="card" style="display:flex;flex-direction:column;gap:10px;${m.is_active ? '' : 'opacity:.6'}">
       <div class="row" style="flex-wrap:nowrap"><div style="width:46px;height:46px;border-radius:50%;background:var(--green);color:#fff;display:grid;place-items:center;font-weight:800;flex:none">${esc(initials(m))}</div>
       <div style="min-width:0"><strong style="display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(m.display_name || m.email || m.username)}${m.user_id === me ? ' <span class="muted">(vous)</span>' : ''}</strong>
-      <span class="muted" style="font-size:13px">${m.username ? '👤 ' + esc(m.username) : '✉️ ' + esc(m.email || '')}</span></div></div>
+      <span class="muted" style="font-size:13px">${m.username ? ' ' + esc(m.username) : ' ' + esc(m.email || '')}</span></div></div>
       <div class="row" style="gap:6px">${canTouch(m) ? `<select data-role="${esc(m.member_id)}" aria-label="Poste" style="flex:1;min-height:38px">${roleOpts(m.role)}</select>` : `<span class="pill st-trial">${esc(ROLE_LABEL[m.role] || m.role)}</span>`}
         <span class="pill ${m.is_active ? (m.must_change_password ? 'st-past_due' : 'st-active') : 'st-cancelled'}">${!m.is_active ? 'Suspendu' : m.must_change_password ? 'Code provisoire' : 'Actif'}</span></div>
       <span class="muted" style="font-size:12px">${seen(m.last_sign_in_at)}</span>
@@ -2453,7 +2480,7 @@ async function renderEquipe(){
 /* ================= Modules à cocher, devise, résultat & analyse ================= */
 const CURRENCIES = { XOF: ['Franc CFA (UEMOA)', 'F', 0], XAF: ['Franc CFA (CEMAC)', 'F', 0], GNF: ['Franc guinéen', 'FG', 0], CDF: ['Franc congolais', 'FC', 0], MGA: ['Ariary', 'Ar', 0], MAD: ['Dirham marocain', 'DH', 2], NGN: ['Naira', '₦', 0], GHS: ['Cedi', 'GH₵', 2], EUR: ['Euro', '€', 2], USD: ['Dollar US', '$', 2] };
 const MODULES = { planning: 'Planning', clients: 'Clients', menage: 'Ménage (état des chambres)', resto: 'Restaurant & Bar', depenses: 'Dépenses', factures: 'Factures', rapports: 'Rapports', mapage: 'Ma page de présentation', controle: 'Contrôle propriétaire', notifs: 'Notifications', multi: 'Plusieurs établissements', equipe: 'Équipe' };
-const MODULE_GROUPS = [['🏨 Hébergement', ['planning','clients','menage']], ['💰 Argent', ['depenses','factures']], ['🍽️ Restaurant & Bar', ['resto']], ['📊 Pilotage', ['rapports','controle','mapage']], ['⚙️ Organisation', ['notifs','multi','equipe']]];
+const MODULE_GROUPS = [[' Hébergement', ['planning','clients','menage']], [' Argent', ['depenses','factures']], [' Restaurant & Bar', ['resto']], [' Pilotage', ['rapports','controle','mapage']], [' Organisation', ['notifs','multi','equipe']]];
 const MODULE_HELP = { planning: 'Vue calendrier des chambres', clients: 'Fichier clients et historique', resto: 'Caisse restaurant/bar, produits et stock', depenses: 'Charges fixes, opérationnelles, budget', factures: 'Factures numérotées', rapports: 'Rapports financiers et exports', mapage: 'Page publique et réservation en ligne', controle: 'Alertes et journal des actions', menage: 'Statuts « à nettoyer » et rappels de ménage', notifs: 'La cloche et les alertes en direct', multi: 'Sélecteur d’établissement (si vous en avez plusieurs)', equipe: 'Comptes du personnel et invitations' };
 const moduleOn = (v) => !MODULES[v] || !S.modules || S.modules.includes(v);
 async function loadOrgPrefs(){
@@ -2539,7 +2566,7 @@ async function openAnalysis(months){
       <div class="card"><h3 style="font-size:16px;margin-bottom:10px">Où part l’argent</h3>${bars(expParts, 'var(--gold)', a.expenses_prev_by_category)}</div>
     </div>
     ${(a.top_products || []).length ? `<div class="card" style="margin-bottom:14px"><h3 style="font-size:16px;margin-bottom:8px">Meilleurs produits du mois</h3>${a.top_products.map((t, i) => `<div class="row between" style="padding:5px 0;border-bottom:1px dashed var(--line);font-size:14px"><span>${i + 1}. ${esc(t.name)} <span class="muted">× ${+t.qty}</span></span><span>${money(t.amount)} <span class="muted">· marge ${money(t.margin)}</span></span></div>`).join('')}</div>` : ''}
-    <div class="card" style="margin-bottom:14px"><h3 style="font-size:16px;margin-bottom:8px">Points d’attention</h3>${alerts.length ? alerts.map(x => `<div style="padding:6px 0;border-bottom:1px dashed var(--line);font-size:14px">⚠️ ${x}</div>`).join('') : '<p class="muted" style="margin:0">Rien à signaler ce mois-ci. 👍</p>'}</div>
+    <div class="card" style="margin-bottom:14px"><h3 style="font-size:16px;margin-bottom:8px">Points d’attention</h3>${alerts.length ? alerts.map(x => `<div style="padding:6px 0;border-bottom:1px dashed var(--line);font-size:14px"> ${x}</div>`).join('') : '<p class="muted" style="margin:0">Rien à signaler ce mois-ci. </p>'}</div>
     <div class="tablewrap"><table class="table" style="font-size:13px"><thead><tr><th>Mois</th><th>Chambres</th><th>Resto/Bar</th><th>Autres</th><th>Dépenses</th><th>Résultat</th><th>Occup.</th></tr></thead><tbody>
       ${s.slice().reverse().map(x => `<tr><td>${new Date(x.m + 'T00:00:00').toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })}</td><td>${money(x.rooms)}</td><td>${money(x.resto)}</td><td>${money(x.other)}</td><td>${money(x.expenses)}</td><td style="font-weight:700;color:${x.result < 0 ? 'var(--red)' : 'var(--green)'}">${money(x.result)}</td><td>${x.occupancy} %</td></tr>`).join('')}
     </tbody></table></div>
@@ -2608,7 +2635,7 @@ function openPrintSettings(){
   const row = (kind, title) => `<h3 style="font-size:16px;margin:12px 0 6px">${title}</h3><div style="display:grid;gap:6px">${Object.entries(PRINT_FMTS[kind]).map(([k, l]) => `<label class="card" style="margin:0;padding:10px 12px;display:flex;gap:10px;align-items:center;cursor:pointer"><input type="radio" name="pf_${kind}" value="${k}" ${getFmt(kind) === k ? 'checked' : ''} style="width:18px;min-height:18px">${l}</label>`).join('')}</div>`;
   modal(`<h2 style="font-size:22px;margin-bottom:4px">Impression</h2><p class="muted" style="margin:0 0 6px;font-size:14px">Réglage propre à cet appareil, selon l’imprimante qui y est branchée.</p>
     ${row('ticket', 'Tickets, reçus de caisse et clôtures')}${row('doc', 'Factures et rapports')}
-    ${can(['owner', 'admin']) ? `<button type="button" class="ghost" id="pfRc" style="width:100%;margin-top:14px;justify-content:center">✏️ Personnaliser le reçu (logo, adresse, message…)</button>` : ''}
+    ${can(['owner', 'admin']) ? `<button type="button" class="ghost" id="pfRc" style="width:100%;margin-top:14px;justify-content:center"> Personnaliser le reçu (logo, adresse, message…)</button>` : ''}
     <div class="row" style="margin-top:10px"><button class="ghost" type="button" id="pfTest" style="flex:1">Imprimer un test</button><button class="primary" data-close style="flex:1">Terminé</button></div>
     <p class="muted" style="font-size:12px;margin:10px 0 0">Astuce : dans la fenêtre d’impression, choisissez votre imprimante de tickets, marges « Aucune » et échelle 100 %.</p>`);
   document.querySelectorAll('[name^=pf_]').forEach(r => r.onchange = () => { try { localStorage.setItem('hh_print_' + r.name.slice(3), r.value); } catch (_) {} toast('Format enregistré : ' + PRINT_FMTS[r.name.slice(3)][r.value]); });
@@ -2616,7 +2643,7 @@ function openPrintSettings(){
   $('pfTest').onclick = () => printPosTicket({ server: myName(), number: 'TEST', total: 3500, outlet: 'bar', table: 'Table 1', method: 'cash', created_at: new Date().toISOString() }, [{ name: 'Flag 65cl', qty: 2, unit_price: 1000 }, { name: 'Coca-Cola', qty: 3, unit_price: 500 }]);
 }
 /* ================= Restaurant & Bar ================= */
-const OUTLETS = { restaurant: ['Restaurant', '🍽️'], bar: ['Bar', '🍹'] };
+const OUTLETS = { restaurant: ['Restaurant', 'R'], bar: ['Bar', 'B'] };
 const POS_OPS = [['wave', 'Wave'], ['orange_money', 'Orange'], ['mtn_money', 'MTN'], ['moov_money', 'Moov']];
 const UNITS = ['unité', 'bouteille', 'canette', 'verre', 'plat', 'portion', 'kg', 'litre', 'paquet'];
 const PROD_CATS = { restaurant: ['Entrées', 'Plats', 'Grillades', 'Accompagnements', 'Desserts', 'Petit-déjeuner'], bar: ['Bières', 'Sucreries', 'Eaux', 'Vins', 'Spiritueux', 'Cocktails', 'Cafés & thés'] };
@@ -2631,7 +2658,7 @@ async function uploadProductPhoto(file){
 }
 const prodThumb = (p, size = 64) => ((p.images && p.images[0]) || p.image_url)
   ? `<img src="${esc((p.images && p.images[0]) || p.image_url)}" alt="" loading="lazy" style="width:100%;height:${size}px;object-fit:cover;border-radius:12px;display:block">`
-  : `<div style="height:${size}px;border-radius:12px;background:var(--green-l);display:grid;place-items:center;font-size:${Math.round(size / 2.4)}px">${OUTLETS[p.outlet] ? OUTLETS[p.outlet][1] : '🍽️'}</div>`;
+  : `<div style="height:${size}px;border-radius:12px;background:var(--green-l);display:grid;place-items:center;font-size:${Math.round(size / 2.4)}px"><span style="font-family:var(--display);font-weight:800;color:var(--green);opacity:.55">${esc((p.name || '?').trim().charAt(0).toUpperCase())}</span></div>`;
 const stockTxt = (p) => !p.track_stock ? '' : Number(p.stock_qty) <= 0 ? '<span class="pill st-cancelled">Rupture</span>' : Number(p.stock_qty) <= Number(p.alert_qty) ? `<span class="pill st-past_due">Reste ${+p.stock_qty}</span>` : `<span class="muted" style="font-size:12px">Stock ${+p.stock_qty}</span>`;
 
 async function renderResto(){
@@ -2667,11 +2694,11 @@ function printPosTicket(s, items){
 
 /* ================= Imprimantes thermiques (ESC/POS) : USB filaire, série, Bluetooth, RawBT, système ================= */
 const PRN_TYPES = {
-  system: ['🖨️', 'Imprimante du système', 'Wi-Fi, réseau ou USB avec pilote installé : passe par la fenêtre d’impression.'],
-  usb: ['🔌', 'USB filaire (direct)', 'Imprimante de tickets branchée en USB. Chrome ou Edge sur ordinateur ou Android.'],
-  serial: ['🧵', 'Port série / COM', 'Imprimantes série, USB-série ou Bluetooth appairée en port COM (ordinateur, Chrome/Edge).'],
-  bluetooth: ['📶', 'Bluetooth', 'Petites imprimantes Bluetooth basse consommation (Chrome Android ou ordinateur).'],
-  rawbt: ['🤖', 'Android · application RawBT', 'Toutes imprimantes Bluetooth, USB ou réseau via l’application gratuite RawBT.']
+  system: ['', 'Imprimante du système', 'Wi-Fi, réseau ou USB avec pilote installé : passe par la fenêtre d’impression.'],
+  usb: ['', 'USB filaire (direct)', 'Imprimante de tickets branchée en USB. Chrome ou Edge sur ordinateur ou Android.'],
+  serial: ['', 'Port série / COM', 'Imprimantes série, USB-série ou Bluetooth appairée en port COM (ordinateur, Chrome/Edge).'],
+  bluetooth: ['', 'Bluetooth', 'Petites imprimantes Bluetooth basse consommation (Chrome Android ou ordinateur).'],
+  rawbt: ['', 'Android · application RawBT', 'Toutes imprimantes Bluetooth, USB ou réseau via l’application gratuite RawBT.']
 };
 const PRN_ROLES = { caisse: 'Caisse (tickets clients)', cuisine: 'Cuisine / Bar (bons de commande)' };
 const BLE_SERVICES = ['000018f0-0000-1000-8000-00805f9b34fb', 'e7810a71-73ae-499d-8c15-faa9aef0c3f2', '49535343-fe7d-4ae5-8fa9-9fafd205e455', '0000ff00-0000-1000-8000-00805f9b34fb', '0000fee7-0000-1000-8000-00805f9b34fb', '0000ae30-0000-1000-8000-00805f9b34fb'];
@@ -2792,7 +2819,7 @@ function openPrinterSetup(role = 'caisse'){
     $('modalBody').innerHTML = `<div class="row between" style="margin-bottom:6px"><h2 style="font-size:22px">Imprimantes</h2><button class="small ghost" data-close style="border:0;font-size:18px" aria-label="Fermer">✕</button></div>
       <p class="muted" style="margin:0 0 10px;font-size:13px">Réglage propre à cet appareil. Branchez ou allumez l’imprimante avant de la connecter.</p>
       <div class="row" style="gap:6px;margin-bottom:12px;flex-wrap:nowrap">${Object.entries(PRN_ROLES).map(([k, l]) => `<button type="button" class="small ${k === role ? '' : 'ghost'}" data-prole="${k}" style="flex:1">${l}</button>`).join('')}</div>
-      <div style="display:grid;gap:6px">${Object.entries(PRN_TYPES).map(([k, [ic, l, d]]) => { const sup = prnSupported(k); return `<label class="card" style="margin:0;padding:10px 12px;display:flex;gap:10px;align-items:flex-start;cursor:${sup ? 'pointer' : 'not-allowed'};${sup ? '' : 'opacity:.5'};${c.type === k ? 'border-color:var(--green);background:var(--green-l)' : ''}"><input type="radio" name="ptype" value="${k}" ${c.type === k ? 'checked' : ''} ${sup ? '' : 'disabled'} style="width:18px;min-height:18px;margin-top:3px"><span><strong>${ic} ${l}</strong>${PRN.conn[role + ':' + k] ? ' <span class="pill st-active">connectée</span>' : ''}<br><span class="muted" style="font-size:12px">${d}${sup ? '' : ' — non disponible sur ce navigateur'}</span></span></label>`; }).join('')}</div>
+      <div style="display:grid;gap:6px">${Object.entries(PRN_TYPES).map(([k, [ic, l, d]]) => { const sup = prnSupported(k); return `<label class="card" style="margin:0;padding:10px 12px;display:flex;gap:10px;align-items:flex-start;cursor:${sup ? 'pointer' : 'not-allowed'};${sup ? '' : 'opacity:.5'};${c.type === k ? 'border-color:var(--green);background:var(--green-l)' : ''}"><input type="radio" name="ptype" value="${k}" ${c.type === k ? 'checked' : ''} ${sup ? '' : 'disabled'} style="width:18px;min-height:18px;margin-top:3px"><span><strong>${l}</strong>${PRN.conn[role + ':' + k] ? ' <span class="pill st-active">connectée</span>' : ''}<br><span class="muted" style="font-size:12px">${d}${sup ? '' : ' — non disponible sur ce navigateur'}</span></span></label>`; }).join('')}</div>
       <div class="row" style="gap:10px;margin-top:12px">
         <div style="flex:1"><label>Largeur du papier</label><select id="pW"><option value="80" ${+c.width === 80 ? 'selected' : ''}>80 mm (48 caractères)</option><option value="58" ${+c.width === 58 ? 'selected' : ''}>58 mm (32 caractères)</option></select></div>
         <div style="flex:1"><label>Exemplaires</label><select id="pCopies">${[1, 2, 3].map(n => `<option ${+c.copies === n ? 'selected' : ''}>${n}</option>`).join('')}</select></div>
@@ -2870,7 +2897,7 @@ async function scanBarcode(onCode){
 function drawPos(){
   const body = $('rBody');
   if (!S.products.filter(p => p.is_active !== false).length) {
-    body.innerHTML = `<div class="card" style="text-align:center;padding:36px"><div style="font-size:42px">🍽️🍹</div><h2 style="font-size:22px;margin:8px 0">Ajoutez votre carte</h2><p class="muted">Créez vos plats et boissons avec leurs photos, leur prix d’achat et leur prix de vente. Le stock se décompte tout seul à chaque vente.</p>${isMgr() ? '<button class="primary" type="button" id="rFirst">+ Ajouter un produit</button>' : '<p class="muted">Demandez au gérant d’ajouter les produits.</p>'}</div>`;
+    body.innerHTML = `<div class="card" style="text-align:center;padding:36px"><div style="font-size:42px"></div><h2 style="font-size:22px;margin:8px 0">Ajoutez votre carte</h2><p class="muted">Créez vos plats et boissons avec leurs photos, leur prix d’achat et leur prix de vente. Le stock se décompte tout seul à chaque vente.</p>${isMgr() ? '<button class="primary" type="button" id="rFirst">+ Ajouter un produit</button>' : '<p class="muted">Demandez au gérant d’ajouter les produits.</p>'}</div>`;
     if ($('rFirst')) $('rFirst').onclick = () => openProductForm(null);
     return;
   }
@@ -2885,23 +2912,23 @@ function drawPos(){
   const c = prnCfg('caisse');
   body.innerHTML = `<div class="posgrid">
     <div>
-      <div class="row" style="gap:6px;margin-bottom:10px;flex-wrap:nowrap">${Object.entries(OUTLETS).map(([k, [l, ic]]) => `<button type="button" class="${S.rOutlet === k ? 'primary' : 'ghost'}" data-outlet="${k}" style="flex:1">${ic} ${l}</button>`).join('')}</div>
+      <div class="row" style="gap:6px;margin-bottom:10px;flex-wrap:nowrap">${Object.entries(OUTLETS).map(([k, [l, ic]]) => `<button type="button" class="${S.rOutlet === k ? 'primary' : 'ghost'}" data-outlet="${k}" style="flex:1">${l}</button>`).join('')}</div>
       <div class="row" style="gap:6px;margin-bottom:10px;flex-wrap:nowrap">
         <input id="rQ" type="search" placeholder="Rechercher ou scanner un code-barres…" value="${esc(S.rQ || '')}" style="flex:1;min-width:0" autocomplete="off">
         <button type="button" class="ghost small" id="rScan" title="Scanner" aria-label="Scanner un code-barres" style="min-width:44px">▦</button>
         <button type="button" class="ghost small" id="rFull" title="Plein écran" aria-label="Plein écran" style="min-width:44px">⤢</button>
       </div>
       <div class="row" style="gap:6px;margin-bottom:10px;overflow-x:auto;flex-wrap:nowrap">
-        <button type="button" class="small ghost" id="rHolds" style="white-space:nowrap">🕒 En attente${holds.length ? ` <span class="pill st-past_due">${holds.length}</span>` : ''}</button>
+        <button type="button" class="small ghost" id="rHolds" style="white-space:nowrap"> En attente${holds.length ? ` <span class="pill st-past_due">${holds.length}</span>` : ''}</button>
         <button type="button" class="small ghost" id="rHist" style="white-space:nowrap">Historique</button>
-        <button type="button" class="small ghost" id="rPrn" style="white-space:nowrap">🖨️ Imprimante <span id="posPrnDot" style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#E0A100;vertical-align:middle"></span></button>
+        <button type="button" class="small ghost" id="rPrn" style="white-space:nowrap"> Imprimante <span id="posPrnDot" style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#E0A100;vertical-align:middle"></span></button>
         ${c.type !== 'system' ? '<button type="button" class="small ghost" id="rDrawer" style="white-space:nowrap">Tiroir</button>' : ''}
       </div>
       <div class="row" style="gap:6px;margin-bottom:12px;overflow-x:auto;flex-wrap:nowrap"><button type="button" class="small ${!S.rCat ? '' : 'ghost'}" data-rcat="">Tout</button>${cats.map(cc => `<button type="button" class="small ${S.rCat === cc ? '' : 'ghost'}" data-rcat="${esc(cc)}" style="white-space:nowrap">${esc(cc)}</button>`).join('')}</div>
       <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px">
         ${shown.map(p => { const n = inCart(p.id), out = p.track_stock && Number(p.stock_qty) - n <= 0, low = p.track_stock && !out && Number(p.stock_qty) <= Number(p.alert_qty), img = prodImg(p), promo = effPrice(p) < Number(p.sale_price);
           return `<button type="button" data-add="${esc(p.id)}" ${out && !n ? 'disabled' : ''} style="position:relative;display:flex;flex-direction:column;align-items:stretch;text-align:left;padding:0;border-radius:18px;border:1.5px solid ${n ? 'var(--green)' : 'var(--line)'};background:var(--card);min-height:0;overflow:hidden;box-shadow:0 2px 10px rgba(0,0,0,.04)">
-            <div style="position:relative;aspect-ratio:1/1;background:var(--green-l);display:grid;place-items:center;font-size:44px;${out ? 'filter:grayscale(1);opacity:.55' : ''}">${img ? `<img src="${esc(img)}" alt="" loading="lazy" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover">` : (OUTLETS[p.outlet] || ['', '🍽️'])[1]}
+            <div style="position:relative;aspect-ratio:1/1;background:var(--green-l);display:grid;place-items:center;font-size:44px;${out ? 'filter:grayscale(1);opacity:.55' : ''}">${img ? `<img src="${esc(img)}" alt="" loading="lazy" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover">` : `<span style="font-family:var(--display);font-weight:800;color:var(--green);opacity:.55">${esc((p.name || '?').trim().charAt(0).toUpperCase())}</span>`}
               ${out ? '<span class="pill" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:#E36A6A;color:#fff">Rupture</span>' : low ? '<span class="pill" style="position:absolute;top:8px;left:8px;background:#E8A317;color:#fff">Stock faible</span>' : ''}
               ${(p.variants || []).length ? '<span class="pill" style="position:absolute;bottom:8px;left:8px;background:rgba(255,255,255,.92);color:#222">Options</span>' : ''}</div>
             <div style="padding:10px 12px 12px"><strong style="display:block;font-size:14px;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(p.name)}</strong>
@@ -2910,19 +2937,19 @@ function drawPos(){
       </div>
     </div>
     <div class="card poscart" id="rCart" style="display:flex;flex-direction:column;gap:8px">
-      <div class="row between"><h3 style="font-size:20px">Panier</h3><span class="muted">🛒 ${count} article${count > 1 ? 's' : ''}</span></div>
-      <button type="button" class="ghost small" id="rHold" ${S.cart.length ? '' : 'disabled'} style="width:100%;background:#FFF4E5;border-color:#F3C98B;color:#9A5B00">🕒 Mettre en attente</button>
+      <div class="row between"><h3 style="font-size:20px">Panier</h3><span class="muted"> ${count} article${count > 1 ? 's' : ''}</span></div>
+      <button type="button" class="ghost small" id="rHold" ${S.cart.length ? '' : 'disabled'} style="width:100%;background:#FFF4E5;border-color:#F3C98B;color:#9A5B00"> Mettre en attente</button>
       <div style="max-height:40vh;overflow-y:auto">${S.cart.map(it => `<div class="row" style="padding:8px 0;border-bottom:1px dashed var(--line);flex-wrap:nowrap;gap:8px">
           <div style="min-width:0;flex:1"><strong style="display:block;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(it.name)}</strong><span class="muted" style="font-size:12px">${money(it.price)}${it.sent ? ` · ${it.sent} envoyé(s)` : ''}</span></div>
           <div class="row" style="gap:4px;flex-wrap:nowrap"><button type="button" class="small ghost" data-dec="${esc(it.key)}" aria-label="Retirer un" style="min-width:34px;padding:0">−</button><strong style="min-width:20px;text-align:center">${it.qty}</strong><button type="button" class="small ghost" data-inc="${esc(it.key)}" aria-label="Ajouter un" style="min-width:34px;padding:0">+</button></div>
           <button type="button" class="small ghost" data-del="${esc(it.key)}" aria-label="Supprimer" style="min-width:30px;padding:0;border:0;color:var(--red)">✕</button></div>`).join('') || '<p class="muted" style="text-align:center;padding:18px 0">Touchez un produit pour l’ajouter.</p>'}</div>
       <div class="row" style="gap:6px;flex-wrap:nowrap"><input id="rTable" placeholder="# N° table / chambre" value="${esc(S.rTable || '')}" maxlength="30" style="flex:1;min-width:0"><input id="rServer" list="rServers" placeholder="Serveur(se)" value="${esc(S.rServer || '')}" maxlength="60" style="flex:1;min-width:0"><datalist id="rServers">${(() => { try { return JSON.parse(localStorage.getItem('hh_servers') || '[]'); } catch (_) { return []; } })().map(n => `<option value="${esc(n)}">`).join('')}</datalist></div>
       <div class="row between" style="margin:4px 0"><span style="font-size:20px;font-weight:700">Total</span><span style="font-family:var(--display);font-size:30px;font-weight:800;color:var(--green)">${money(total)}</span></div>
-      <button class="ghost" type="button" id="rKitchen" style="width:100%;background:var(--ink);color:var(--card);border-color:var(--ink)" ${unsent ? '' : 'disabled'}>👨‍🍳 Envoyer en ${S.rOutlet === 'bar' ? 'préparation (bar)' : 'cuisine'}${unsent ? ` · ${unsent}` : ''}</button>
-      <button class="ghost" type="button" id="rBill" style="width:100%" ${S.cart.length ? '' : 'disabled'}>🧾 Imprimer l’addition</button>
+      <button class="ghost" type="button" id="rKitchen" style="width:100%;background:var(--ink);color:var(--card);border-color:var(--ink)" ${unsent ? '' : 'disabled'}> Envoyer en ${S.rOutlet === 'bar' ? 'préparation (bar)' : 'cuisine'}${unsent ? ` · ${unsent}` : ''}</button>
+      <button class="ghost" type="button" id="rBill" style="width:100%" ${S.cart.length ? '' : 'disabled'}> Imprimer l’addition</button>
       <button class="primary" type="button" id="rPay" style="width:100%;min-height:56px;font-size:18px" ${S.cart.length ? '' : 'disabled'}>Encaisser · ${money(total)}</button>
     </div></div>
-    ${S.cart.length ? `<button type="button" class="primary posfab" id="rFab">🛒 ${count} · ${money(total)}</button>` : ''}`;
+    ${S.cart.length ? `<button type="button" class="primary posfab" id="rFab"> ${count} · ${money(total)}</button>` : ''}`;
   prnStatus();
   body.querySelectorAll('[data-outlet]').forEach(b => b.onclick = () => { S.rOutlet = b.dataset.outlet; S.rCat = null; drawPos(); });
   body.querySelectorAll('[data-rcat]').forEach(b => b.onclick = () => { S.rCat = b.dataset.rcat || null; drawPos(); });
@@ -2982,7 +3009,7 @@ function openPosPay(total){
     const change = st.mode === 'cash' && +st.received >= total ? +st.received - total : null;
     $('pp').innerHTML = `<div class="row between" style="margin-bottom:12px"><h2 style="font-size:24px">Encaisser</h2><button class="small ghost" data-close aria-label="Fermer" style="border:0;font-size:18px">✕</button></div>
       <div style="border-radius:18px;padding:16px 18px;margin-bottom:14px;background:var(--green-l)"><div style="font-size:12px;font-weight:800;letter-spacing:.14em;color:var(--muted)">${esc(OUTLETS[S.rOutlet][0].toUpperCase())}${S.rTable ? ' · ' + esc(S.rTable) : ''}${S.rServer ? ' · ' + esc(S.rServer) : ''}</div><div style="font-family:var(--display);font-weight:800;font-size:34px">${money(total)}</div></div>
-      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px">${[['cash', '💵', 'Espèces'], ['mobile', '📱', 'Mobile'], ['card', '💳', 'Carte']].map(([k, ic, l]) => `<button type="button" data-pm="${k}" style="min-height:72px;display:flex;flex-direction:column;gap:2px;align-items:center;justify-content:center;border-radius:14px;border:2px solid ${st.mode === k ? 'var(--green)' : 'var(--line)'};background:${st.mode === k ? 'var(--green-l)' : 'var(--card)'};font-weight:700"><span style="font-size:22px">${ic}</span>${l}</button>`).join('')}</div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px">${[['cash', '', 'Espèces'], ['mobile', '', 'Mobile'], ['card', '', 'Carte']].map(([k, ic, l]) => `<button type="button" data-pm="${k}" style="min-height:72px;display:flex;flex-direction:column;gap:2px;align-items:center;justify-content:center;border-radius:14px;border:2px solid ${st.mode === k ? 'var(--green)' : 'var(--line)'};background:${st.mode === k ? 'var(--green-l)' : 'var(--card)'};font-weight:700"><span style="font-size:22px">${ic}</span>${l}</button>`).join('')}</div>
       ${st.mode === 'cash' ? `<label for="ppGiven">Montant reçu</label><input id="ppGiven" inputmode="numeric" value="${esc(st.received)}" placeholder="${total}">
         <div class="row" style="gap:6px;margin:8px 0">${chips.map(v => `<button type="button" class="small ghost" data-given="${v}">${money(v)}</button>`).join('')}</div>
         ${change !== null ? `<div class="row between card" style="background:var(--gold-l);margin:8px 0"><strong>Monnaie à rendre</strong><strong style="font-size:22px">${money(change)}</strong></div>` : ''}` : ''}
@@ -3010,7 +3037,7 @@ function openPosPay(total){
       modal(`<div style="text-align:center"><div style="width:64px;height:64px;border-radius:50%;background:var(--green-l);display:grid;place-items:center;margin:0 auto 10px;font-size:30px">✓</div>
         <h2 style="font-size:24px;margin-bottom:4px">Ticket n° ${data.number} encaissé</h2><p style="font-family:var(--display);font-size:30px;font-weight:800;margin:4px 0">${money(data.total)}</p>
         ${change !== null && change > 0 ? `<p class="muted">Monnaie à rendre : <strong>${money(change)}</strong></p>` : ''}<p class="muted" style="font-size:13px">Stock mis à jour · recette ajoutée à la caisse</p>
-        <p style="font-size:13px;margin:4px 0 0"><a href="#" id="tkFmt">🖨️ ${esc(PRN_TYPES[cfg.type][1])} · ${cfg.type === 'system' ? esc(PRINT_FMTS.ticket[getFmt('ticket')]) : cfg.width + ' mm'} · changer</a></p></div>
+        <p style="font-size:13px;margin:4px 0 0"><a href="#" id="tkFmt"> ${esc(PRN_TYPES[cfg.type][1])} · ${cfg.type === 'system' ? esc(PRINT_FMTS.ticket[getFmt('ticket')]) : cfg.width + ' mm'} · changer</a></p></div>
         <div class="row" style="margin-top:14px"><button class="ghost" type="button" id="tkPrint" style="flex:1">Imprimer le ticket</button><button class="primary" data-close style="flex:1">Nouvelle commande</button></div>`);
       $('tkFmt').onclick = (e) => { e.preventDefault(); openPrinterSetup('caisse'); };
       $('tkPrint').onclick = doPrint;
@@ -3034,14 +3061,14 @@ function openProductForm(p, preset){
       <div id="pfImgs" style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px"></div>
       <input id="pfImg" type="file" accept="image/jpeg,image/png,image/webp" multiple class="sr-only">
       ${sec('Informations de base')}
-      <div class="row" style="gap:6px;margin-bottom:12px;flex-wrap:nowrap">${Object.entries(OUTLETS).map(([k, [l, ic]]) => `<label class="card" style="flex:1;padding:10px;margin:0;cursor:pointer;display:flex;gap:8px;align-items:center"><input type="radio" name="pfOut" value="${k}" ${p.outlet === k ? 'checked' : ''} style="width:18px;min-height:18px">${ic} ${l}</label>`).join('')}</div>
+      <div class="row" style="gap:6px;margin-bottom:12px;flex-wrap:nowrap">${Object.entries(OUTLETS).map(([k, [l, ic]]) => `<label class="card" style="flex:1;padding:10px;margin:0;cursor:pointer;display:flex;gap:8px;align-items:center"><input type="radio" name="pfOut" value="${k}" ${p.outlet === k ? 'checked' : ''} style="width:18px;min-height:18px">${l}</label>`).join('')}</div>
       <div class="field"><label for="pfName">Nom du produit</label><input id="pfName" required maxlength="80" value="${esc(p.name || '')}" placeholder="ex. Poulet braisé, Flag 65cl"></div>
       <div class="row" style="gap:10px"><div class="field" style="flex:1 1 160px"><label for="pfCat">Catégorie</label><input id="pfCat" list="pfCats" maxlength="40" value="${esc(p.category || '')}" placeholder="ex. Plats, Bières"><datalist id="pfCats">${cats.map(c => `<option value="${esc(c)}">`).join('')}</datalist></div>
         <div class="field" style="flex:1 1 110px"><label for="pfUnit">Unité</label><select id="pfUnit">${UNITS.map(u => `<option ${u === p.unit ? 'selected' : ''}>${u}</option>`).join('')}</select></div></div>
       ${sec('Prix et promotions')}
       <div class="row" style="gap:10px"><div class="field" style="flex:1"><label for="pfSell">Prix normal *</label><input id="pfSell" inputmode="numeric" required value="${p.sale_price != null ? +p.sale_price : ''}" placeholder="0"></div>
         <div class="field" style="flex:1"><label for="pfPromo">Prix promotionnel</label><input id="pfPromo" inputmode="numeric" value="${p.promo_price != null ? +p.promo_price : ''}" placeholder="—"></div></div>
-      <details class="card" style="padding:12px 14px;margin:0 0 6px" ${p.purchase_price > 0 || p.supplier ? 'open' : ''}><summary style="cursor:pointer;font-weight:700">🚚 Prix d’achat & fournisseur <span class="muted" style="font-weight:400;font-size:12px">— pour calculer la marge et valoriser le stock</span></summary>
+      <details class="card" style="padding:12px 14px;margin:0 0 6px" ${p.purchase_price > 0 || p.supplier ? 'open' : ''}><summary style="cursor:pointer;font-weight:700"> Prix d’achat & fournisseur <span class="muted" style="font-weight:400;font-size:12px">— pour calculer la marge et valoriser le stock</span></summary>
         <div class="row" style="gap:10px;margin-top:10px"><div class="field" style="flex:1"><label for="pfBuy">Prix d’achat</label><input id="pfBuy" inputmode="numeric" value="${+p.purchase_price || ''}" placeholder="0"></div><div class="field" style="flex:1"><label for="pfSup">Fournisseur</label><input id="pfSup" maxlength="80" value="${esc(p.supplier || '')}" placeholder="ex. Solibra"></div></div></details>
       <p class="muted" id="pfMargin" style="margin:0 0 6px;font-size:13px"></p>
       ${sec('Stock', '')}
@@ -3049,7 +3076,7 @@ function openProductForm(p, preset){
       <div class="row" id="pfStockRow" style="gap:10px">${isNew ? `<div class="field" style="flex:1"><label for="pfInit">Stock disponible</label><input id="pfInit" inputmode="decimal" placeholder="0"></div>` : `<div class="field" style="flex:1"><label>Stock disponible</label><input value="${+p.stock_qty} ${esc(p.unit)}" disabled></div>`}
         <div class="field" style="flex:1"><label for="pfAlert">Alerte quand il reste</label><input id="pfAlert" inputmode="decimal" value="${+p.alert_qty || 0}"></div></div>
       <div class="field"><label for="pfBar">Code-barres</label><div class="row" style="gap:6px;flex-wrap:nowrap"><input id="pfBar" maxlength="64" value="${esc(p.barcode || '')}" placeholder="ex. 6001234567890" style="flex:1;min-width:0"><button type="button" class="primary small" id="pfScan" aria-label="Scanner" style="min-width:48px">▦</button></div></div>
-      <div id="pfPrepBox">${sec('👨‍🍳 Cuisine')}<div class="field"><label for="pfPrep">Temps de préparation (minutes)</label><input id="pfPrep" inputmode="numeric" value="${p.prep_minutes ?? ''}" placeholder="ex. 15"><small class="muted">Affiché sur le bon de cuisine. Laissez vide si non applicable.</small></div></div>
+      <div id="pfPrepBox">${sec(' Cuisine')}<div class="field"><label for="pfPrep">Temps de préparation (minutes)</label><input id="pfPrep" inputmode="numeric" value="${p.prep_minutes ?? ''}" placeholder="ex. 15"><small class="muted">Affiché sur le bon de cuisine. Laissez vide si non applicable.</small></div></div>
       ${sec('Description')}
       <textarea id="pfDesc" maxlength="2000" rows="3" placeholder="Décrivez votre produit (ingrédients, accompagnement…)" style="width:100%;padding:10px 12px;border-radius:12px;border:1px solid var(--line);font:inherit;background:var(--card);color:inherit">${esc(p.description || '')}</textarea>
       ${sec('Variantes du produit', 'Tailles, cuissons, accompagnements… avec un prix propre si besoin')}
@@ -3063,7 +3090,7 @@ function openProductForm(p, preset){
   $('modalBody').style.maxWidth = '640px';
   const num = (id) => { const v = String(($(id) || {}).value || '').replace(/\s/g, '').replace(',', '.'); return v === '' ? null : Number(v); };
   const drawImgs = () => { $('pfImgs').innerHTML = st.images.map((u, i) => `<div style="position:relative;aspect-ratio:1/1;border-radius:14px;overflow:hidden;border:1px solid var(--line)"><img src="${esc(u)}" alt="" style="width:100%;height:100%;object-fit:cover">${i === 0 ? '<span class="pill" style="position:absolute;bottom:4px;left:4px;font-size:10px;background:var(--ink);color:var(--card)">Principale</span>' : ''}<button type="button" data-rmimg="${i}" aria-label="Retirer" style="position:absolute;top:4px;right:4px;min-height:26px;width:26px;padding:0;border-radius:50%;border:0;background:rgba(0,0,0,.6);color:#fff">✕</button></div>`).join('')
-      + (st.images.length < 4 ? `<label for="pfImg" style="aspect-ratio:1/1;border-radius:14px;border:2px dashed var(--line);display:grid;place-items:center;cursor:pointer;text-align:center;margin:0;background:var(--card)"><span class="muted" style="font-size:12px">⬆️<br>Galerie (${st.images.length}/4)<br><span style="font-size:10px">JPG, PNG, WebP</span></span></label>` : '');
+      + (st.images.length < 4 ? `<label for="pfImg" style="aspect-ratio:1/1;border-radius:14px;border:2px dashed var(--line);display:grid;place-items:center;cursor:pointer;text-align:center;margin:0;background:var(--card)"><span class="muted" style="font-size:12px"><br>Galerie (${st.images.length}/4)<br><span style="font-size:10px">JPG, PNG, WebP</span></span></label>` : '');
     $('pfImgs').querySelectorAll('[data-rmimg]').forEach(b => b.onclick = () => { st.images.splice(+b.dataset.rmimg, 1); drawImgs(); }); };
   const drawVars = () => { $('pfVars').innerHTML = st.variants.map((v, i) => `<div class="row" style="gap:6px;margin-bottom:6px;flex-wrap:nowrap"><input data-vn="${i}" maxlength="60" value="${esc(v.name || '')}" placeholder="ex. Grand, Bien cuit, + frites" style="flex:2;min-width:0"><input data-vp="${i}" inputmode="numeric" value="${v.price ?? ''}" placeholder="Prix (sinon prix normal)" style="flex:1;min-width:0"><button type="button" class="small ghost" data-vrm="${i}" aria-label="Retirer" style="min-width:36px;padding:0;color:var(--red)">✕</button></div>`).join('');
     $('pfVars').querySelectorAll('[data-vn]').forEach(x => x.oninput = () => { st.variants[+x.dataset.vn].name = x.value; });
@@ -3108,7 +3135,7 @@ function drawProducts(){
   const body = $('rBody');
   const by = (o) => S.products.filter(p => p.outlet === o);
   const margin = (p) => Number(p.sale_price) > 0 ? Math.round((Number(p.sale_price) - Number(p.purchase_price)) / Number(p.sale_price) * 100) : 0;
-  body.innerHTML = Object.entries(OUTLETS).map(([o, [l, ic]]) => `<h3 style="font-size:18px;margin:6px 0 10px">${ic} ${l} <span class="muted" style="font-size:14px">· ${by(o).length} produit(s)</span></h3>
+  body.innerHTML = Object.entries(OUTLETS).map(([o, [l, ic]]) => `<h3 style="font-size:18px;margin:6px 0 10px">${l} <span class="muted" style="font-size:14px">· ${by(o).length} produit(s)</span></h3>
     <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;margin-bottom:20px">${by(o).map(p => `<div class="card" style="padding:10px;display:flex;gap:10px;flex-direction:column">
       ${prodThumb(p, 110)}
       <div style="${p.is_active === false ? 'opacity:.55' : ''}"><strong>${esc(p.name)}</strong>${p.is_active === false ? ' <span class="pill st-cancelled">inactif</span>' : ''}${effPrice(p) < Number(p.sale_price) ? ' <span class="pill st-past_due">promo</span>' : ''}${(p.variants || []).length ? ` <span class="pill st-trial">${p.variants.length} variante(s)</span>` : ''}<div class="muted" style="font-size:12px">${esc(p.category || 'Sans catégorie')} · ${esc(p.unit)}${p.barcode ? ' · ▦ ' + esc(p.barcode) : ''}</div></div>
@@ -3149,9 +3176,9 @@ async function drawStock(){
       <div class="card kpi"><div class="l muted">Valeur du stock (prix d’achat)</div><div style="font-family:var(--display);font-size:26px;font-weight:800">${money(value)}</div></div>
       <div class="card kpi"><div class="l muted">Produits suivis</div><div style="font-family:var(--display);font-size:26px;font-weight:800">${tracked.length}</div></div>
       <div class="card kpi"><div class="l muted">À réapprovisionner</div><div style="font-family:var(--display);font-size:26px;font-weight:800;color:${low.length ? 'var(--red)' : 'inherit'}">${low.length}</div></div></div>
-    ${low.length ? `<div class="card" style="margin-bottom:16px;border-color:var(--gold-l)"><h3 style="font-size:18px;margin-bottom:8px">⚠️ À commander</h3>${low.map(p => `<div class="row between" style="padding:8px 0;border-bottom:1px solid var(--line)"><span><strong>${esc(p.name)}</strong> <span class="muted">· reste ${+p.stock_qty} ${esc(p.unit)} (alerte ${+p.alert_qty})</span></span><button class="small" type="button" data-sin="${esc(p.id)}">+ Stock</button></div>`).join('')}</div>` : ''}
+    ${low.length ? `<div class="card" style="margin-bottom:16px;border-color:var(--gold-l)"><h3 style="font-size:18px;margin-bottom:8px"> À commander</h3>${low.map(p => `<div class="row between" style="padding:8px 0;border-bottom:1px solid var(--line)"><span><strong>${esc(p.name)}</strong> <span class="muted">· reste ${+p.stock_qty} ${esc(p.unit)} (alerte ${+p.alert_qty})</span></span><button class="small" type="button" data-sin="${esc(p.id)}">+ Stock</button></div>`).join('')}</div>` : ''}
     <div class="card" style="margin-bottom:16px"><h3 style="font-size:18px;margin-bottom:8px">État du stock</h3><div class="tablewrap"><table class="table"><thead><tr><th>Produit</th><th>Stock</th><th>Prix d’achat</th><th>Valeur</th><th></th></tr></thead><tbody>
-      ${tracked.map(p => `<tr><td>${esc(p.name)} <span class="muted">${esc(OUTLETS[p.outlet][1])}</span></td><td><strong>${+p.stock_qty}</strong> ${esc(p.unit)}</td><td>${money(p.purchase_price)}</td><td>${money(Math.max(0, p.stock_qty) * p.purchase_price)}</td>
+      ${tracked.map(p => `<tr><td>${esc(p.name)} <span class="muted">· ${esc(OUTLETS[p.outlet][0])}</span></td><td><strong>${+p.stock_qty}</strong> ${esc(p.unit)}</td><td>${money(p.purchase_price)}</td><td>${money(Math.max(0, p.stock_qty) * p.purchase_price)}</td>
         <td style="text-align:right;white-space:nowrap"><button class="small ghost" type="button" data-sin="${esc(p.id)}">+ Entrée</button> <button class="small ghost" type="button" data-inv="${esc(p.id)}">Inventaire</button></td></tr>`).join('') || '<tr><td colspan="5" class="muted">Aucun produit suivi.</td></tr>'}
     </tbody></table></div></div>
     <div class="card"><h3 style="font-size:18px;margin-bottom:8px">Mouvements récents</h3>${(mv || []).map(m => `<div class="row between" style="padding:7px 0;border-bottom:1px dashed var(--line);flex-wrap:nowrap;gap:8px">
@@ -3181,7 +3208,7 @@ async function drawSales(){
       <div class="card kpi"><div class="l muted">Restaurant · Bar</div><div style="font-weight:800;font-size:16px;margin-top:6px">${money((s.by_outlet || {}).restaurant || 0)}<br>${money((s.by_outlet || {}).bar || 0)}</div></div></div>
     ${(s.top || []).length ? `<div class="card" style="margin-bottom:16px"><h3 style="font-size:18px;margin-bottom:8px">Meilleures ventes</h3>${s.top.map((t, i) => `<div class="row between" style="padding:6px 0;border-bottom:1px dashed var(--line)"><span>${i + 1}. <strong>${esc(t.name)}</strong> <span class="muted">× ${+t.qty}</span></span><span>${money(t.amount)} <span class="muted" style="font-size:12px">· marge ${money(t.margin)}</span></span></div>`).join('')}</div>` : ''}
     <div class="card"><h3 style="font-size:18px;margin-bottom:8px">Tickets</h3>${(sales.data || []).map(t => `<div style="padding:9px 0;border-bottom:1px solid var(--line);${t.status === 'cancelled' ? 'opacity:.55' : ''}">
-      <div class="row between" style="flex-wrap:nowrap"><span><strong>N° ${t.number}</strong> <span class="muted">· ${esc(OUTLETS[t.outlet][1])} ${new Date(t.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}${t.table_label ? ' · ' + esc(t.table_label) : ''}${t.server_name ? ' · ' + esc(t.server_name) : ''} · ${esc(PAY_NAME[t.method] || t.method)}</span></span>
+      <div class="row between" style="flex-wrap:nowrap"><span><strong>N° ${t.number}</strong> <span class="muted">· ${esc(OUTLETS[t.outlet][0])} ${new Date(t.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}${t.table_label ? ' · ' + esc(t.table_label) : ''}${t.server_name ? ' · ' + esc(t.server_name) : ''} · ${esc(PAY_NAME[t.method] || t.method)}</span></span>
         <strong style="${t.status === 'cancelled' ? 'text-decoration:line-through' : ''}">${money(t.total)}</strong></div>
       <div class="muted" style="font-size:12px">${(t.pos_sale_items || []).map(i => `${+i.qty} × ${esc(i.name)}`).join(', ')}${t.status === 'cancelled' ? ` · <strong>Annulé</strong> : ${esc(t.cancel_reason || '')}` : ''}</div>
       <div class="row" style="gap:6px;margin-top:4px"><button class="small ghost" type="button" data-tprint="${esc(t.id)}">Imprimer</button>${t.status === 'paid' && isMgr() ? `<button class="small ghost" type="button" data-tcancel="${esc(t.id)}" style="color:var(--red)">Annuler</button>` : ''}</div></div>`).join('') || '<p class="muted">Aucune vente sur la période.</p>'}</div>`;
