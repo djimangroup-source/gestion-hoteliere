@@ -3,6 +3,12 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#B4532A">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Horus Hotel">
 <title>Horus Hotel – Gestion hôtelière</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700;12..96,800&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&display=swap">
@@ -160,6 +166,7 @@ body.modal-open{overflow:hidden}
     <div class="org" id="orgLabel"></div>
     <button type="button" id="navSearch" class="navsearch" aria-label="Rechercher une action">Que voulez-vous faire ?<kbd>/</kbd></button>
     <select id="estSwitch" class="estsw hidden" aria-label="Établissement"></select>
+    <button type="button" id="navInstall" class="navsearch" style="color:var(--green);font-weight:700;justify-content:flex-start">⬇ Installer l’application</button>
     <button data-view="dashboard">Accueil</button>
     <button data-view="controle">Contrôle <span id="alertBadge" class="hidden" style="display:inline-block;min-width:20px;padding:0 6px;border-radius:999px;background:var(--green);color:#fff;font-size:12px;line-height:20px"></span></button>
     <button data-view="reservations">Réservations</button>
@@ -238,6 +245,22 @@ function modal(html){ $('modalBody').style.maxWidth = ''; $('modalBody').innerHT
 function closeModal(){ $('modal').classList.add('hidden'); document.body.classList.remove('modal-open'); }
 $('modal').addEventListener('click', e => { if (e.target.id === 'modal' || e.target.closest('[data-close]')) closeModal(); });
 function show(id){ ['auth','onboard','app','public'].forEach(x => $(x).classList.toggle('hidden', x !== id)); }
+
+
+/* ---------- Installation de l'application ---------- */
+let INSTALL_EVT = null;
+if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});
+const isStandalone = () => window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); INSTALL_EVT = e; const b = $('navInstall'); if (b) b.classList.remove('hidden'); });
+window.addEventListener('appinstalled', () => { INSTALL_EVT = null; const b = $('navInstall'); if (b) b.classList.add('hidden'); toast('Horus Hotel est installé : retrouvez-le sur votre écran d’accueil.'); });
+async function installApp(){
+  if (INSTALL_EVT) { INSTALL_EVT.prompt(); const r = await INSTALL_EVT.userChoice; INSTALL_EVT = null; if (r.outcome !== 'accepted') toast('Installation annulée.'); return; }
+  const ios = /iphone|ipad|ipod/i.test(navigator.userAgent);
+  modal(`<h2 style="font-size:24px;margin-bottom:8px">Installer Horus Hotel</h2>
+    ${ios ? `<p>Sur iPhone ou iPad (Safari) :</p><ol style="line-height:1.8"><li>Touchez le bouton <strong>Partager</strong> (carré avec une flèche).</li><li>Choisissez <strong>« Sur l’écran d’accueil »</strong>.</li><li>Touchez <strong>Ajouter</strong>.</li></ol>`
+      : `<p>Sur Android (Chrome) : menu <strong>⋮</strong> puis <strong>« Installer l’application »</strong> ou « Ajouter à l’écran d’accueil ».</p><p>Sur ordinateur (Chrome ou Edge) : cliquez sur l’icône d’installation <strong>⊕</strong> à droite de la barre d’adresse.</p>`}
+    <p class="muted" style="font-size:13px">L’application s’ouvre ensuite en plein écran avec son icône, comme une vraie application.</p><div class="row"><button class="primary" data-close>Compris</button></div>`);
+}
 
 /* ---------- Authentification ---------- */
 function renderAuth(){
@@ -350,6 +373,8 @@ function renderBanner(){
 document.addEventListener('click', e => { const g = e.target.closest('[data-go]'); if (g) go(g.dataset.go); const m = $('navMore'); if (m && m.open && !e.target.closest('#navMore')) m.open = false; });
 document.querySelectorAll('nav.side [data-view]').forEach(b => b.addEventListener('click', () => go(b.dataset.view)));
 $('navSearch').onclick = () => openPalette();
+$('navInstall').onclick = () => installApp();
+if (isStandalone()) $('navInstall').classList.add('hidden');
 $('navEsts').onclick = () => openEstablishments();
 
 const ROLE_VIEWS = {
