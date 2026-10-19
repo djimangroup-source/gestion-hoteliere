@@ -211,6 +211,7 @@ body.modal-open{overflow:hidden}
     </form>
     <div class="row" style="margin-top:12px"><button type="button" class="ghost" id="magicBtn" style="flex:1 1 200px">Recevoir un lien de connexion par e-mail</button></div>
     <p style="margin:10px 0 0;font-size:14px" class="row between"><a href="#" id="forgotLink">Mot de passe oublié ?</a><a href="#" onclick="event.preventDefault();refreshApp()" class="muted"> Actualiser l’application</a></p>
+    <p style="margin:12px 0 0;font-size:13px;text-align:center"><a href="?annuaire=1">Chercher un hôtel ou une résidence →</a></p>
     <p class="muted" id="authLegal" style="margin:14px 0 0;font-size:12px;text-align:center"></p>
     <p class="muted" style="margin:16px 0 0;font-size:14px"><span id="authSwitchTxt">Pas encore de compte ?</span> <a href="#" id="authSwitch">Créer un compte – 30 jours gratuits</a></p>
     </div>
@@ -258,6 +259,7 @@ body.modal-open{overflow:hidden}
       <button data-view="resto" data-rtab="ventes" data-acc="1">Ventes</button></div>
     <div class="ngroup" data-group="pilot"><button type="button" class="ghead" aria-expanded="true"> Pilotage</button>
       <button type="button" id="navAna" data-ana="1">Résultat &amp; analyse</button>
+      <button type="button" id="navReviews" data-ana="1">Avis clients</button>
       <button data-view="rapports">Rapports</button>
       <button data-view="controle">Contrôle <span id="alertBadge" class="hidden" style="display:inline-block;min-width:20px;padding:0 6px;border-radius:999px;background:var(--green);color:#fff;font-size:12px;line-height:20px"></span></button>
       <button data-view="mapage">Ma page de présentation</button></div>
@@ -269,6 +271,7 @@ body.modal-open{overflow:hidden}
         <button type="button" id="navCur">Devise</button>
         <button type="button" id="navTheme">Thème de l’application</button>
         <button type="button" id="navRates">Tarifs automatiques</button>
+        <button type="button" id="navDir">Annuaire public</button>
         <button type="button" id="navLegal">Documents légaux</button>
         <button type="button" id="navRefresh"> Actualiser l’application</button>
         <button type="button" id="navPrint">Impression &amp; reçus</button>
@@ -702,7 +705,9 @@ $('onboardForm').addEventListener('submit', async e => {
 /* ---------- Chargement ---------- */
 const PUBLIC_SLUG = new URLSearchParams(location.search).get('h');
 async function boot(){
-  const LEGAL_Q = new URLSearchParams(location.search).get('legal'); if (LEGAL_Q) return renderLegalPage(LEGAL_Q);
+  const QP = new URLSearchParams(location.search); const LEGAL_Q = QP.get('legal'); if (LEGAL_Q) return renderLegalPage(LEGAL_Q);
+  if (QP.get('avis')) return renderReviewPage(QP.get('avis'));
+  if (QP.has('annuaire')) return renderDirectory();
   if (PUBLIC_SLUG) return renderPublicPage(PUBLIC_SLUG);
   const { data: { session } } = await sb.auth.getSession();
   S.session = session;
@@ -756,6 +761,7 @@ function renderBanner(){
 document.addEventListener('click', e => { const g = e.target.closest('[data-go]'); if (g) go(g.dataset.go); const m = $('navMore'); if (m && m.open && !e.target.closest('#navMore')) m.open = false; });
 document.querySelectorAll('nav.side [data-view]').forEach(b => b.addEventListener('click', () => { if (b.dataset.rtab) S.rTab = b.dataset.rtab; go(b.dataset.view); }));
 $('navAna').onclick = () => openAnalysis(6);
+$('navReviews').onclick = () => openReviews();
 document.querySelectorAll('nav.side .ghead').forEach(h => { const g = h.parentElement; try { if (localStorage.getItem('hh_grp_' + g.dataset.group) === '0') g.classList.add('collapsed'); } catch (_) {}
   h.onclick = () => { g.classList.toggle('collapsed'); h.setAttribute('aria-expanded', !g.classList.contains('collapsed')); try { localStorage.setItem('hh_grp_' + g.dataset.group, g.classList.contains('collapsed') ? '0' : '1'); } catch (_) {} }; });
 $('navSearch').onclick = () => openPalette();
@@ -800,6 +806,7 @@ function openTab(t){
 function openMore(){
   const pilot = groupViews('pilot').map(v => [VIEW_LABEL[v], () => go(v)]);
   if (canAna()) pilot.unshift(['Résultat & analyse', () => openAnalysis(6)]);
+  pilot.push(['Avis clients', () => openReviews()]);
   const settings = [...document.querySelectorAll('nav.side .menu button')].filter(b => !b.classList.contains('hidden')).map(b => [b.textContent.trim(), () => b.click()]);
   const sec = (title, items) => items.length ? `<h3 style="font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:14px 0 6px">${title}</h3><div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px">${items.map(([l], i) => `<button type="button" class="ghost" data-mi="${title}|${i}" style="min-height:52px;border-radius:14px;justify-content:flex-start;text-align:left;white-space:normal">${esc(l)}</button>`).join('')}</div>` : '';
   const map = { 'Pilotage': pilot, 'Réglages': settings };
@@ -816,6 +823,15 @@ $('navTheme').onclick = () => openThemes();
 $('navRefresh').onclick = () => refreshApp();
 $('navLegal').onclick = () => openLegal('cgu');
 $('navRates').onclick = () => openRateRules();
+$('navDir').onclick = async () => {
+  const { data: e } = await sb.from('establishments').select('id,name,slug,public_enabled,directory_listed').eq('id', S.est).single();
+  const url = location.origin + location.pathname + '?annuaire=1';
+  modal(`<h2 style="font-size:22px;margin-bottom:6px">Annuaire public</h2><p class="muted" style="margin:0 0 12px">Les voyageurs trouvent les établissements Horus Hotel par ville et par budget, puis réservent directement sur votre page, sans commission.</p>
+    ${e && e.public_enabled ? '' : '<p class="card" style="background:#FFF4E0;margin:0 0 12px">Votre page de présentation n’est pas encore publiée : publiez-la dans « Ma page de présentation » pour apparaître dans l’annuaire.</p>'}
+    <label class="row between" style="flex-wrap:nowrap;font-weight:600;margin-bottom:12px"><span>Afficher ${esc((e && e.name) || 'mon établissement')} dans l’annuaire</span><input type="checkbox" id="dirOn" ${e && e.directory_listed ? 'checked' : ''} ${can(['owner', 'admin']) ? '' : 'disabled'} style="width:22px;min-height:22px"></label>
+    <div class="row"><a class="btn" href="${url}" target="_blank" rel="noopener" style="flex:1;justify-content:center">Voir l’annuaire</a><button class="primary" data-close style="flex:1">Fermer</button></div>`);
+  $('dirOn').onchange = async () => { const { error } = await sb.from('establishments').update({ directory_listed: $('dirOn').checked }).eq('id', S.est); if (error) return toast(errMsg(error), true); toast($('dirOn').checked ? 'Votre établissement apparaît dans l’annuaire.' : 'Retiré de l’annuaire.'); };
+};
 document.addEventListener('click', (e) => { if (e.target.closest('#rateRulesBtn')) openRateRules(); });
 $('navMods').onclick = () => openModules();
 $('navCur').onclick = () => { modal(`<h2 style="font-size:22px;margin-bottom:10px">Devise d’affichage</h2><p class="muted" style="font-size:14px;margin:0 0 10px">Les montants s’affichent dans cette devise (aucune conversion n’est faite).</p><div style="display:grid;gap:6px">${Object.entries(CURRENCIES).map(([k, v]) => `<button type="button" class="${k === S.currency ? '' : 'ghost'}" data-cur="${k}" style="justify-content:space-between;display:flex"><span>${v[0]}</span><strong>${k} · ${v[1]}</strong></button>`).join('')}</div>`); document.querySelectorAll('[data-cur]').forEach(b => b.onclick = () => { closeModal(); setCurrency(b.dataset.cur); }); };
@@ -1473,7 +1489,7 @@ async function afterCheckIn(id, refresh){
 function afterCheckOut(r, refresh){
   refresh && refresh();
   nextStep('Départ enregistré', `La chambre ${esc(r.room_number)} passe « à nettoyer ». ${r.balance > 0 ? `Attention : ${money(r.balance)} restent impayés.` : 'Pensez à remettre la facture au client.'}`,
-    [{ label: 'Facture', fn: async () => { const { data, error } = await sb.rpc('issue_guest_invoice', { p_reservation: r.id }); if (error) return toast(errMsg(error), true); const { data: inv } = await sb.from('guest_invoices').select('*').eq('id', data).single(); printGuestInvoice(inv); } }, ...(r.balance > 0 ? [{ label: 'Encaisser', fn: () => openEncaisser(r, refresh) }] : [])]);
+    [{ label: 'Demander un avis', fn: () => askReview(r) }, { label: 'Facture', fn: async () => { const { data, error } = await sb.rpc('issue_guest_invoice', { p_reservation: r.id }); if (error) return toast(errMsg(error), true); const { data: inv } = await sb.from('guest_invoices').select('*').eq('id', data).single(); printGuestInvoice(inv); } }, ...(r.balance > 0 ? [{ label: 'Encaisser', fn: () => openEncaisser(r, refresh) }] : [])]);
 }
 function waConfirmText(r){
   const est = S.ests.find(x => x.id === S.est) || {};
@@ -2763,6 +2779,99 @@ function openPrintSettings(){
   if ($('pfRc')) $('pfRc').onclick = () => openReceiptEditor();
   $('pfTest').onclick = () => printPosTicket({ server: myName(), number: 'TEST', total: 3500, outlet: 'bar', table: 'Table 1', method: 'cash', created_at: new Date().toISOString() }, [{ name: 'Flag 65cl', qty: 2, unit_price: 1000 }, { name: 'Coca-Cola', qty: 3, unit_price: 500 }]);
 }
+/* ================= Avis clients ================= */
+const stars = (n, size = 16) => `<span aria-label="${n} sur 5" style="color:#E8A317;font-size:${size}px;letter-spacing:1px">${'★'.repeat(Math.round(n || 0))}<span style="color:#D9CDBB">${'★'.repeat(5 - Math.round(n || 0))}</span></span>`;
+const reviewUrl = (tok) => location.origin + location.pathname + '?avis=' + tok;
+async function askReview(r){
+  const { data: tok, error } = await sb.rpc('request_review', { p_reservation: r.id });
+  if (error) return toast(errMsg(error), true);
+  const est = (S.ests || []).find(x => x.id === S.est) || {};
+  const msg = `Bonjour ${(r.guest_name || '').split(' ')[0]}, merci d’avoir séjourné à ${est.name || 'notre établissement'} ! Votre avis compte beaucoup pour nous : ${reviewUrl(tok)}`;
+  const phone = String(r.guest_phone || '').replace(/[^\d]/g, '');
+  modal(`<h2 style="font-size:22px;margin-bottom:8px">Demander un avis</h2><p class="muted" style="margin:0 0 10px">Le client note son séjour de 1 à 5 étoiles et laisse un commentaire. Les avis s’affichent sur votre page de présentation.</p>
+    <div class="card" style="background:var(--bg);font-size:14px;margin-bottom:12px">${esc(msg)}</div>
+    <div class="row"><a class="btn primary" style="flex:1;justify-content:center" target="_blank" rel="noopener" href="https://wa.me/${phone.length >= 8 ? (phone.length === 10 ? '225' + phone : phone) : ''}?text=${encodeURIComponent(msg)}">Envoyer par WhatsApp</a><button class="ghost" type="button" id="rvCopy" style="flex:1">Copier le message</button></div>
+    <button class="ghost" data-close style="width:100%;margin-top:8px">Fermer</button>`);
+  $('rvCopy').onclick = async () => { try { await navigator.clipboard.writeText(msg); toast('Message copié.'); } catch (_) { toast('Copie impossible.', true); } };
+}
+async function openReviews(){
+  const { data, error } = await sb.from('reviews').select('*').eq('establishment_id', S.est).order('submitted_at', { ascending: false, nullsFirst: false }).limit(200);
+  if (error) return toast(errMsg(error), true);
+  const done = (data || []).filter(v => v.status === 'submitted'), pend = (data || []).filter(v => v.status !== 'submitted');
+  const avg = done.length ? done.reduce((a, v) => a + v.rating, 0) / done.length : 0;
+  const mgr = can(['owner', 'admin', 'manager']);
+  const dist = [5, 4, 3, 2, 1].map(n => [n, done.filter(v => v.rating === n).length]);
+  modal(`<div class="row between" style="margin-bottom:10px"><h2 style="font-size:22px">Avis clients</h2><button class="small ghost" data-close style="border:0;font-size:18px" aria-label="Fermer">✕</button></div>
+    <div class="row" style="gap:18px;align-items:center;margin-bottom:14px;flex-wrap:nowrap"><div style="text-align:center;min-width:110px"><div style="font-family:var(--display);font-size:40px;font-weight:800">${done.length ? avg.toFixed(1) : '—'}</div>${stars(avg, 18)}<div class="muted" style="font-size:12px">${done.length} avis · ${pend.length} en attente</div></div>
+      <div style="flex:1">${dist.map(([n, c]) => `<div class="row" style="gap:8px;flex-wrap:nowrap;font-size:12px"><span style="width:14px">${n}</span><div style="flex:1;height:8px;border-radius:4px;background:var(--line)"><div style="height:8px;border-radius:4px;background:#E8A317;width:${done.length ? c / done.length * 100 : 0}%"></div></div><span style="width:20px;text-align:right">${c}</span></div>`).join('')}</div></div>
+    <p class="muted" style="font-size:12px;margin:0 0 10px">Pour recevoir des avis : après un départ, touchez « Demander un avis ». Les notes de 1 ou 2 étoiles vous sont signalées dans Contrôle.</p>
+    <div style="max-height:55vh;overflow-y:auto">${done.map(v => `<div class="card" style="padding:12px;margin-bottom:8px;${v.is_published ? '' : 'opacity:.6'}"><div class="row between" style="flex-wrap:nowrap"><span><strong>${esc(v.guest_name || 'Client')}</strong> ${stars(v.rating)}</span><span class="muted" style="font-size:12px">${dfr(String(v.submitted_at).slice(0, 10))}</span></div>
+      ${v.comment ? `<p style="margin:6px 0">${esc(v.comment)}</p>` : ''}${v.reply ? `<div style="font-size:13px;border-left:3px solid var(--green);padding-left:8px;margin:6px 0"><strong>Votre réponse :</strong> ${esc(v.reply)}</div>` : ''}
+      ${mgr ? `<div class="row" style="gap:6px"><button class="small ghost" type="button" data-rvpub="${esc(v.id)}" data-on="${v.is_published}">${v.is_published ? 'Masquer de la page' : 'Afficher sur la page'}</button><button class="small ghost" type="button" data-rvrep="${esc(v.id)}">${v.reply ? 'Modifier la réponse' : 'Répondre'}</button></div>` : ''}</div>`).join('') || '<p class="muted">Aucun avis reçu pour le moment.</p>'}</div>`);
+  $('modalBody').style.maxWidth = '620px';
+  document.querySelectorAll('[data-rvpub]').forEach(b => b.onclick = async () => { const { error } = await sb.from('reviews').update({ is_published: b.dataset.on !== 'true' }).eq('id', b.dataset.rvpub); if (error) return toast(errMsg(error), true); openReviews(); });
+  document.querySelectorAll('[data-rvrep]').forEach(b => b.onclick = () => { const v = done.find(x => x.id === b.dataset.rvrep);
+    modal(`<h2 style="font-size:20px;margin-bottom:8px">Répondre à ${esc(v.guest_name || 'ce client')}</h2><p class="muted">${stars(v.rating)} ${esc(v.comment || '')}</p><form id="rvF"><textarea id="rvT" maxlength="1000" rows="4" style="width:100%;padding:10px 12px;border-radius:12px;border:1px solid var(--line);font:inherit">${esc(v.reply || '')}</textarea><div class="row" style="margin-top:10px"><button class="primary" style="flex:1">Publier la réponse</button><button type="button" class="ghost" id="rvB">Retour</button></div></form>`);
+    $('rvB').onclick = openReviews;
+    $('rvF').onsubmit = async (e) => { e.preventDefault(); const { error } = await sb.from('reviews').update({ reply: $('rvT').value.trim() || null }).eq('id', v.id); if (error) return toast(errMsg(error), true); toast('Réponse publiée.'); openReviews(); }; });
+}
+async function renderReviewPage(tok){
+  const el = $('public'); show('public');
+  el.innerHTML = '<p class="muted" style="text-align:center;padding:80px 16px">Chargement…</p>';
+  const { data: r } = await sb.rpc('public_review_get', { p_token: tok });
+  const wrap = (inner) => `<div class="auth"><div class="card" style="max-width:480px;text-align:center">${r && r.logo ? `<img src="${esc(r.logo)}" alt="" style="max-height:64px;max-width:60%;object-fit:contain;margin-bottom:8px">` : ''}${inner}</div></div>`;
+  if (!r || !r.ok) { el.innerHTML = wrap('<h1 style="font-size:24px">Lien invalide</h1><p class="muted">Ce lien d’avis n’existe pas ou a expiré.</p>'); return; }
+  document.title = 'Votre avis – ' + r.name;
+  if (r.status === 'submitted') { el.innerHTML = wrap(`<h1 style="font-size:24px">Merci ${esc(r.guest)} !</h1><p>${stars(r.rating, 28)}</p><p class="muted">Votre avis sur ${esc(r.name)} a bien été enregistré.</p>${r.slug ? `<a class="btn" href="${location.pathname}?h=${encodeURIComponent(r.slug)}">Voir la page de l’établissement</a>` : ''}`); return; }
+  let note = 0;
+  el.innerHTML = wrap(`<div class="eyebrow">${esc(r.name)}</div><h1 style="font-size:26px;margin:6px 0 4px">Comment s’est passé votre séjour${r.guest ? ', ' + esc(r.guest) : ''} ?</h1><p class="muted" style="margin:0 0 14px">Touchez les étoiles pour noter.</p>
+    <div id="rvStars" style="display:flex;justify-content:center;gap:6px;margin-bottom:6px">${[1, 2, 3, 4, 5].map(n => `<button type="button" data-st="${n}" aria-label="${n} étoile${n > 1 ? 's' : ''}" style="border:0;background:none;font-size:42px;line-height:1;color:#D9CDBB;min-height:52px;padding:0 2px">★</button>`).join('')}</div>
+    <div id="rvLbl" class="muted" style="height:20px;margin-bottom:10px"></div>
+    <textarea id="rvC" maxlength="1000" rows="4" placeholder="Votre commentaire (facultatif) : accueil, propreté, confort…" style="width:100%;padding:10px 12px;border-radius:12px;border:1px solid var(--line);font:inherit;text-align:left"></textarea>
+    <button class="primary" id="rvGo" style="width:100%;margin-top:12px;min-height:52px">Envoyer mon avis</button>
+    <p class="muted" style="font-size:12px;margin:10px 0 0">Votre prénom, votre note et votre commentaire peuvent être affichés sur la page de l’établissement. <a href="#" data-legal="confidentialite">Confidentialité</a></p>`);
+  const LBL = ['', 'Décevant', 'Moyen', 'Bien', 'Très bien', 'Excellent'];
+  const paint = () => { el.querySelectorAll('[data-st]').forEach(b => { b.style.color = +b.dataset.st <= note ? '#E8A317' : '#D9CDBB'; }); $('rvLbl').textContent = LBL[note] || ''; };
+  el.querySelectorAll('[data-st]').forEach(b => b.onclick = () => { note = +b.dataset.st; paint(); });
+  $('rvGo').onclick = async () => { if (!note) return toast('Choisissez une note.', true); $('rvGo').disabled = true;
+    const { data, error } = await sb.rpc('public_review_submit', { p_token: tok, p_rating: note, p_comment: $('rvC').value });
+    if (error || !data || !data.ok) { $('rvGo').disabled = false; return toast(error ? 'Service indisponible, réessayez.' : data.error, true); }
+    r.status = 'submitted'; r.rating = note; renderReviewPage(tok); };
+}
+async function loadPubReviews(slug){
+  let box = null; for (let i = 0; i < 30 && !(box = document.getElementById('pubReviews')); i++) await new Promise(r => setTimeout(r, 100));
+  if (!box) return;
+  const { data } = await sb.rpc('public_reviews', { p_slug: slug });
+  if (!data || !data.count) return;
+  box.classList.remove('hidden');
+  box.innerHTML = `<div class="row between" style="margin-bottom:12px"><h2 style="font-size:24px">Avis des clients</h2><span style="font-size:18px"><strong>${Number(data.avg).toFixed(1)}</strong> ${stars(data.avg, 18)} <span class="muted" style="font-size:13px">(${data.count})</span></span></div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:10px">${data.items.map(v => `<div style="border:1px solid var(--line);border-radius:14px;padding:12px"><div class="row between"><strong>${esc(v.guest || 'Client')}</strong>${stars(v.rating, 14)}</div>${v.comment ? `<p style="margin:6px 0 0;font-size:14px">${esc(v.comment)}</p>` : ''}${v.reply ? `<p class="muted" style="margin:6px 0 0;font-size:12px;border-left:3px solid var(--green);padding-left:6px">Réponse : ${esc(v.reply)}</p>` : ''}</div>`).join('')}</div>`;
+}
+
+/* ================= Annuaire public ================= */
+async function renderDirectory(){
+  const el = $('public'); show('public'); document.title = 'Annuaire des hôtels et résidences – Horus Hotel';
+  const params = new URLSearchParams(location.search); let city = params.get('ville') || '', q = params.get('q') || '', max = params.get('max') || '';
+  const draw = async () => {
+    $('dirRes').innerHTML = '<p class="muted">Recherche…</p>';
+    const { data } = await sb.rpc('public_directory', { p_city: city || null, p_q: q || null, p_max_price: max ? Number(max) : null });
+    const list = data || [];
+    $('dirRes').innerHTML = list.length ? `<p class="muted" style="margin:0 0 10px">${list.length} établissement(s)</p><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:14px">${list.map(h => `<a href="${location.pathname}?h=${encodeURIComponent(h.slug)}" class="card" style="padding:0;overflow:hidden;text-decoration:none;color:inherit;display:block">
+      <div style="aspect-ratio:16/9;background:var(--green-l) ${h.cover ? `url('${esc(h.cover)}') center/cover` : ''};position:relative">${h.logo ? `<img src="${esc(h.logo)}" alt="" style="position:absolute;left:12px;bottom:-22px;width:52px;height:52px;border-radius:14px;object-fit:cover;border:3px solid var(--card);background:var(--card)">` : ''}</div>
+      <div style="padding:${h.logo ? '28px' : '14px'} 14px 14px"><strong style="font-size:17px">${esc(h.name)}</strong><div class="muted" style="font-size:13px">${esc(h.city || '')}${h.tagline ? ' · ' + esc(h.tagline) : ''}</div>
+      <div class="row between" style="margin-top:8px"><span>${h.reviews ? `${stars(h.rating, 14)} <span class="muted" style="font-size:12px">${Number(h.rating).toFixed(1)} (${h.reviews})</span>` : '<span class="muted" style="font-size:12px">Nouveau</span>'}</span>${h.price_from ? `<span style="font-size:13px">dès <strong style="color:var(--green)">${money(h.price_from)}</strong>/nuit</span>` : ''}</div></div></a>`).join('')}</div>` : '<div class="card" style="text-align:center;padding:30px"><p class="muted">Aucun établissement ne correspond à votre recherche.</p></div>';
+  };
+  el.innerHTML = `<div style="background:var(--ink);color:#FBF6EE;padding:44px 18px 60px;text-align:center"><div style="font-family:var(--display);font-size:clamp(28px,5vw,44px);font-weight:800">Trouvez votre hôtel ou résidence</div><p style="opacity:.8;margin:8px 0 0">Réservez directement auprès des établissements, sans commission.</p></div>
+    <div style="max-width:1100px;margin:-34px auto 0;padding:0 16px 60px">
+      <form id="dirF" class="card row" style="gap:10px;align-items:flex-end;margin-bottom:18px"><div style="flex:2 1 200px"><label for="dQ">Nom ou ville</label><input id="dQ" value="${esc(q)}" placeholder="ex. Abidjan, Assinie, Les Palmiers"></div>
+        <div style="flex:1 1 140px"><label for="dM">Budget max / nuit</label><select id="dM"><option value="">Tous les prix</option>${[10000, 20000, 30000, 50000, 75000, 100000].map(v => `<option value="${v}" ${String(v) === max ? 'selected' : ''}>${money(v)}</option>`).join('')}</select></div>
+        <button class="primary" style="flex:0 0 auto">Rechercher</button></form>
+      <div id="dirRes"></div>
+      <p class="muted" style="text-align:center;margin-top:30px;font-size:13px">Vous gérez un hôtel ou une résidence ? <a href="${location.pathname}">Rejoignez Horus Hotel gratuitement</a> · ${legalLinks()}</p></div>`;
+  $('dirF').onsubmit = (e) => { e.preventDefault(); q = $('dQ').value.trim(); max = $('dM').value; city = ''; const u = new URL(location.href); u.search = '?annuaire=1' + (q ? '&q=' + encodeURIComponent(q) : '') + (max ? '&max=' + max : ''); history.replaceState(null, '', u); draw(); };
+  draw();
+}
+
 /* ================= Tarifs automatiques ================= */
 const WDAYS = [[1, 'Lun'], [2, 'Mar'], [3, 'Mer'], [4, 'Jeu'], [5, 'Ven'], [6, 'Sam'], [7, 'Dim']];
 const ADJ = { percent: 'Majoration / remise en %', amount: 'Ajout / retrait en montant', fixed: 'Prix fixe par nuit' };
@@ -3535,6 +3644,7 @@ async function renderMaPage(){
 
 /* ================= Page publique de réservation (visiteurs) ================= */
 async function renderPublicPage(slug){
+  loadPubReviews(slug);
   show('public');
   const root = $('public');
   root.innerHTML = '<p class="muted" style="text-align:center;padding:80px 16px">Chargement…</p>';
@@ -3576,6 +3686,7 @@ async function renderPublicPage(slug){
     <div style="flex:999 1 520px;min-width:0;display:flex;flex-direction:column;gap:20px">
       ${h.description ? `<section class="card"><h2 style="font-size:24px;margin-bottom:8px">Bienvenue</h2><p style="margin:0;font-size:16px;line-height:1.65">${para(h.description)}</p></section>` : ''}
       ${gallery.length ? `<section><div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px">${gallery.map((u, i) => `<button type="button" data-gal="${i}" style="padding:0;border:0;border-radius:14px;overflow:hidden;min-height:0;display:block;cursor:zoom-in"><img src="${esc(u)}" alt="Photo ${i + 1} de ${esc(h.name)}" loading="lazy" style="width:100%;height:${i === 0 && gallery.length > 2 ? 140 : 140}px;object-fit:cover;display:block"></button>`).join('')}</div></section>` : ''}
+      <section class="card hidden" id="pubReviews"></section>
       <section class="card" id="hebergements"><h2 style="font-size:24px;margin-bottom:12px">Hébergements</h2>
         ${types.length ? `<div class="grid g2">${types.map(t => `<div style="border:1px solid var(--line);border-radius:18px;overflow:hidden;background:var(--card);display:flex;flex-direction:column">
           ${(t.photos || []).length ? `<div style="display:flex;overflow-x:auto;scroll-snap-type:x mandatory;gap:2px">${t.photos.map((u, i) => `<img src="${esc(u)}" alt="${esc(t.type)}, photo ${i + 1}" loading="lazy" style="flex:0 0 100%;height:200px;object-fit:cover;scroll-snap-align:start">`).join('')}</div>` : `<div style="height:120px;background:linear-gradient(135deg,var(--green-l),var(--bg))"></div>`}
