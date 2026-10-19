@@ -240,6 +240,7 @@ body.modal-open{overflow:hidden}
     <div class="org" id="orgLabel"></div>
     <button type="button" id="navSearch" class="navsearch" aria-label="Rechercher une action">Que voulez-vous faire ?<kbd>/</kbd></button>
     <button type="button" id="navNotif" class="navsearch" style="justify-content:flex-start;gap:10px;color:var(--ink)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10 21h4"></path></svg>Notifications<span id="notifBadge" class="hidden" style="margin-left:auto;min-width:22px;padding:2px 7px;border-radius:999px;background:var(--green);color:#fff;font-size:12px;font-weight:800;text-align:center"></span></button>
+    <button type="button" id="navClock" class="navsearch hidden" style="justify-content:flex-start;gap:8px;color:var(--ink)"></button>
     <select id="estSwitch" class="estsw hidden" aria-label="Établissement"></select>
     <button type="button" id="navInstall" class="navsearch" style="color:var(--green);font-weight:700;justify-content:flex-start"> Installer l’application</button>
     <button data-view="dashboard">Accueil</button>
@@ -247,7 +248,8 @@ body.modal-open{overflow:hidden}
       <button data-view="reservations">Réservations</button>
       <button data-view="planning">Planning</button>
       <button data-view="chambres">Chambres</button>
-      <button data-view="clients">Clients</button></div>
+      <button data-view="clients">Clients</button>
+      <button data-view="inventaire">Inventaire</button></div>
     <div class="ngroup" data-group="argent"><button type="button" class="ghead" aria-expanded="true"> Argent</button>
       <button data-view="caisse">Caisse</button>
       <button data-view="depenses">Dépenses</button>
@@ -262,6 +264,7 @@ body.modal-open{overflow:hidden}
       <button type="button" id="navReviews" data-ana="1">Avis clients</button>
       <button data-view="rapports">Rapports</button>
       <button data-view="controle">Contrôle <span id="alertBadge" class="hidden" style="display:inline-block;min-width:20px;padding:0 6px;border-radius:999px;background:var(--green);color:#fff;font-size:12px;line-height:20px"></span></button>
+      <button data-view="pointage">Pointage</button>
       <button data-view="mapage">Ma page de présentation</button></div>
     <details class="more" id="navMore">
       <summary>Réglages</summary>
@@ -301,6 +304,8 @@ body.modal-open{overflow:hidden}
     <section id="v-clients" class="hidden"></section>
     <section id="v-caisse" class="hidden"></section>
     <section id="v-resto" class="hidden"></section>
+    <section id="v-inventaire" class="hidden"></section>
+    <section id="v-pointage" class="hidden"></section>
     <section id="v-depenses" class="hidden"></section>
     <section id="v-factures" class="hidden"></section>
     <section id="v-mapage" class="hidden"></section>
@@ -332,7 +337,7 @@ const authStore = {
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true, storage: authStore } });
 
 const S = { session:null, member:null, org:null, overview:null, plans:[], providers:[], isAdmin:false, cycle:'monthly', view:'dashboard', signup:false, est:null, ests:[], rooms:[] };
-const VIEWS = ['resto','rapports','controle','equipe','mapage','dashboard','reservations','planning','clients','caisse','depenses','factures','tarifs','abonnement','chambres','admin'];
+const VIEWS = ['inventaire','pointage','resto','rapports','controle','equipe','mapage','dashboard','reservations','planning','clients','caisse','depenses','factures','tarifs','abonnement','chambres','admin'];
 const $ = (id) => document.getElementById(id);
 const esc = (v) => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const fcfa = (n) => n == null ? '—' : new Intl.NumberFormat('fr-FR').format(n).replace(/ | /g,' ') + ' FCFA';
@@ -371,7 +376,7 @@ if (window.HorusApp && window.HorusApp.postMessage) {
   window.__nativeOpen = nativeOpen;
 }
 /* ---------- Mise à jour de l'application sans réinstaller ni perdre la connexion ---------- */
-const APP_VERSION = '2026.10.19-11';
+const APP_VERSION = '2026.10.19-12';
 async function refreshApp(){
   toast('Actualisation…');
   try { const reg = navigator.serviceWorker && await navigator.serviceWorker.getRegistration(); if (reg) { await reg.update(); if (reg.waiting) reg.waiting.postMessage('skipWaiting'); } } catch (_) {}
@@ -747,7 +752,7 @@ async function loadCommon(){
   ]);
   if (ov.error) toast(errMsg(ov.error), true);
   S.overview = ov.data; S.plans = pl.data || []; S.providers = pr.data || [];
-  await loadOrgPrefs(); applyRoleNav();
+  await loadOrgPrefs(); applyRoleNav(); refreshClock();
   renderBanner();
   refreshAlertBadge();
   startNotifs();
@@ -767,8 +772,8 @@ document.querySelectorAll('nav.side .ghead').forEach(h => { const g = h.parentEl
 $('navSearch').onclick = () => openPalette();
 $('mSearch').onclick = () => openPalette();
 $('mNotif').onclick = () => openNotifs();
-const GROUPS = { heberg: ['reservations','planning','chambres','clients'], argent: ['caisse','depenses','factures'], resto: ['resto'], pilot: ['controle','rapports','mapage'] };
-const VIEW_LABEL = { reservations:'Réservations', planning:'Planning', chambres:'Chambres', clients:'Clients', caisse:'Caisse', depenses:'Dépenses', factures:'Factures', resto:'Restaurant & Bar', controle:'Contrôle', rapports:'Rapports', mapage:'Ma page' };
+const GROUPS = { heberg: ['reservations','planning','chambres','clients','inventaire'], argent: ['caisse','depenses','factures'], resto: ['resto'], pilot: ['controle','rapports','pointage','mapage'] };
+const VIEW_LABEL = { inventaire:'Inventaire', pointage:'Pointage', reservations:'Réservations', planning:'Planning', chambres:'Chambres', clients:'Clients', caisse:'Caisse', depenses:'Dépenses', factures:'Factures', resto:'Restaurant & Bar', controle:'Contrôle', rapports:'Rapports', mapage:'Ma page' };
 const groupOf = (v) => Object.keys(GROUPS).find(g => GROUPS[g].includes(v));
 const groupViews = (g) => GROUPS[g].filter(allowed);
 const canAna = () => can(['owner','admin','manager','accountant']);
@@ -807,6 +812,7 @@ function openMore(){
   const pilot = groupViews('pilot').map(v => [VIEW_LABEL[v], () => go(v)]);
   if (canAna()) pilot.unshift(['Résultat & analyse', () => openAnalysis(6)]);
   pilot.push(['Avis clients', () => openReviews()]);
+  if (moduleOn('pointage')) pilot.unshift([CLOCK.state === 'in' ? 'Pointer mon départ' : 'Pointer mon arrivée', () => toggleClock()]);
   const settings = [...document.querySelectorAll('nav.side .menu button')].filter(b => !b.classList.contains('hidden')).map(b => [b.textContent.trim(), () => b.click()]);
   const sec = (title, items) => items.length ? `<h3 style="font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:14px 0 6px">${title}</h3><div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px">${items.map(([l], i) => `<button type="button" class="ghost" data-mi="${title}|${i}" style="min-height:52px;border-radius:14px;justify-content:flex-start;text-align:left;white-space:normal">${esc(l)}</button>`).join('')}</div>` : '';
   const map = { 'Pilotage': pilot, 'Réglages': settings };
@@ -821,6 +827,7 @@ $('navEsts').onclick = () => openEstablishments();
 $('navNotif').onclick = () => openNotifs();
 $('navTheme').onclick = () => openThemes();
 $('navRefresh').onclick = () => refreshApp();
+$('navClock').onclick = () => toggleClock();
 $('navLegal').onclick = () => openLegal('cgu');
 $('navRates').onclick = () => openRateRules();
 $('navDir').onclick = async () => {
@@ -840,10 +847,10 @@ $('navPrn').onclick = () => openPrinterSetup('caisse');
 
 const ROLE_VIEWS = {
   owner: null, admin: null,
-  manager: ['dashboard','reservations','planning','clients','chambres','caisse','resto','depenses','factures','rapports','mapage'],
-  receptionist: ['dashboard','reservations','planning','clients','chambres','caisse','resto','factures'],
-  accountant: ['dashboard','reservations','caisse','resto','depenses','factures','rapports'],
-  housekeeping: ['chambres'],
+  manager: ['dashboard','reservations','planning','clients','chambres','inventaire','pointage','caisse','resto','depenses','factures','rapports','mapage'],
+  receptionist: ['dashboard','reservations','planning','clients','chambres','inventaire','caisse','resto','factures'],
+  accountant: ['dashboard','reservations','pointage','caisse','resto','depenses','factures','rapports'],
+  housekeeping: ['chambres','inventaire'],
   staff: ['resto','dashboard','planning']
 };
 const ROLE_LABEL = { owner:'Propriétaire', admin:'Administrateur', manager:'Gérant', receptionist:'Réceptionniste', housekeeping:'Ménage', accountant:'Comptable', staff:'Serveur / Barman' };
@@ -921,7 +928,7 @@ function go(view){
   if (typeof syncTabbar === 'function') syncTabbar();
   window.scrollTo(0, 0);
   if (lockedView(view)) return renderLocked(view);
-  ({ resto: renderResto, rapports: renderRapports, controle: renderControle, equipe: renderEquipe, mapage: renderMaPage, dashboard: renderDashboard, reservations: renderReservations, planning: renderPlanning, clients: renderClients, caisse: renderCaisse, depenses: renderDepenses, factures: renderFactures, tarifs: renderTarifs, abonnement: renderAbonnement, chambres: renderChambres, admin: renderAdmin })[view]();
+  ({ inventaire: renderInventaire, pointage: renderPointage, resto: renderResto, rapports: renderRapports, controle: renderControle, equipe: renderEquipe, mapage: renderMaPage, dashboard: renderDashboard, reservations: renderReservations, planning: renderPlanning, clients: renderClients, caisse: renderCaisse, depenses: renderDepenses, factures: renderFactures, tarifs: renderTarifs, abonnement: renderAbonnement, chambres: renderChambres, admin: renderAdmin })[view]();
 }
 
 /* ---------- Tarifs ---------- */
@@ -2616,9 +2623,9 @@ async function renderEquipe(){
 
 /* ================= Modules à cocher, devise, résultat & analyse ================= */
 const CURRENCIES = { XOF: ['Franc CFA (UEMOA)', 'F', 0], XAF: ['Franc CFA (CEMAC)', 'F', 0], GNF: ['Franc guinéen', 'FG', 0], CDF: ['Franc congolais', 'FC', 0], MGA: ['Ariary', 'Ar', 0], MAD: ['Dirham marocain', 'DH', 2], NGN: ['Naira', '₦', 0], GHS: ['Cedi', 'GH₵', 2], EUR: ['Euro', '€', 2], USD: ['Dollar US', '$', 2] };
-const MODULES = { planning: 'Planning', clients: 'Clients', menage: 'Ménage (état des chambres)', resto: 'Restaurant & Bar', depenses: 'Dépenses', factures: 'Factures', rapports: 'Rapports', mapage: 'Ma page de présentation', controle: 'Contrôle propriétaire', notifs: 'Notifications', multi: 'Plusieurs établissements', equipe: 'Équipe' };
-const MODULE_GROUPS = [[' Hébergement', ['planning','clients','menage']], [' Argent', ['depenses','factures']], [' Restaurant & Bar', ['resto']], [' Pilotage', ['rapports','controle','mapage']], [' Organisation', ['notifs','multi','equipe']]];
-const MODULE_HELP = { planning: 'Vue calendrier des chambres', clients: 'Fichier clients et historique', resto: 'Caisse restaurant/bar, produits et stock', depenses: 'Charges fixes, opérationnelles, budget', factures: 'Factures numérotées', rapports: 'Rapports financiers et exports', mapage: 'Page publique et réservation en ligne', controle: 'Alertes et journal des actions', menage: 'Statuts « à nettoyer » et rappels de ménage', notifs: 'La cloche et les alertes en direct', multi: 'Sélecteur d’établissement (si vous en avez plusieurs)', equipe: 'Comptes du personnel et invitations' };
+const MODULES = { planning: 'Planning', clients: 'Clients', inventaire: 'Inventaire (linge, produits)', menage: 'Ménage (état des chambres)', pointage: 'Pointage du personnel', resto: 'Restaurant & Bar', depenses: 'Dépenses', factures: 'Factures', rapports: 'Rapports', mapage: 'Ma page de présentation', controle: 'Contrôle propriétaire', notifs: 'Notifications', multi: 'Plusieurs établissements', equipe: 'Équipe' };
+const MODULE_GROUPS = [['Hébergement', ['planning','clients','inventaire','menage']], ['Argent', ['depenses','factures']], ['Restaurant & Bar', ['resto']], ['Pilotage', ['rapports','controle','mapage']], ['Organisation', ['pointage','notifs','multi','equipe']]];
+const MODULE_HELP = { planning: 'Vue calendrier des chambres', clients: 'Fichier clients et historique', resto: 'Caisse restaurant/bar, produits et stock', depenses: 'Charges fixes, opérationnelles, budget', factures: 'Factures numérotées', rapports: 'Rapports financiers et exports', mapage: 'Page publique et réservation en ligne', controle: 'Alertes et journal des actions', inventaire: 'Draps, serviettes, savons, entretien, minibar', pointage: 'Arrivées et départs du personnel, heures du mois', menage: 'Statuts « à nettoyer » et rappels de ménage', notifs: 'La cloche et les alertes en direct', multi: 'Sélecteur d’établissement (si vous en avez plusieurs)', equipe: 'Comptes du personnel et invitations' };
 const moduleOn = (v) => !MODULES[v] || !S.modules || S.modules.includes(v);
 async function loadOrgPrefs(){
   const { data } = await sb.from('organizations').select('display_currency,enabled_modules').eq('id', S.org).maybeSingle();
@@ -2779,6 +2786,118 @@ function openPrintSettings(){
   if ($('pfRc')) $('pfRc').onclick = () => openReceiptEditor();
   $('pfTest').onclick = () => printPosTicket({ server: myName(), number: 'TEST', total: 3500, outlet: 'bar', table: 'Table 1', method: 'cash', created_at: new Date().toISOString() }, [{ name: 'Flag 65cl', qty: 2, unit_price: 1000 }, { name: 'Coca-Cola', qty: 3, unit_price: 500 }]);
 }
+/* ================= Inventaire hébergement ================= */
+const SUP_CATS = ['Linge', 'Produits d’accueil', 'Entretien', 'Minibar', 'Fournitures'];
+const SUP_PRESETS = [['Draps 2 places', 'Linge', 'pièce'], ['Taies d’oreiller', 'Linge', 'pièce'], ['Serviettes de bain', 'Linge', 'pièce'], ['Tapis de bain', 'Linge', 'pièce'], ['Savons', 'Produits d’accueil', 'pièce'], ['Gel douche', 'Produits d’accueil', 'flacon'], ['Papier toilette', 'Produits d’accueil', 'rouleau'], ['Eau minérale 50 cl', 'Minibar', 'bouteille'], ['Javel', 'Entretien', 'litre'], ['Sacs poubelle', 'Entretien', 'paquet']];
+async function renderInventaire(){
+  const el = $('v-inventaire'); el.innerHTML = '<p class="muted">Chargement…</p>';
+  const [it, mv] = await Promise.all([
+    sb.from('supplies').select('*').eq('establishment_id', S.est).eq('is_active', true).order('category').order('name'),
+    sb.from('supply_movements').select('*').eq('establishment_id', S.est).order('created_at', { ascending: false }).limit(40)
+  ]);
+  if (it.error) { el.innerHTML = head('Inventaire') + `<p class="muted">${esc(errMsg(it.error))}</p>`; return; }
+  const items = it.data || [], mgr = can(['owner', 'admin', 'manager']);
+  const low = items.filter(x => Number(x.qty) <= Number(x.alert_qty));
+  const value = items.reduce((a, x) => a + Math.max(0, x.qty) * x.unit_cost, 0);
+  const byCat = {}; items.forEach(x => (byCat[x.category] = byCat[x.category] || []).push(x));
+  const name = (id) => (items.find(x => x.id === id) || {}).name || 'Article retiré';
+  const K = { in: ['Entrée', 'st-active'], out: ['Sortie', 'st-trial'], loss: ['Perte', 'st-cancelled'], adjust: ['Inventaire', 'st-past_due'] };
+  el.innerHTML = head('Inventaire', mgr ? '<button class="primary" type="button" id="supAdd">+ Article</button>' : '') + readOnlyNote() + `
+    <p class="muted" style="margin:-10px 0 16px">Linge, produits d’accueil, entretien et minibar des chambres.</p>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;margin-bottom:16px">
+      <div class="card"><div class="muted" style="font-size:13px">Articles suivis</div><div style="font-family:var(--display);font-size:26px;font-weight:800">${items.length}</div></div>
+      <div class="card"><div class="muted" style="font-size:13px">À racheter</div><div style="font-family:var(--display);font-size:26px;font-weight:800;color:${low.length ? 'var(--red)' : 'inherit'}">${low.length}</div></div>
+      <div class="card"><div class="muted" style="font-size:13px">Valeur en stock</div><div style="font-family:var(--display);font-size:26px;font-weight:800">${money(value)}</div></div></div>
+    ${!items.length ? `<div class="card" style="text-align:center;padding:30px"><h2 style="font-size:20px;margin-bottom:6px">Commencez votre inventaire</h2><p class="muted">Ajoutez vos draps, serviettes, savons… et suivez ce qui entre et ce qui sort.</p>${mgr ? '<button class="primary" type="button" id="supPre">Ajouter la liste de base</button>' : ''}</div>` : ''}
+    ${Object.entries(byCat).map(([c, list]) => `<div class="card" style="margin-bottom:12px"><h3 style="font-size:17px;margin-bottom:8px">${esc(c)}</h3>${list.map(x => { const lowx = Number(x.qty) <= Number(x.alert_qty); return `<div class="row between" style="padding:9px 0;border-bottom:1px solid var(--line);gap:8px;flex-wrap:nowrap">
+      <div style="min-width:0"><strong>${esc(x.name)}</strong>${lowx ? ' <span class="pill st-cancelled">à racheter</span>' : ''}<div class="muted" style="font-size:12px">alerte à ${+x.alert_qty} ${esc(x.unit)}${x.unit_cost ? ' · ' + money(x.unit_cost) + ' / ' + esc(x.unit) : ''}</div></div>
+      <div class="row" style="gap:6px;flex-wrap:nowrap"><strong style="font-size:18px;min-width:50px;text-align:right;color:${lowx ? 'var(--red)' : 'inherit'}">${+x.qty}</strong>
+        <button class="small" type="button" data-sm="in|${esc(x.id)}" aria-label="Entrée">+</button><button class="small ghost" type="button" data-sm="out|${esc(x.id)}" aria-label="Sortie">−</button>
+        <button class="small ghost" type="button" data-sm="more|${esc(x.id)}" aria-label="Plus d’options">…</button></div></div>`; }).join('')}</div>`).join('')}
+    ${(mv.data || []).length ? `<div class="card"><h3 style="font-size:17px;margin-bottom:8px">Mouvements récents</h3>${mv.data.map(m => `<div class="row between" style="padding:6px 0;border-bottom:1px dashed var(--line);font-size:13px;flex-wrap:nowrap"><span><span class="pill ${K[m.kind][1]}">${K[m.kind][0]}</span> ${esc(name(m.supply_id))}${m.room_id ? ' · ch. ' + esc((S.rooms.find(r => r.id === m.room_id) || {}).number || '') : ''}${m.note ? ' <span class="muted">· ' + esc(m.note) + '</span>' : ''}<br><span class="muted">${new Date(m.created_at).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })}</span></span><strong style="color:${m.qty < 0 ? 'var(--red)' : 'var(--green)'}">${m.qty > 0 ? '+' : ''}${+m.qty}</strong></div>`).join('')}</div>` : ''}`;
+  if ($('supAdd')) $('supAdd').onclick = () => openSupplyForm(null);
+  if ($('supPre')) $('supPre').onclick = async () => { const { error } = await sb.from('supplies').insert(SUP_PRESETS.map(([n, c, u]) => ({ establishment_id: S.est, name: n, category: c, unit: u, alert_qty: 5 }))); if (error) return toast(errMsg(error), true); toast('Liste de base ajoutée : saisissez vos quantités avec « + ».'); renderInventaire(); };
+  el.querySelectorAll('[data-sm]').forEach(b => b.onclick = () => { const [k, id] = b.dataset.sm.split('|'); const x = items.find(y => y.id === id); k === 'more' ? openSupplyMore(x) : openSupplyMove(x, k); });
+}
+function openSupplyMove(x, kind){
+  const T = { in: ['Entrée', 'Quantité reçue / rendue par la blanchisserie'], out: ['Sortie', 'Quantité utilisée / envoyée en chambre'], loss: ['Perte', 'Quantité perdue ou abîmée'], adjust: ['Inventaire', 'Quantité comptée en réalité'] }[kind];
+  modal(`<div class="eyebrow">${esc(x.name)} · en stock ${+x.qty} ${esc(x.unit)}</div><h2 style="font-size:22px;margin:4px 0 12px">${T[0]}</h2>
+    <form id="smF"><div class="field"><label for="smQ">${T[1]}</label><input id="smQ" inputmode="decimal" required style="font-size:22px"></div>
+    ${kind === 'out' ? `<div class="field"><label for="smR">Chambre (facultatif)</label><select id="smR"><option value="">—</option>${(S.rooms || []).map(r => `<option value="${esc(r.id)}">${esc(r.number)}</option>`).join('')}</select></div>` : ''}
+    <div class="field"><label for="smN">${kind === 'loss' ? 'Raison (obligatoire)' : 'Note'}</label><input id="smN" maxlength="200" ${kind === 'loss' ? 'required placeholder="ex. drap taché, serviette déchirée"' : ''}></div>
+    <button class="primary" style="width:100%">Enregistrer</button></form>`);
+  setTimeout(() => $('smQ').focus(), 50);
+  $('smF').onsubmit = async (e) => { e.preventDefault(); const q = Number(String($('smQ').value).replace(',', '.'));
+    const { data, error } = await sb.rpc('supply_move', { p_item: x.id, p_kind: kind, p_qty: q, p_note: $('smN').value || null, p_room: $('smR') ? $('smR').value || null : null });
+    if (error) return toast(errMsg(error), true); closeModal(); toast(`${x.name} : ${+data} ${x.unit}.`); renderInventaire(); };
+}
+function openSupplyMore(x){
+  const mgr = can(['owner', 'admin', 'manager']);
+  modal(`<h2 style="font-size:22px;margin-bottom:12px">${esc(x.name)}</h2><div style="display:grid;gap:8px">
+    <button class="ghost" type="button" data-o="loss">Déclarer une perte / un article abîmé</button>
+    ${mgr ? '<button class="ghost" type="button" data-o="adjust">Faire l’inventaire (corriger la quantité)</button><button class="ghost" type="button" data-o="edit">Modifier l’article</button><button class="ghost" type="button" data-o="del" style="color:var(--red)">Retirer l’article</button>' : ''}</div>`);
+  document.querySelectorAll('[data-o]').forEach(b => b.onclick = async () => { const o = b.dataset.o;
+    if (o === 'loss' || o === 'adjust') return openSupplyMove(x, o);
+    if (o === 'edit') return openSupplyForm(x);
+    const { error } = await sb.from('supplies').update({ is_active: false }).eq('id', x.id); if (error) return toast(errMsg(error), true); closeModal(); toast('Article retiré.'); renderInventaire(); });
+}
+function openSupplyForm(x){
+  const isNew = !x; x = x || { category: 'Linge', unit: 'pièce', alert_qty: 5, unit_cost: 0 };
+  modal(`<h2 style="font-size:22px;margin-bottom:12px">${isNew ? 'Nouvel article' : 'Modifier l’article'}</h2><form id="spF">
+    <div class="field"><label for="spN">Nom</label><input id="spN" required maxlength="80" value="${esc(x.name || '')}" placeholder="ex. Serviettes de bain"></div>
+    <div class="row" style="gap:10px"><div class="field" style="flex:1"><label for="spC">Catégorie</label><input id="spC" list="spCs" maxlength="40" value="${esc(x.category)}"><datalist id="spCs">${SUP_CATS.map(c => `<option value="${esc(c)}">`).join('')}</datalist></div>
+      <div class="field" style="flex:1"><label for="spU">Unité</label><input id="spU" maxlength="20" value="${esc(x.unit)}"></div></div>
+    <div class="row" style="gap:10px">${isNew ? '<div class="field" style="flex:1"><label for="spQ">Quantité actuelle</label><input id="spQ" inputmode="decimal" placeholder="0"></div>' : ''}<div class="field" style="flex:1"><label for="spA">Alerte quand il reste</label><input id="spA" inputmode="decimal" value="${+x.alert_qty}"></div><div class="field" style="flex:1"><label for="spP">Prix unitaire</label><input id="spP" inputmode="numeric" value="${+x.unit_cost || ''}"></div></div>
+    <button class="primary" style="width:100%">Enregistrer</button></form>`);
+  $('spF').onsubmit = async (e) => { e.preventDefault(); const n = (id) => Number(String(($(id) || {}).value || '0').replace(',', '.')) || 0;
+    const row = { establishment_id: S.est, name: $('spN').value.trim(), category: $('spC').value.trim() || 'Linge', unit: $('spU').value.trim() || 'pièce', alert_qty: n('spA'), unit_cost: n('spP') };
+    const res = isNew ? await sb.from('supplies').insert(row).select('id').single() : await sb.from('supplies').update(row).eq('id', x.id).select('id').single();
+    if (res.error) return toast(errMsg(res.error), true);
+    if (isNew && n('spQ') > 0) await sb.rpc('supply_move', { p_item: res.data.id, p_kind: 'in', p_qty: n('spQ'), p_note: 'Stock de départ', p_room: null });
+    closeModal(); toast('Article enregistré.'); renderInventaire(); };
+}
+
+/* ================= Pointage ================= */
+let CLOCK = { state: 'out', since: null };
+async function refreshClock(){ if (!S.org || !moduleOn('pointage')) { const b = $('navClock'); if (b) b.classList.add('hidden'); return; }
+  const { data } = await sb.rpc('clock', { p_org: S.org, p_est: S.est || null, p_action: 'status' }); if (data) CLOCK = data; drawClock(); }
+function drawClock(){ const b = $('navClock'); if (!b) return; b.classList.remove('hidden');
+  b.innerHTML = CLOCK.state === 'in' ? `<span style="width:9px;height:9px;border-radius:50%;background:#2E8B57;display:inline-block"></span> Présent depuis ${new Date(CLOCK.since).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}` : `<span style="width:9px;height:9px;border-radius:50%;background:#B9AE9C;display:inline-block"></span> Pointer mon arrivée`; }
+async function toggleClock(){
+  const act = CLOCK.state === 'in' ? 'out' : 'in';
+  const { data, error } = await sb.rpc('clock', { p_org: S.org, p_est: S.est || null, p_action: act });
+  if (error) return toast(errMsg(error), true);
+  CLOCK = data; drawClock();
+  toast(act === 'in' ? 'Arrivée pointée. Bonne journée !' : `Départ pointé : ${Math.floor(data.minutes / 60)} h ${String(data.minutes % 60).padStart(2, '0')} travaillées.`);
+  if (S.view === 'pointage') renderPointage();
+}
+async function renderPointage(){
+  const el = $('v-pointage'); el.innerHTML = '<p class="muted">Chargement…</p>';
+  S.ptMonth = S.ptMonth || today().slice(0, 7);
+  const from = S.ptMonth + '-01', to = addDays(new Date(new Date(from).getFullYear(), new Date(from).getMonth() + 1, 1).toISOString().slice(0, 10), 0);
+  const [att, team] = await Promise.all([
+    sb.from('attendance').select('*').eq('organization_id', S.org).gte('clock_in', from + 'T00:00:00').lt('clock_in', to + 'T00:00:00').order('clock_in', { ascending: false }),
+    can(['owner', 'admin']) ? sb.rpc('org_team_v2', { p_org: S.org }) : { data: [] }
+  ]);
+  await teamNames();
+  const rows = att.data || [];
+  const mins = (a) => Math.round(((a.clock_out ? new Date(a.clock_out) : new Date()) - new Date(a.clock_in)) / 60000);
+  const label = (uid) => { const m = (team.data || []).find(x => x.user_id === uid); return m ? (m.display_name || m.username || m.email) : who(uid); };
+  const per = {}; rows.forEach(a => { const p = per[a.user_id] = per[a.user_id] || { days: new Set(), min: 0, open: false }; p.days.add(a.clock_in.slice(0, 10)); p.min += mins(a); if (!a.clock_out) p.open = true; });
+  const hm = (m) => `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, '0')}`;
+  const mgr = can(['owner', 'admin', 'manager']);
+  el.innerHTML = head('Pointage', `<input type="month" id="ptM" value="${S.ptMonth}" style="max-width:180px"><button class="primary" type="button" id="ptMe">${CLOCK.state === 'in' ? 'Pointer mon départ' : 'Pointer mon arrivée'}</button>`) + `
+    <div class="card" style="margin-bottom:14px"><h3 style="font-size:17px;margin-bottom:8px">Heures du mois</h3><div class="tablewrap"><table class="table"><thead><tr><th>Employé</th><th>Jours</th><th>Heures</th><th>Moyenne / jour</th><th></th></tr></thead><tbody>
+      ${Object.entries(per).map(([u, p]) => `<tr><td>${esc(label(u))}</td><td>${p.days.size}</td><td><strong>${hm(p.min)}</strong></td><td>${hm(Math.round(p.min / Math.max(1, p.days.size)))}</td><td>${p.open ? '<span class="pill st-active">présent</span>' : ''}</td></tr>`).join('') || '<tr><td colspan="5" class="muted">Aucun pointage ce mois-ci.</td></tr>'}</tbody></table></div></div>
+    <div class="card"><h3 style="font-size:17px;margin-bottom:8px">Détail</h3>${rows.map(a => `<div class="row between" style="padding:8px 0;border-bottom:1px solid var(--line);gap:8px;flex-wrap:nowrap"><span><strong>${esc(label(a.user_id))}</strong> <span class="muted">· ${new Date(a.clock_in).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' })}</span><br><span style="font-size:13px">${new Date(a.clock_in).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })} → ${a.clock_out ? new Date(a.clock_out).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : '<em>en cours</em>'}${a.edited_by ? ' <span class="muted">(corrigé)</span>' : ''}${a.note ? ' <span class="muted">· ' + esc(a.note) + '</span>' : ''}</span></span>
+      <span class="row" style="gap:6px;flex-wrap:nowrap"><strong>${hm(mins(a))}</strong>${mgr ? `<button class="small ghost" type="button" data-ptfix="${esc(a.id)}">Corriger</button>` : ''}</span></div>`).join('') || '<p class="muted">Aucun pointage.</p>'}</div>`;
+  $('ptM').onchange = () => { if ($('ptM').value) { S.ptMonth = $('ptM').value; renderPointage(); } };
+  $('ptMe').onclick = toggleClock;
+  el.querySelectorAll('[data-ptfix]').forEach(b => b.onclick = () => { const a = rows.find(x => x.id === b.dataset.ptfix); const loc = (d) => d ? new Date(new Date(d).getTime() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16) : '';
+    modal(`<h2 style="font-size:20px;margin-bottom:10px">Corriger le pointage de ${esc(label(a.user_id))}</h2><form id="pfF"><div class="field"><label for="pfI">Arrivée</label><input type="datetime-local" id="pfI" required value="${loc(a.clock_in)}"></div><div class="field"><label for="pfO">Départ</label><input type="datetime-local" id="pfO" value="${loc(a.clock_out)}"></div><div class="field"><label for="pfN">Motif</label><input id="pfN" required maxlength="200" placeholder="ex. oubli de pointage" value="${esc(a.note || '')}"></div><button class="primary" style="width:100%">Enregistrer</button><p class="muted" style="font-size:12px">La correction est inscrite dans le journal du Contrôle.</p></form>`);
+    $('pfF').onsubmit = async (e) => { e.preventDefault(); const { error } = await sb.rpc('attendance_fix', { p_id: a.id, p_in: new Date($('pfI').value).toISOString(), p_out: $('pfO').value ? new Date($('pfO').value).toISOString() : null, p_note: $('pfN').value }); if (error) return toast(errMsg(error), true); closeModal(); toast('Pointage corrigé.'); renderPointage(); }; });
+}
+
 /* ================= Avis clients ================= */
 const stars = (n, size = 16) => `<span aria-label="${n} sur 5" style="color:#E8A317;font-size:${size}px;letter-spacing:1px">${'★'.repeat(Math.round(n || 0))}<span style="color:#D9CDBB">${'★'.repeat(5 - Math.round(n || 0))}</span></span>`;
 const reviewUrl = (tok) => location.origin + location.pathname + '?avis=' + tok;
