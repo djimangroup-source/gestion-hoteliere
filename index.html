@@ -177,6 +177,7 @@ body.modal-open{overflow:hidden}
 @media (max-width:700px){.rcgrid{grid-template-columns:1fr!important}}
 .subnav{display:none}
 @media (max-width:899px){.subnav:not(.hidden){display:flex;gap:6px;overflow-x:auto;margin:0 0 14px;padding-bottom:2px}.subnav button{flex:0 0 auto;min-height:38px;padding:0 14px;border-radius:999px;font-size:14px}}
+.legal h2{font-size:17px;margin:18px 0 6px}.legal p,.legal li{line-height:1.6;font-size:14.5px}.legal ul{padding-left:20px}
 .big{font-family:var(--display);font-weight:800;font-size:56px;line-height:1;color:var(--green)}
 @media (max-width:700px){nav.side{max-width:none}}
 </style>
@@ -205,10 +206,12 @@ body.modal-open{overflow:hidden}
       <div class="field"><label for="email">Adresse e-mail</label><input id="email" name="username" type="email" required autocomplete="username" inputmode="email" autocapitalize="none" spellcheck="false"></div>
       <div class="field"><label for="password">Mot de passe</label><div style="position:relative"><input id="password" name="password" type="password" required minlength="8" autocomplete="current-password" style="padding-right:96px"><button type="button" id="pwToggle" class="small ghost" style="position:absolute;right:4px;top:4px;min-height:36px;border:0" aria-label="Afficher le mot de passe">Afficher</button></div></div>
       <label class="row" style="gap:8px;margin:-4px 0 14px;font-weight:600;color:var(--ink);flex-wrap:nowrap"><input type="checkbox" id="remember" checked style="width:20px;min-height:20px"> Rester connecté sur cet appareil</label>
+      <label class="row hidden" id="cguRow" style="gap:8px;margin:-4px 0 14px;font-weight:600;color:var(--ink);flex-wrap:nowrap;align-items:flex-start"><input type="checkbox" id="cguOk" style="width:20px;min-height:20px;margin-top:2px"> <span>J’accepte les <a href="#" data-legal="cgu">CGU</a>, les <a href="#" data-legal="cgv">CGV</a> et la <a href="#" data-legal="confidentialite">politique de confidentialité</a>.</span></label>
       <button class="primary" style="width:100%" id="authBtn">Se connecter</button>
     </form>
     <div class="row" style="margin-top:12px"><button type="button" class="ghost" id="magicBtn" style="flex:1 1 200px">Recevoir un lien de connexion par e-mail</button></div>
     <p style="margin:10px 0 0;font-size:14px" class="row between"><a href="#" id="forgotLink">Mot de passe oublié ?</a><a href="#" onclick="event.preventDefault();refreshApp()" class="muted"> Actualiser l’application</a></p>
+    <p class="muted" id="authLegal" style="margin:14px 0 0;font-size:12px;text-align:center"></p>
     <p class="muted" style="margin:16px 0 0;font-size:14px"><span id="authSwitchTxt">Pas encore de compte ?</span> <a href="#" id="authSwitch">Créer un compte – 30 jours gratuits</a></p>
     </div>
   </div>
@@ -265,6 +268,7 @@ body.modal-open{overflow:hidden}
         <button type="button" id="navMods">Fonctionnalités utilisées</button>
         <button type="button" id="navCur">Devise</button>
         <button type="button" id="navTheme">Thème de l’application</button>
+        <button type="button" id="navLegal">Documents légaux</button>
         <button type="button" id="navRefresh"> Actualiser l’application</button>
         <button type="button" id="navPrint">Impression &amp; reçus</button>
         <button type="button" id="navPrn">Imprimantes thermiques</button>
@@ -363,7 +367,7 @@ if (window.HorusApp && window.HorusApp.postMessage) {
   window.__nativeOpen = nativeOpen;
 }
 /* ---------- Mise à jour de l'application sans réinstaller ni perdre la connexion ---------- */
-const APP_VERSION = '2026.10.19-10';
+const APP_VERSION = '2026.10.19-11';
 async function refreshApp(){
   toast('Actualisation…');
   try { const reg = navigator.serviceWorker && await navigator.serviceWorker.getRegistration(); if (reg) { await reg.update(); if (reg.waiting) reg.waiting.postMessage('skipWaiting'); } } catch (_) {}
@@ -462,10 +466,110 @@ function renderAuth(){
   $('authBtn').textContent = S.signup ? 'Créer mon compte' : 'Se connecter';
   $('authSwitchTxt').textContent = S.signup ? 'Déjà inscrit ?' : 'Pas encore de compte ?';
   renderProfiles();
+  $('cguRow').classList.toggle('hidden', !S.signup); $('cguOk').required = !!S.signup;
+  $('authLegal').innerHTML = 'En vous connectant, vous acceptez nos conditions. ' + legalLinks();
   $('authSwitch').textContent = S.signup ? 'Se connecter' : 'Créer un compte – 30 jours gratuits';
   $('password').autocomplete = S.signup ? 'new-password' : 'current-password';
   try { const last = localStorage.getItem('hh_last_email'); if (last && !$('email').value) { $('email').value = last; } $('remember').checked = authStore.remember(); } catch (_) {}
 }
+/* ================= Documents légaux : CGU, CGV, confidentialité, mentions légales ================= */
+const LEGAL_VERSION = '2026-10-19';
+const LEGAL_DATE = '19 octobre 2026';
+const LEGAL_ENTITY = { name: 'Horus Hotel', country: 'Côte d’Ivoire', city: 'Abidjan', email: 'ayekoueguynoel@gmail.com', host: 'Supabase Inc. (base de données et authentification) et GitHub Inc. (hébergement de l’application)' };
+const LEGAL_DOCS = {
+  cgu: ['Conditions générales d’utilisation', () => `
+    <h2>1. Objet</h2><p>Les présentes conditions générales d’utilisation (« CGU ») encadrent l’accès et l’utilisation du logiciel en ligne <b>${LEGAL_ENTITY.name}</b> (le « Service »), solution de gestion d’hôtels, de résidences meublées, de restaurants et de bars, accessible depuis un navigateur ou une application installée. Elles s’appliquent à toute personne qui crée un compte ou utilise le Service (l’« Utilisateur »), qu’il s’agisse d’un établissement client (le « Client ») ou d’un membre de son personnel.</p>
+    <h2>2. Acceptation</h2><p>La création d’un compte, la première connexion et l’utilisation du Service valent acceptation sans réserve des présentes CGU, des conditions générales de vente (CGV) et de la politique de confidentialité, dans leur version en vigueur. L’acceptation est enregistrée et horodatée. En cas de mise à jour, l’Utilisateur est invité à accepter la nouvelle version lors de sa prochaine connexion ; à défaut, l’accès au Service est suspendu.</p>
+    <h2>3. Accès au Service et compte</h2><p>Le Service est réservé aux personnes majeures agissant pour les besoins d’une activité professionnelle. L’Utilisateur fournit des informations exactes et les tient à jour. Les identifiants (adresse e-mail et mot de passe, ou code hôtel, identifiant et code personnel) sont strictement personnels et confidentiels : toute action réalisée avec eux est réputée faite par leur titulaire. Toute utilisation non autorisée doit être signalée sans délai.</p>
+    <p>Le Client (propriétaire ou administrateur) crée les comptes de son personnel, leur attribue un poste et des droits, et peut les suspendre à tout moment. Il reste responsable de l’usage fait du Service par son personnel.</p>
+    <h2>4. Obligations de l’Utilisateur</h2><p>L’Utilisateur s’engage à utiliser le Service conformément aux lois en vigueur, notamment en matière fiscale, commerciale, de protection des données personnelles et d’hébergement touristique ; à ne saisir que des données dont il a le droit de disposer ; à informer ses propres clients du traitement de leurs données ; à ne pas tenter d’accéder aux données d’autres établissements, de contourner les mesures de sécurité ou de perturber le fonctionnement du Service ; à ne pas revendre ou mettre le Service à disposition de tiers sans accord écrit.</p>
+    <h2>5. Données du Client</h2><p>Les données saisies (réservations, clients, encaissements, dépenses, produits, stocks, factures, photos) appartiennent au Client. ${LEGAL_ENTITY.name} les héberge et les traite uniquement pour fournir le Service, selon la politique de confidentialité. Les données de chaque établissement sont cloisonnées et accessibles uniquement aux comptes qu’il a autorisés.</p>
+    <p>Les montants, rapports, tickets, factures et analyses produits par le Service sont des outils d’aide à la gestion calculés à partir des données saisies : leur exactitude dépend de ces données. Ils ne remplacent ni une comptabilité tenue par un professionnel, ni les obligations fiscales et déclaratives du Client.</p>
+    <h2>6. Disponibilité et évolutions</h2><p>${LEGAL_ENTITY.name} met en œuvre les moyens raisonnables pour assurer l’accès au Service 24 h/24, 7 j/7, sans obligation de résultat. Le Service peut être interrompu pour maintenance, mise à jour, panne d’un prestataire technique ou cas de force majeure. Les fonctionnalités peuvent évoluer ; celles d’une formule payante en cours ne sont pas supprimées sans information préalable. Une connexion à internet est nécessaire ; certaines fonctions (impression directe, caméra, Bluetooth) dépendent du navigateur et du matériel de l’Utilisateur.</p>
+    <h2>7. Propriété intellectuelle</h2><p>Le Service, son code, sa marque, son nom, ses interfaces et ses contenus sont la propriété de ${LEGAL_ENTITY.name}. Le Client bénéficie d’un droit d’utilisation personnel, non exclusif et non cessible pendant la durée de son abonnement. Toute reproduction, copie, décompilation ou exploitation non autorisée est interdite. Le Client conserve tous ses droits sur ses propres contenus (logo, photos, textes) et autorise leur affichage dans le Service et sur sa page de présentation publique s’il l’active.</p>
+    <h2>8. Responsabilité</h2><p>${LEGAL_ENTITY.name} n’est pas responsable : des décisions de gestion prises sur la base du Service ; des erreurs de saisie ; de l’usage des identifiants par un tiers du fait d’une négligence de l’Utilisateur ; des dommages indirects (perte de chiffre d’affaires, de clientèle, d’image) ; des défaillances du matériel, des imprimantes, du réseau internet ou des services de paiement mobile de l’Utilisateur. Sauf faute lourde ou intentionnelle, la responsabilité totale de ${LEGAL_ENTITY.name} est limitée aux sommes payées par le Client au cours des douze derniers mois. Les formules gratuites sont fournies « en l’état ».</p>
+    <h2>9. Suspension et résiliation</h2><p>Le Client peut cesser d’utiliser le Service à tout moment. ${LEGAL_ENTITY.name} peut suspendre ou fermer un compte en cas de manquement grave aux présentes CGU, de fraude, d’atteinte à la sécurité ou de non-paiement, après mise en demeure restée sans effet sauf urgence. Après la fin d’un abonnement payant, le compte passe à la formule gratuite Découverte lorsqu’elle existe, sans perte de données. Sur demande, le Client peut obtenir la suppression de son compte et de ses données, sous réserve des durées de conservation légales.</p>
+    <h2>10. Modification des CGU</h2><p>Les CGU peuvent être modifiées pour tenir compte des évolutions du Service ou de la réglementation. La nouvelle version est présentée à l’Utilisateur, qui doit l’accepter pour continuer à utiliser le Service.</p>
+    <h2>11. Droit applicable et litiges</h2><p>Les présentes CGU sont régies par le droit ivoirien, notamment la loi n° 2013-546 du 30 juillet 2013 relative aux transactions électroniques. En cas de différend, les parties recherchent d’abord une solution amiable. À défaut, compétence est attribuée aux juridictions d’${LEGAL_ENTITY.city} (${LEGAL_ENTITY.country}).</p>
+    <h2>12. Contact</h2><p>Pour toute question : <a href="mailto:${LEGAL_ENTITY.email}">${LEGAL_ENTITY.email}</a>.</p>`],
+  cgv: ['Conditions générales de vente (abonnements)', () => `
+    <h2>1. Objet</h2><p>Les présentes conditions générales de vente (« CGV ») s’appliquent à la souscription des formules d’abonnement au Service ${LEGAL_ENTITY.name} par un établissement professionnel (le « Client »). Elles complètent les CGU.</p>
+    <h2>2. Formules et prix</h2><p>Les formules disponibles, leurs fonctionnalités, leurs limites (nombre de chambres, d’utilisateurs, d’établissements) et leurs prix sont affichés dans l’application, rubrique « Tarifs ». Les prix sont exprimés en francs CFA (XOF), toutes taxes applicables comprises sauf mention contraire. La formule Découverte est gratuite et sans limite de durée, dans les limites indiquées. Les offres « sur devis » font l’objet d’une proposition écrite.</p>
+    <h2>3. Période d’essai</h2><p>Une période d’essai gratuite peut être proposée à la création du compte. Elle ne nécessite aucun moyen de paiement. À son terme, sans souscription, le compte passe automatiquement à la formule gratuite Découverte, sans perte de données.</p>
+    <h2>4. Souscription, durée et renouvellement</h2><p>L’abonnement est souscrit pour une durée mensuelle ou annuelle, à compter de la confirmation du paiement. Il n’est pas renouvelé automatiquement : le Client renouvelle lui-même son abonnement avant l’échéance. Un délai de grâce de trois (3) jours suit l’échéance ; ensuite, le compte passe à la formule Découverte et les fonctions des formules supérieures sont désactivées jusqu’au renouvellement. Les données sont conservées.</p>
+    <h2>5. Paiement</h2><p>Le paiement s’effectue par les moyens proposés dans l’application (notamment Mobile Money : Wave, Orange Money, MTN MoMo, Moov Money ; virement ; ou autre moyen indiqué). Chaque paiement est validé avant activation. Une facture ou un reçu est mis à disposition du Client. Aucun paiement n’est prélevé automatiquement sans action du Client.</p>
+    <h2>6. Changement de formule</h2><p>Le Client peut passer à une formule supérieure à tout moment ; le nouveau prix s’applique à compter du changement. Le passage à une formule inférieure prend effet à la fin de la période payée. Si l’usage du Client dépasse les limites de la nouvelle formule (par exemple le nombre d’utilisateurs), certaines créations peuvent être bloquées jusqu’à mise en conformité.</p>
+    <h2>7. Rétractation et remboursement</h2><p>Le Service étant destiné à des professionnels et utilisable dès l’activation, la période payée en cours n’est pas remboursable, sauf indisponibilité prolongée du Service imputable à ${LEGAL_ENTITY.name} ou disposition légale impérative contraire. En cas d’erreur de paiement (doublon, mauvais montant), le Client contacte ${LEGAL_ENTITY.name} sous trente (30) jours avec la référence de la transaction.</p>
+    <h2>8. Résiliation</h2><p>Le Client peut ne pas renouveler son abonnement à tout moment ; l’accès payant reste ouvert jusqu’à la fin de la période réglée. ${LEGAL_ENTITY.name} peut résilier en cas de manquement grave aux CGU ou de fraude au paiement.</p>
+    <h2>9. Assistance</h2><p>L’assistance est fournie selon la formule (par message ou WhatsApp, en heures ouvrées, et en priorité pour les formules qui l’incluent).</p>
+    <h2>10. Droit applicable</h2><p>Les présentes CGV sont soumises au droit ivoirien. Les litiges sont réglés à l’amiable en priorité, à défaut devant les juridictions d’${LEGAL_ENTITY.city}.</p>`],
+  confidentialite: ['Politique de confidentialité', () => `
+    <h2>1. Responsable du traitement</h2><p><b>${LEGAL_ENTITY.name}</b> est responsable du traitement des données relatives aux comptes Utilisateurs (propriétaires, administrateurs, personnel). Pour les données des clients hébergés (voyageurs, clients du restaurant), <b>l’établissement Client est responsable du traitement</b> et ${LEGAL_ENTITY.name} agit comme sous-traitant, uniquement sur ses instructions. La présente politique est établie au regard de la loi n° 2013-450 du 19 juin 2013 relative à la protection des données à caractère personnel en Côte d’Ivoire, dont l’autorité de contrôle est l’ARTCI.</p>
+    <h2>2. Données traitées</h2><ul>
+      <li><b>Comptes</b> : nom, adresse e-mail ou identifiant de personnel, établissement, poste, mot de passe (chiffré, jamais lisible par ${LEGAL_ENTITY.name}), dates de connexion.</li>
+      <li><b>Activité de l’établissement</b> : chambres, réservations, encaissements, dépenses et justificatifs, produits, stocks, ventes, factures, journal des actions.</li>
+      <li><b>Clients de l’établissement</b> : nom, téléphone, e-mail, dates de séjour, montants, notes saisies par l’établissement.</li>
+      <li><b>Demandes de réservation en ligne</b> : nom, téléphone, e-mail facultatif, dates, message.</li>
+      <li><b>Données techniques</b> : type de navigateur, réglages enregistrés sur l’appareil (thème, imprimante, profils de connexion).</li></ul>
+    <h2>3. Finalités et bases légales</h2><p>Fournir et sécuriser le Service (exécution du contrat) ; gérer les abonnements et paiements (contrat, obligations légales) ; prévenir la fraude et tracer les opérations sensibles (intérêt légitime du Client et de ${LEGAL_ENTITY.name}) ; assistance ; amélioration du Service à partir de statistiques anonymes. Aucune donnée n’est vendue, louée ni utilisée à des fins publicitaires.</p>
+    <h2>4. Destinataires</h2><p>Les données d’un établissement ne sont accessibles qu’aux comptes autorisés de cet établissement, selon leur poste. Elles sont hébergées par des prestataires techniques : ${LEGAL_ENTITY.host}. Ces prestataires peuvent stocker les données hors de Côte d’Ivoire ; ${LEGAL_ENTITY.name} s’assure qu’ils offrent des garanties de sécurité appropriées (chiffrement des échanges, contrôle d’accès). Les données peuvent être communiquées aux autorités sur demande légale.</p>
+    <h2>5. Durées de conservation</h2><p>Les données sont conservées pendant la durée d’utilisation du Service. Après suppression du compte à la demande du Client, elles sont effacées sous trente (30) jours, à l’exception des données dont la conservation est imposée par la loi (pièces comptables et factures : dix (10) ans). Les demandes de réservation non suivies peuvent être supprimées par l’établissement à tout moment.</p>
+    <h2>6. Sécurité</h2><p>Échanges chiffrés (HTTPS), mots de passe chiffrés, cloisonnement strict des données de chaque établissement au niveau de la base de données, droits par poste, journal des actions, possibilité de suspendre immédiatement un compte de personnel. Aucune clé d’administration n’est présente dans l’application.</p>
+    <h2>7. Vos droits</h2><p>Toute personne concernée dispose d’un droit d’accès, de rectification, d’opposition pour motif légitime et de suppression de ses données. Les clients d’un hôtel exercent ces droits d’abord auprès de l’établissement ; les Utilisateurs auprès de ${LEGAL_ENTITY.name} : <a href="mailto:${LEGAL_ENTITY.email}">${LEGAL_ENTITY.email}</a>. Une réponse est apportée dans un délai d’un mois. Une réclamation peut être adressée à l’ARTCI.</p>
+    <h2>8. Obligations de l’établissement Client</h2><p>L’établissement informe ses clients de la collecte de leurs données (par exemple par affichage à l’accueil ou sur sa page de réservation), ne collecte que les données nécessaires, et respecte ses propres obligations déclaratives auprès de l’ARTCI le cas échéant.</p>
+    <h2>9. Stockage sur l’appareil</h2><p>L’application enregistre sur l’appareil des réglages de confort (rester connecté, thème, format et imprimante, profils de connexion sans mot de passe, commandes en attente). Aucun cookie publicitaire ni traceur tiers n’est utilisé. Ces informations peuvent être effacées depuis les réglages du navigateur.</p>`],
+  mentions: ['Mentions légales', () => `
+    <h2>Éditeur</h2><p><b>${LEGAL_ENTITY.name}</b> — logiciel de gestion hôtelière, ${LEGAL_ENTITY.city}, ${LEGAL_ENTITY.country}.<br>Contact : <a href="mailto:${LEGAL_ENTITY.email}">${LEGAL_ENTITY.email}</a></p>
+    <h2>Hébergement</h2><p>Application : GitHub Inc., 88 Colin P. Kelly Jr. Street, San Francisco, CA 94107, États-Unis (GitHub Pages).<br>Données et authentification : Supabase Inc., San Francisco, États-Unis.</p>
+    <h2>Propriété intellectuelle</h2><p>La marque, le nom, le logo, l’interface et le code de ${LEGAL_ENTITY.name} sont protégés. Toute reproduction sans autorisation est interdite.</p>
+    <h2>Documents</h2><p>Conditions générales d’utilisation, conditions générales de vente et politique de confidentialité : version du ${LEGAL_DATE}.</p>`]
+};
+const legalUrl = (k) => location.origin + location.pathname + '?legal=' + k;
+function legalHtml(k){ const d = LEGAL_DOCS[k]; return `<div class="legal"><div class="eyebrow">${LEGAL_ENTITY.name} · version du ${LEGAL_DATE}</div><h1 style="font-size:28px;margin:6px 0 14px">${d[0]}</h1>${d[1]()}</div>`; }
+function openLegal(k){
+  modal(`<div class="row between" style="margin-bottom:6px;flex-wrap:nowrap"><div class="row" style="gap:6px;overflow-x:auto;flex-wrap:nowrap">${Object.entries(LEGAL_DOCS).map(([kk, d]) => `<button type="button" class="small ${kk === k ? '' : 'ghost'}" data-lg="${kk}" style="white-space:nowrap">${d[0].split(' (')[0].replace('Conditions générales d’utilisation', 'CGU').replace('Conditions générales de vente', 'CGV')}</button>`).join('')}</div><button class="small ghost" data-close style="border:0;font-size:18px" aria-label="Fermer">✕</button></div>
+    <div style="max-height:68vh;overflow-y:auto;padding-right:4px">${legalHtml(k)}</div>
+    <div class="row" style="margin-top:12px"><a class="btn" href="${legalUrl(k)}" target="_blank" rel="noopener" style="flex:1;justify-content:center">Ouvrir / imprimer</a><button class="primary" data-close style="flex:1">Fermer</button></div>`);
+  $('modalBody').style.maxWidth = '760px';
+  document.querySelectorAll('[data-lg]').forEach(b => b.onclick = () => openLegal(b.dataset.lg));
+}
+function legalLinks(){ return `<a href="#" data-legal="cgu">CGU</a> · <a href="#" data-legal="cgv">CGV</a> · <a href="#" data-legal="confidentialite">Confidentialité</a> · <a href="#" data-legal="mentions">Mentions légales</a>`; }
+document.addEventListener('click', (e) => { const a = e.target.closest('[data-legal]'); if (a) { e.preventDefault(); openLegal(a.dataset.legal); } });
+function renderLegalPage(k){
+  if (!LEGAL_DOCS[k]) k = 'cgu';
+  document.title = LEGAL_DOCS[k][0] + ' – ' + LEGAL_ENTITY.name;
+  const el = $('public'); show('public');
+  el.innerHTML = `<div style="max-width:820px;margin:0 auto;padding:28px 18px 60px"><div class="row" style="gap:6px;margin-bottom:18px">${Object.entries(LEGAL_DOCS).map(([kk, d]) => `<a class="btn" style="min-height:38px;${kk === k ? 'background:var(--ink);color:var(--card)' : ''}" href="${legalUrl(kk)}">${d[0].split(' (')[0]}</a>`).join('')}</div>
+    <div class="card" style="padding:28px">${legalHtml(k)}</div><p class="muted" style="text-align:center;margin-top:16px"><a href="${location.origin + location.pathname}">Retour à ${LEGAL_ENTITY.name}</a> · <a href="#" onclick="window.print();return false">Imprimer</a></p></div>`;
+}
+// Acceptation obligatoire (nouvelle inscription, ou nouvelle version des documents)
+async function ensureLegalAccepted(){
+  if (!S.session) return true;
+  const { data } = await sb.from('legal_acceptances').select('id').eq('user_id', S.session.user.id).eq('version', LEGAL_VERSION).limit(1);
+  if (data && data.length) return true;
+  let pending = null; try { pending = localStorage.getItem('hh_legal_ok'); } catch (_) {}
+  if (pending === LEGAL_VERSION) { const { error } = await sb.from('legal_acceptances').insert({ version: LEGAL_VERSION, user_agent: navigator.userAgent.slice(0, 300) }); try { localStorage.removeItem('hh_legal_ok'); } catch (_) {} if (!error || error.code === '23505') return true; }
+  return new Promise((resolve) => {
+    modal(`<div class="eyebrow">Avant de continuer</div><h2 style="font-size:24px;margin:4px 0 8px">Conditions d’utilisation</h2>
+      <p class="muted" style="margin:0 0 12px">Pour utiliser ${LEGAL_ENTITY.name}, merci de lire et d’accepter nos documents (version du ${LEGAL_DATE}).</p>
+      <div style="display:grid;gap:6px;margin-bottom:12px">${['cgu', 'cgv', 'confidentialite'].map(k => `<button type="button" class="ghost" data-legal="${k}" style="justify-content:space-between;align-items:center;display:flex;text-align:left;gap:8px"><span>${LEGAL_DOCS[k][0]}</span><span>Lire →</span></button>`).join('')}</div>
+      <label class="row" style="gap:10px;flex-wrap:nowrap;font-weight:600;align-items:flex-start;margin-bottom:14px"><input type="checkbox" id="lgOk" style="width:22px;min-height:22px;margin-top:2px"> <span>J’ai lu et j’accepte les conditions générales d’utilisation, les conditions générales de vente et la politique de confidentialité.</span></label>
+      <button class="primary" id="lgGo" style="width:100%;min-height:52px" disabled>Accepter et continuer</button>
+      <button class="ghost" type="button" id="lgOut" style="width:100%;margin-top:8px">Refuser et se déconnecter</button>`);
+    $('modal').dataset.locked = '1';
+    const reopen = () => { if (!$('lgOk')) { /* l'utilisateur lit un document : on revient ensuite */ } };
+    $('lgOk').onchange = () => { $('lgGo').disabled = !$('lgOk').checked; };
+    $('lgGo').onclick = async () => { $('lgGo').disabled = true;
+      const { error } = await sb.from('legal_acceptances').insert({ version: LEGAL_VERSION, user_agent: navigator.userAgent.slice(0, 300) });
+      if (error && error.code !== '23505') { $('lgGo').disabled = false; return toast(errMsg(error), true); }
+      delete $('modal').dataset.locked; closeModal(); resolve(true); };
+    $('lgOut').onclick = async () => { delete $('modal').dataset.locked; closeModal(); await sb.auth.signOut(); resolve(false); };
+    // Les liens « Lire » ouvrent le document dans la même fenêtre : on rouvre l'acceptation après fermeture
+    document.querySelectorAll('#modalBody [data-legal]').forEach(b => b.addEventListener('click', (e) => { e.stopPropagation(); e.preventDefault(); window.open(legalUrl(b.dataset.legal), '_blank', 'noopener'); }, true));
+    reopen();
+  });
+}
+
 /* ---------- Profils enregistrés sur cet appareil (sans mot de passe) ---------- */
 const getProfiles = () => { try { return JSON.parse(localStorage.getItem('hh_profiles') || '[]'); } catch (_) { return []; } };
 const setProfiles = (l) => { try { localStorage.setItem('hh_profiles', JSON.stringify(l.slice(0, 6))); } catch (_) {} };
@@ -565,6 +669,8 @@ $('authForm').addEventListener('submit', async e => {
   const btn = $('authBtn'); btn.disabled = true;
   try {
     if (S.signup) {
+      if (!$('cguOk').checked) throw new Error('Acceptez les conditions générales pour créer votre compte.');
+      try { localStorage.setItem('hh_legal_ok', LEGAL_VERSION); } catch (_) {}
       const { data, error } = await sb.auth.signUp({ email, password, options: { emailRedirectTo: location.origin + location.pathname } });
       if (error) throw error;
       if (!data.session) { toast('Compte créé. Confirmez votre adresse e-mail puis connectez-vous.'); S.signup = false; renderAuth(); }
@@ -595,10 +701,12 @@ $('onboardForm').addEventListener('submit', async e => {
 /* ---------- Chargement ---------- */
 const PUBLIC_SLUG = new URLSearchParams(location.search).get('h');
 async function boot(){
+  const LEGAL_Q = new URLSearchParams(location.search).get('legal'); if (LEGAL_Q) return renderLegalPage(LEGAL_Q);
   if (PUBLIC_SLUG) return renderPublicPage(PUBLIC_SLUG);
   const { data: { session } } = await sb.auth.getSession();
   S.session = session;
   if (!session) { renderAuth(); renderProfiles(); show('auth'); setTimeout(() => { const f = $('email').value ? $('password') : $('email'); if (f) f.focus(); }, 50); return; }
+  if (!(await ensureLegalAccepted())) return;
   const [mem, adm] = await Promise.all([
     sb.from('organization_members').select('organization_id, role, username, display_name, must_change_password, organizations(name)').eq('user_id', session.user.id).eq('is_active', true).limit(1),
     sb.rpc('is_platform_admin')
@@ -705,6 +813,7 @@ $('navEsts').onclick = () => openEstablishments();
 $('navNotif').onclick = () => openNotifs();
 $('navTheme').onclick = () => openThemes();
 $('navRefresh').onclick = () => refreshApp();
+$('navLegal').onclick = () => openLegal('cgu');
 $('navMods').onclick = () => openModules();
 $('navCur').onclick = () => { modal(`<h2 style="font-size:22px;margin-bottom:10px">Devise d’affichage</h2><p class="muted" style="font-size:14px;margin:0 0 10px">Les montants s’affichent dans cette devise (aucune conversion n’est faite).</p><div style="display:grid;gap:6px">${Object.entries(CURRENCIES).map(([k, v]) => `<button type="button" class="${k === S.currency ? '' : 'ghost'}" data-cur="${k}" style="justify-content:space-between;display:flex"><span>${v[0]}</span><strong>${k} · ${v[1]}</strong></button>`).join('')}</div>`); document.querySelectorAll('[data-cur]').forEach(b => b.onclick = () => { closeModal(); setCurrency(b.dataset.cur); }); };
 $('navPrint').onclick = () => openPrintSettings();
@@ -3433,6 +3542,7 @@ async function renderPublicPage(slug){
         <div class="field"><label for="bMail">E-mail (facultatif)</label><input id="bMail" type="email" autocomplete="email"></div>
         <div class="field"><label for="bNote">Message (facultatif)</label><input id="bNote" maxlength="500" placeholder="Heure d'arrivée, demande particulière…"></div>
         <div style="position:absolute;left:-10000px" aria-hidden="true"><label for="bWeb">Ne pas remplir</label><input id="bWeb" tabindex="-1" autocomplete="off"></div>
+        <label class="row" style="gap:8px;margin:0 0 12px;flex-wrap:nowrap;align-items:flex-start;font-size:13px"><input type="checkbox" id="bOk" style="width:20px;min-height:20px;margin-top:1px"> <span>J’accepte que mes informations soient transmises à l’établissement pour traiter ma demande (<a href="#" data-legal="confidentialite">confidentialité</a>).</span></label>
         <button class="primary" style="width:100%" id="bSend">Envoyer la demande</button>
         <p class="muted" style="font-size:12px;margin:10px 0 0">${h.auto_confirm ? 'Votre réservation est confirmée immédiatement, sous réserve des conditions de l’établissement.' : 'L’établissement vous recontactera pour confirmer. Aucun paiement en ligne n’est demandé.'}</p>` : '<p class="muted">Réservation en ligne indisponible. Contactez directement l’établissement.</p>'}
       </form>
@@ -3463,6 +3573,7 @@ async function renderPublicPage(slug){
     if ($('bWeb').value || Date.now() - t_started < 3000) return toast('Merci de vérifier vos informations.', true);
     if (!lastQuote || !lastQuote.ok) return toast('Choisissez des dates disponibles.', true);
     if ($('bName').value.trim().length < 2) return toast('Indiquez votre nom complet.', true);
+    if (!$('bOk').checked) return toast('Merci d’accepter la transmission de vos informations à l’établissement.', true);
     const btn = $('bSend'); btn.disabled = true; btn.textContent = 'Envoi…';
     const { data: r, error: er } = await sb.rpc('public_create_booking', { p_slug: h.slug, p_room_type: $('bType').value, p_check_in: $('bIn').value, p_check_out: $('bOut').value, p_adults: +$('bAd').value || 1,
       p_name: $('bName').value.trim(), p_phone: $('bPhone').value.trim(), p_email: $('bMail').value.trim() || null, p_notes: $('bNote').value.trim() || null });
