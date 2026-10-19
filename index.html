@@ -294,7 +294,7 @@ const STATUS = { trial:'Essai', active:'Actif', past_due:'Échéance dépassée'
 const PAYST = { pending:'En attente', succeeded:'Payé', failed:'Échoué', cancelled:'Annulé', refunded:'Remboursé' };
 const CYCLE = { trial:'Essai', monthly:'Mensuel', yearly:'Annuel' };
 const METHOD = { orange_money:'Orange Money', mtn_money:'MTN MoMo', moov_money:'Moov Money', wave:'Wave', card:'Carte bancaire', bank_transfer:'Virement bancaire', cash:'Espèces' };
-const FEAT = { online_booking:'Page de présentation & réservation en ligne', owner_control:'Contrôle propriétaire & alertes', multi_property:'Plusieurs établissements', priority_support:'Support prioritaire', training:'Installation & formation', reception:'Réception & planning', reservations:'Réservations', clients:'Fiches clients', billing:'Facturation', payments:'Encaissements', cash:'Caisse', housekeeping:'Housekeeping', expenses:'Dépenses', basic_reports:'Rapports de base', users:'Utilisateurs', pdf_export:'Export PDF', advanced_reservations:'Réservations avancées', rates:'Tarifs', promotions:'Promotions', services:'Services', advanced_housekeeping:'Housekeeping avancé', maintenance:'Maintenance', financial_reports:'Rapports financiers', occupancy_stats:"Statistiques d'occupation", full_history:'Historique complet', excel_export:'Export Excel', user_permissions:'Permissions utilisateurs', notifications:'Notifications', restaurant:'Restaurant', bar:'Bar', orders:'Commandes', room_charge_transfer:'Transfert sur chambre', inventory:'Stocks', suppliers:'Fournisseurs', staff:'Personnel', groups:'Groupes', accounting:'Comptabilité simplifiée', advanced_dashboard:'Dashboard avancé', adr_revpar:'ADR & RevPAR', revenue_by_service:'CA par service', online_booking:'Réservation en ligne', online_payment:'Paiement en ligne', whatsapp_sms:'WhatsApp / SMS', api:'API', channel_manager:'Channel Manager', ota:'Connexion OTA', dynamic_pricing:'Tarification dynamique', revenue_management:'Revenue Management', advanced_crm:'CRM avancé', loyalty:'Fidélité', advanced_promotions:'Promotions avancées', whatsapp_automation:'Automatisation WhatsApp', custom_reports:'Rapports personnalisables', ai_assistant:'Assistant IA', smart_alerts:'Alertes intelligentes', advanced_api:'API avancée', full_audit:'Audit complet', multi_property:'Multi-établissements', multi_city:'Multi-villes', central_admin:'Administration centralisée', hotel_groups:'Groupes hôteliers', financial_consolidation:'Consolidation financière', national_dashboard:'Dashboard national', advanced_permissions:'Permissions avancées', custom_api:'API personnalisée', custom_integrations:'Intégrations spécifiques', data_migration:'Migration des données', training:'Formation', priority_support:'Support prioritaire' };
+const FEAT = { notifications:'Notifications', daily_summary:'Résumé quotidien au propriétaire (bientôt)', whatsapp_auto:'Messages WhatsApp automatiques (bientôt)', seasonal_rates:'Tarifs par saison (bientôt)', extra_services:'Services en plus : petit-déjeuner, linge… (bientôt)', online_booking:'Page de présentation & réservation en ligne', owner_control:'Contrôle propriétaire & alertes', multi_property:'Plusieurs établissements', priority_support:'Support prioritaire', training:'Installation & formation', reception:'Réception & planning', reservations:'Réservations', clients:'Fiches clients', billing:'Facturation', payments:'Encaissements', cash:'Caisse', housekeeping:'Housekeeping', expenses:'Dépenses', basic_reports:'Rapports de base', users:'Utilisateurs', pdf_export:'Export PDF', advanced_reservations:'Réservations avancées', rates:'Tarifs', promotions:'Promotions', services:'Services', advanced_housekeeping:'Housekeeping avancé', maintenance:'Maintenance', financial_reports:'Rapports financiers', occupancy_stats:"Statistiques d'occupation", full_history:'Historique complet', excel_export:'Export Excel', user_permissions:'Permissions utilisateurs', notifications:'Notifications', restaurant:'Restaurant', bar:'Bar', orders:'Commandes', room_charge_transfer:'Transfert sur chambre', inventory:'Stocks', suppliers:'Fournisseurs', staff:'Personnel', groups:'Groupes', accounting:'Comptabilité simplifiée', advanced_dashboard:'Dashboard avancé', adr_revpar:'ADR & RevPAR', revenue_by_service:'CA par service', online_booking:'Réservation en ligne', online_payment:'Paiement en ligne', whatsapp_sms:'WhatsApp / SMS', api:'API', channel_manager:'Channel Manager', ota:'Connexion OTA', dynamic_pricing:'Tarification dynamique', revenue_management:'Revenue Management', advanced_crm:'CRM avancé', loyalty:'Fidélité', advanced_promotions:'Promotions avancées', whatsapp_automation:'Automatisation WhatsApp', custom_reports:'Rapports personnalisables', ai_assistant:'Assistant IA', smart_alerts:'Alertes intelligentes', advanced_api:'API avancée', full_audit:'Audit complet', multi_property:'Multi-établissements', multi_city:'Multi-villes', central_admin:'Administration centralisée', hotel_groups:'Groupes hôteliers', financial_consolidation:'Consolidation financière', national_dashboard:'Dashboard national', advanced_permissions:'Permissions avancées', custom_api:'API personnalisée', custom_integrations:'Intégrations spécifiques', data_migration:'Migration des données', training:'Formation', priority_support:'Support prioritaire' };
 
 function toast(msg, err=false){ const t=$('toast'); t.textContent=msg; t.className='toast'+(err?' err':''); clearTimeout(t._h); t._h=setTimeout(()=>t.classList.add('hidden'), 5000); }
 function errMsg(e){ const m = (e && (e.message || e.error_description)) || 'Une erreur est survenue.'; return /momo_ref/.test(m) ? 'Saisissez le numéro de transaction Mobile Money (4 caractères minimum).' : m; }
@@ -520,18 +520,19 @@ function applyRoleNav(){ document.querySelectorAll('nav.side [data-view]').forEa
 const VIEW_FEATURE = { mapage: ['online_booking', 'La page de présentation et la réservation en ligne', 'Une belle page avec votre logo, vos photos et un formulaire de réservation : vos clients réservent directement, sans commission.'],
   depenses: ['expenses', 'Le module Dépenses', 'Suivez vos charges fixes et opérationnelles, fixez un budget par poste et exigez un justificatif au-delà d’un seuil.'],
   controle: ['owner_control', 'Le contrôle propriétaire', 'Recevez une alerte à chaque remise importante, grosse dépense ou écart de caisse, et consultez le journal de toutes les actions de votre équipe.'],
+  factures: ['billing', 'La facturation', 'Éditez des factures numérotées pour vos clients et suivez les soldes.'],
   rapports: ['financial_reports', 'Les rapports financiers', 'Chiffre d’affaires, taux d’occupation, prix moyen, impayés et dépenses par période, exportables.'] };
 const hasF = (k) => !S.overview || !S.overview.plan || (S.overview.plan.features || []).includes(k);
 const lockedView = (v) => VIEW_FEATURE[v] && !hasF(VIEW_FEATURE[v][0]);
 function renderLocked(v){
-  const [, title, text] = VIEW_FEATURE[v];
-  const pro = (S.plans || []).find(p => p.slug === 'pro');
+  const [feat, title, text] = VIEW_FEATURE[v];
+  const pro = (S.plans || []).filter(p => !p.is_trial && !p.is_quote_based && Number(p.monthly_price) > 0 && (p.features || []).includes(feat)).sort((a, b) => a.monthly_price - b.monthly_price)[0] || (S.plans || []).find(p => p.slug === 'pro');
   $('v-' + v).innerHTML = `<div class="card" style="max-width:640px;margin:40px auto;text-align:center;padding:36px 28px">
     <div style="width:64px;height:64px;border-radius:50%;background:var(--green-l);display:grid;place-items:center;margin:0 auto 12px"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"></rect><path d="M8 11V8a4 4 0 0 1 8 0v3"></path></svg></div>
-    <div class="pill" style="background:var(--green-l);color:var(--green-d);margin-bottom:10px">Disponible avec la formule Pro</div>
+    <div class="pill" style="background:var(--green-l);color:var(--green-d);margin-bottom:10px">Disponible avec la formule ${esc(pro ? pro.name : 'Pro')}</div>
     <h1 style="font-size:28px;margin-bottom:8px">${esc(title)}</h1>
     <p class="muted" style="margin:0 auto 18px;max-width:480px">${esc(text)}</p>
-    ${can(['owner','admin']) ? `<button class="primary" data-go="tarifs">Débloquer avec Pro${pro ? ' · ' + money(pro.monthly_price) + ' / mois' : ''}</button>` : '<p class="muted">Demandez au propriétaire de passer à la formule Pro.</p>'}
+    ${can(['owner','admin']) ? `<button class="primary" data-go="tarifs">Débloquer avec ${esc(pro ? pro.name : 'Pro')}${pro ? ' · ' + money(pro.monthly_price) + ' / mois' : ''}</button>` : `<p class="muted">Demandez au propriétaire de passer à la formule ${esc(pro ? pro.name : 'Pro')}.</p>`}
     <p class="muted" style="font-size:13px;margin:14px 0 0">Votre formule actuelle : ${esc((S.overview && S.overview.plan && S.overview.plan.name) || '')}</p></div>`;
 }
 
@@ -604,9 +605,9 @@ function renderTarifs(){
       ${p.is_recommended ? '<div class="badge">RECOMMANDÉ</div>' : ''}
       <h3 style="font-size:24px">${esc(p.name)}</h3>
       <div class="muted" style="font-size:13px">${p.max_rooms ? "Jusqu'à " + p.max_rooms + ' chambres' : 'Chambres illimitées'} · ${p.max_users ? p.max_users + ' utilisateurs' : 'utilisateurs illimités'} · ${p.max_properties ? p.max_properties + ' établissement' + (p.max_properties > 1 ? 's' : '') : 'établissements illimités'}</div>
-      <div><span class="price">${fcfa(y ? p.yearly_price : p.monthly_price).replace(' FCFA','')}</span> <span class="muted" style="font-size:13px">FCFA / ${y ? 'an' : 'mois'}</span></div>
+      <div>${Number(p.monthly_price) === 0 ? '<span class="price">Gratuit</span> <span class="muted" style="font-size:13px">à vie</span>' : `<span class="price">${fcfa(y ? p.yearly_price : p.monthly_price).replace(' FCFA','')}</span> <span class="muted" style="font-size:13px">FCFA / ${y ? 'an' : 'mois'}</span>`}</div>
       <div class="save">${y && save > 0 ? 'Économisez ' + fcfa(save) + ' avec l’annuel' : ''}</div>
-      <button data-checkout="${esc(p.slug)}" ${isCur ? 'disabled' : ''}>${label}</button>
+      ${Number(p.monthly_price) === 0 ? `<button disabled>${o.billing_cycle === 'free' ? 'Formule actuelle' : 'Automatique après l’essai'}</button>` : `<button data-checkout="${esc(p.slug)}" ${isCur ? 'disabled' : ''}>${label}</button>`}
       <ul>${prev ? '<li>Tout ' + esc(prev.name) + ' +</li>' : ''}${feats}</ul>
     </div>`;
   }).join('');
@@ -620,7 +621,7 @@ function renderTarifs(){
         <button class="${y ? 'on' : ''}" data-cycle="yearly">Annuel · 2 mois offerts</button>
       </div>
     </div>
-    <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(min(100%,260px),1fr));align-items:stretch;margin-bottom:18px;gap:16px">${cards}</div>
+    <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(min(100%,210px),1fr));align-items:stretch;margin-bottom:18px;gap:14px">${cards}</div>
     <div class="grid g2">
       ${trial ? `<div class="card row between"><div><h3 style="font-size:20px">${esc(trial.name)} · ${trial.trial_days} jours</h3><div class="muted" style="font-size:14px">0 FCFA · toutes les fonctions · chambres illimitées · ${trial.max_users} utilisateurs · 1 caisse · 1 devise</div></div>
         <button class="${o.billing_cycle === 'trial' ? '' : 'ghost'}" disabled>${o.billing_cycle === 'trial' ? 'Essai en cours' : 'Essai déjà utilisé'}</button></div>` : ''}
@@ -1725,7 +1726,7 @@ async function printReceipt(key){
     <table>${rows.map(m => `<tr><td>${esc(m.label)} · ${PMETHOD[m.method]}${m.reference ? `<br><span class="m">réf. ${esc(m.reference)}</span>` : ''}</td><td class="r">${money(m.amount)}</td></tr>`).join('')}
     <tr><td class="t">Total reçu</td><td class="r t">${money(total)}</td></tr></table>
     ${b ? `<p>${Number(b.balance) > 0 ? 'Reste à payer : <strong>' + money(b.balance) + '</strong>' : 'Séjour entièrement réglé.'}</p>` : ''}
-    <p class="m">Encaissé par ${esc(who(r0.created_by))}. Merci de votre confiance.</p>
+    <p class="m">Encaissé par ${esc(who(r0.created_by))}. Merci de votre confiance.</p>${S.overview && S.overview.plan && S.overview.plan.slug === 'decouverte' ? '<p class="m" style="text-align:center;margin-top:18px">Propulsé par Horus Hotel · gestion hôtelière gratuite</p>' : ''}
     <script>window.onload=()=>window.print()<\/script></body></html>`);
   w.document.close();
 }
