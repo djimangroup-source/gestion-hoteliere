@@ -178,7 +178,20 @@ body.modal-open{overflow:hidden}
 <div id="auth" class="auth hidden">
   <div class="card">
     <div class="eyebrow">Horus Hotel · Gestion hôtelière &amp; résidences</div>
-    <h1 id="authTitle" style="font-size:30px;margin:6px 0 18px">Connexion</h1>
+    <h1 id="authTitle" style="font-size:30px;margin:6px 0 14px">Connexion</h1>
+    <div class="row" id="authTabs" role="tablist" style="gap:6px;margin-bottom:16px;background:var(--line);padding:4px;border-radius:999px;flex-wrap:nowrap">
+      <button type="button" role="tab" data-amode="mail" class="small" style="flex:1;border:0">Propriétaire (e-mail)</button>
+      <button type="button" role="tab" data-amode="staff" class="small ghost" style="flex:1;border:0">Personnel</button>
+    </div>
+    <form id="staffForm" class="hidden" method="post" action="#" name="stafflogin">
+      <div class="field"><label for="sCode">Code hôtel ou résidence</label><input id="sCode" required autocomplete="organization" autocapitalize="none" spellcheck="false" placeholder="ex. lespalmiers" pattern="[a-zA-Z0-9]{3,20}"></div>
+      <div class="field"><label for="sUser">Identifiant</label><input id="sUser" name="username" required autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="ex. awa" pattern="[a-zA-Z0-9]{2,20}"></div>
+      <div class="field"><label for="sPin">Code (4 chiffres)</label><input id="sPin" name="password" type="password" required inputmode="numeric" pattern="\d{4}" maxlength="4" autocomplete="current-password" style="letter-spacing:10px;font-size:22px;text-align:center"></div>
+      <label class="row" style="gap:8px;margin:-4px 0 14px;font-weight:600;color:var(--ink);flex-wrap:nowrap"><input type="checkbox" id="sRemember" checked style="width:20px;min-height:20px"> Rester connecté sur cet appareil</label>
+      <button class="primary" style="width:100%" id="staffBtn">Se connecter</button>
+      <p class="muted" style="margin:12px 0 0;font-size:13px">Code oublié ? Demandez au responsable de l’établissement de le réinitialiser.</p>
+    </form>
+    <div id="mailBox">
     <form id="authForm" method="post" action="#" name="login">
       <div class="field"><label for="email">Adresse e-mail</label><input id="email" name="username" type="email" required autocomplete="username" inputmode="email" autocapitalize="none" spellcheck="false"></div>
       <div class="field"><label for="password">Mot de passe</label><div style="position:relative"><input id="password" name="password" type="password" required minlength="8" autocomplete="current-password" style="padding-right:96px"><button type="button" id="pwToggle" class="small ghost" style="position:absolute;right:4px;top:4px;min-height:36px;border:0" aria-label="Afficher le mot de passe">Afficher</button></div></div>
@@ -188,6 +201,7 @@ body.modal-open{overflow:hidden}
     <div class="row" style="margin-top:12px"><button type="button" class="ghost" id="magicBtn" style="flex:1 1 200px">Recevoir un lien de connexion par e-mail</button></div>
     <p style="margin:10px 0 0;font-size:14px"><a href="#" id="forgotLink">Mot de passe oublié ?</a></p>
     <p class="muted" style="margin:16px 0 0;font-size:14px"><span id="authSwitchTxt">Pas encore de compte ?</span> <a href="#" id="authSwitch">Créer un compte – 30 jours gratuits</a></p>
+    </div>
   </div>
 </div>
 
@@ -299,7 +313,7 @@ const FEAT = { notifications:'Notifications', daily_summary:'Résumé quotidien 
 function toast(msg, err=false){ const t=$('toast'); t.textContent=msg; t.className='toast'+(err?' err':''); clearTimeout(t._h); t._h=setTimeout(()=>t.classList.add('hidden'), 5000); }
 function errMsg(e){ const m = (e && (e.message || e.error_description)) || 'Une erreur est survenue.'; return /momo_ref/.test(m) ? 'Saisissez le numéro de transaction Mobile Money (4 caractères minimum).' : m; }
 function modal(html){ $('modalBody').style.maxWidth = ''; $('modalBody').innerHTML = html; $('modal').classList.remove('hidden'); $('modalBody').scrollTop = 0; document.body.classList.add('modal-open'); }
-function closeModal(){ $('modal').classList.add('hidden'); document.body.classList.remove('modal-open'); }
+function closeModal(){ if ($('modal').dataset.locked) return; $('modal').classList.add('hidden'); document.body.classList.remove('modal-open'); }
 $('modal').addEventListener('click', e => { if (e.target.id === 'modal' || e.target.closest('[data-close]')) closeModal(); });
 function show(id){ ['auth','onboard','app','public'].forEach(x => $(x).classList.toggle('hidden', x !== id)); }
 
@@ -382,6 +396,53 @@ function renderAuth(){
   $('password').autocomplete = S.signup ? 'new-password' : 'current-password';
   try { const last = localStorage.getItem('hh_last_email'); if (last && !$('email').value) { $('email').value = last; } $('remember').checked = authStore.remember(); } catch (_) {}
 }
+/* ---------- Connexion du personnel : code hôtel + identifiant + code à 4 chiffres ---------- */
+const staffEmail = (code, user) => `${user}.${code}@staff.horushotel.app`;
+const staffPass = (code, user, pin) => `hh:${code}:${user}:${pin}`;
+function setAuthMode(m){
+  try { localStorage.setItem('hh_auth_mode', m); } catch (_) {}
+  $('staffForm').classList.toggle('hidden', m !== 'staff'); $('mailBox').classList.toggle('hidden', m === 'staff');
+  document.querySelectorAll('[data-amode]').forEach(b => { const on = b.dataset.amode === m; b.classList.toggle('ghost', !on); b.style.background = on ? 'var(--card, #fff)' : 'transparent'; b.style.boxShadow = on ? '0 1px 4px rgba(0,0,0,.12)' : 'none'; b.setAttribute('aria-selected', on); });
+  if (m === 'staff') { S.signup = false; renderAuth(); try { const c = localStorage.getItem('hh_staff_code'); if (c && !$('sCode').value) $('sCode').value = c; } catch (_) {} setTimeout(() => ($('sCode').value ? ($('sUser').value ? $('sPin') : $('sUser')) : $('sCode')).focus(), 30); }
+}
+document.querySelectorAll('[data-amode]').forEach(b => b.addEventListener('click', () => setAuthMode(b.dataset.amode)));
+$('sPin').addEventListener('input', () => { $('sPin').value = $('sPin').value.replace(/\D/g, '').slice(0, 4); });
+$('staffForm').addEventListener('submit', async e => {
+  e.preventDefault();
+  const code = $('sCode').value.trim().toLowerCase(), user = $('sUser').value.trim().toLowerCase(), pin = $('sPin').value;
+  if (!/^[a-z0-9]{3,20}$/.test(code)) return toast('Code hôtel invalide.', true);
+  if (!/^[a-z0-9]{2,20}$/.test(user)) return toast('Identifiant invalide.', true);
+  if (!/^\d{4}$/.test(pin)) return toast('Le code doit contenir 4 chiffres.', true);
+  const btn = $('staffBtn'); btn.disabled = true;
+  try {
+    try { localStorage.setItem('hh_remember', $('sRemember').checked ? '1' : '0'); localStorage.setItem('hh_staff_code', code); } catch (_) {}
+    const { error } = await sb.auth.signInWithPassword({ email: staffEmail(code, user), password: staffPass(code, user, pin) });
+    if (error) throw error;
+  } catch (err) { $('sPin').value = ''; toast(/Invalid login/i.test(err.message) ? 'Code hôtel, identifiant ou code incorrect.' : /banned/i.test(err.message) ? 'Ce compte est suspendu. Contactez votre responsable.' : errMsg(err), true); }
+  finally { btn.disabled = false; }
+});
+let _am = 'mail'; try { _am = localStorage.getItem('hh_auth_mode') === 'staff' ? 'staff' : 'mail'; } catch (_) {} setAuthMode(_am);
+
+function forcePinChange(){
+  const meta = (S.session.user.user_metadata) || {};
+  modal(`<div class="eyebrow">Première connexion</div><h2 style="font-size:24px;margin:4px 0 8px">Choisissez votre code personnel</h2>
+    <p class="muted" style="margin:0 0 14px">Remplacez le code provisoire donné par votre responsable. Gardez-le secret.</p>
+    <form id="pinForm"><div class="field"><label for="np1">Nouveau code (4 chiffres)</label><input id="np1" type="password" inputmode="numeric" maxlength="4" pattern="\\d{4}" required autocomplete="new-password" style="letter-spacing:10px;font-size:22px;text-align:center"></div>
+    <div class="field"><label for="np2">Confirmez le code</label><input id="np2" type="password" inputmode="numeric" maxlength="4" pattern="\\d{4}" required autocomplete="new-password" style="letter-spacing:10px;font-size:22px;text-align:center"></div>
+    <button class="primary" style="width:100%">Enregistrer mon code</button></form>`);
+  $('modal').dataset.locked = '1';
+  $('pinForm').onsubmit = async (e) => { e.preventDefault();
+    const a = $('np1').value, b = $('np2').value;
+    if (!/^\d{4}$/.test(a)) return toast('4 chiffres exactement.', true);
+    if (a !== b) return toast('Les deux codes ne correspondent pas.', true);
+    if (/^(\d)\1{3}$/.test(a) || ['1234','4321','0123','9876'].includes(a)) return toast('Code trop simple : évitez 1111 ou 1234.', true);
+    const { error } = await sb.auth.updateUser({ password: staffPass(meta.staff_code, meta.username, a) });
+    if (error) return toast(/same|different/i.test(error.message) ? 'Choisissez un code différent du code provisoire.' : errMsg(error), true);
+    await sb.rpc('staff_password_changed');
+    delete $('modal').dataset.locked; S.member.must_change_password = false; closeModal(); toast('Code enregistré. Bienvenue !');
+  };
+}
+
 $('pwToggle').addEventListener('click', () => { const p = $('password'), on = p.type === 'password'; p.type = on ? 'text' : 'password'; $('pwToggle').textContent = on ? 'Masquer' : 'Afficher'; $('pwToggle').setAttribute('aria-label', on ? 'Masquer le mot de passe' : 'Afficher le mot de passe'); p.focus(); });
 $('remember').addEventListener('change', () => { try { localStorage.setItem('hh_remember', $('remember').checked ? '1' : '0'); } catch (_) {} });
 const appUrl = () => location.origin + location.pathname;
@@ -424,7 +485,7 @@ $('authForm').addEventListener('submit', async e => {
   } catch (err) { toast(err.message === 'Invalid login credentials' ? 'Identifiants incorrects.' : errMsg(err), true); }
   finally { btn.disabled = false; }
 });
-document.addEventListener('click', async e => { if (e.target.closest('[data-logout]')) { e.preventDefault(); await sb.auth.signOut(); } });
+document.addEventListener('click', async e => { if (e.target.closest('[data-logout]')) { e.preventDefault(); delete $('modal').dataset.locked; closeModal(); await sb.auth.signOut(); } });
 
 $('onboardAdmin').addEventListener('click', e => { e.preventDefault(); S.view = 'admin'; boot(); });
 $('onboardForm').addEventListener('submit', async e => {
@@ -445,12 +506,16 @@ async function boot(){
   S.session = session;
   if (!session) { renderAuth(); show('auth'); setTimeout(() => { const f = $('email').value ? $('password') : $('email'); if (f) f.focus(); }, 50); return; }
   const [mem, adm] = await Promise.all([
-    sb.from('organization_members').select('organization_id, role, organizations(name)').eq('user_id', session.user.id).eq('is_active', true).limit(1),
+    sb.from('organization_members').select('organization_id, role, username, display_name, must_change_password, organizations(name)').eq('user_id', session.user.id).eq('is_active', true).limit(1),
     sb.rpc('is_platform_admin')
   ]);
   S.isAdmin = adm.data === true;
   S.member = mem.data && mem.data[0];
   $('navAdmin').classList.toggle('hidden', !S.isAdmin);
+  if (!S.member && (session.user.user_metadata || {}).staff) {
+    await sb.auth.signOut();
+    return toast('Ce compte personnel est suspendu. Contactez votre responsable.', true);
+  }
   if (!S.member) {
     $('onboardAdmin').classList.toggle('hidden', !S.isAdmin);
     if (S.isAdmin && S.view === 'admin') { show('app'); $('orgLabel').textContent = 'Administrateur plateforme'; return go('admin'); }
@@ -463,6 +528,7 @@ async function boot(){
   show('app');
   await loadCommon();
   go(S.view);
+  if (S.member.must_change_password) forcePinChange();
 }
 async function loadCommon(){
   const [ov, pl, pr] = await Promise.all([
@@ -2099,40 +2165,121 @@ async function renderMyInvites(){
   box.querySelectorAll('[data-accept]').forEach(b => b.onclick = async () => { b.disabled = true; const { error } = await sb.rpc('accept_invitation', { p_invitation: b.dataset.accept }); if (error) { b.disabled = false; return toast(errMsg(error), true); } toast('Bienvenue dans l\u2019équipe.'); S.view = 'dashboard'; boot(); });
 }
 
+const STAFF_ROLES = { receptionist:['Réceptionniste','🛎️'], manager:['Gérant','🧭'], housekeeping:['Ménage','🧹'], accountant:['Comptable','📒'], admin:['Administrateur','🔑'] };
+const randPin = () => { let p; do { p = String(Math.floor(Math.random() * 10000)).padStart(4, '0'); } while (/^(\d)\1{3}$/.test(p) || p === '1234'); return p; };
+const userSlug = (t) => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().split(/\s+/)[0].replace(/[^a-z0-9]/g, '').slice(0, 20);
+async function staffAdmin(body){
+  const { data, error } = await sb.functions.invoke('staff-admin', { body: { org: S.org, ...body } });
+  if (error) { let m = error.message; try { const j = await error.context.json(); if (j && j.error) m = j.error; } catch (_) {} throw new Error(m); }
+  if (data && data.error) throw new Error(data.error);
+  return data;
+}
+function showCredentials(name, code, username, pin){
+  const msg = `Bonjour ${name || username}, voici vos accès Horus Hotel :\n• Lien : ${location.origin + location.pathname}\n• Onglet « Personnel »\n• Code hôtel : ${code}\n• Identifiant : ${username}\n• Code provisoire : ${pin}\nVous choisirez votre propre code à la première connexion.`;
+  modal(`<div class="eyebrow">Accès du personnel</div><h2 style="font-size:24px;margin:4px 0 12px">${esc(name || username)}</h2>
+    <div class="card" style="background:var(--line);display:grid;grid-template-columns:auto 1fr;gap:8px 16px;font-size:17px">
+      <span class="muted">Code hôtel</span><strong>${esc(code)}</strong><span class="muted">Identifiant</span><strong>${esc(username)}</strong>
+      <span class="muted">Code provisoire</span><strong style="letter-spacing:6px;font-size:22px">${esc(pin)}</strong></div>
+    <p class="muted" style="font-size:13px">Ce code provisoire ne sera plus affiché. L’employé le remplace à sa première connexion.</p>
+    <div class="row"><a class="btn primary" style="flex:1;justify-content:center" target="_blank" rel="noopener" href="https://wa.me/?text=${encodeURIComponent(msg)}">Envoyer par WhatsApp</a>
+    <button class="ghost" type="button" id="crCopy" style="flex:1">Copier</button></div>
+    <button class="ghost" data-close style="width:100%;margin-top:10px">Fermer</button>`);
+  $('crCopy').onclick = async () => { try { await navigator.clipboard.writeText(msg); toast('Accès copiés.'); } catch (_) { toast('Copie impossible.', true); } };
+}
+function openStaffForm(isOwner, done){
+  const roles = Object.entries(STAFF_ROLES).filter(([k]) => isOwner || k !== 'admin');
+  const pin = randPin();
+  modal(`<div class="eyebrow">Nouveau compte · sans e-mail</div><h2 style="font-size:24px;margin:4px 0 14px">Ajouter un employé</h2>
+    <form id="sfForm"><div class="field"><label for="sfName">Nom et prénom</label><input id="sfName" required maxlength="80" placeholder="ex. Awa Koné"></div>
+    <div class="field"><label for="sfUser">Identifiant de connexion</label><input id="sfUser" required pattern="[a-z0-9]{2,20}" maxlength="20" autocapitalize="none" spellcheck="false"><small class="muted">Lettres minuscules et chiffres, sans espace.</small></div>
+    <label>Poste</label><div id="sfRoles" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:8px;margin:6px 0 6px">
+      ${roles.map(([k, [l, ic]], i) => `<label class="card" style="padding:10px;cursor:pointer;display:flex;gap:8px;align-items:center;margin:0"><input type="radio" name="sfRole" value="${k}" ${i === 0 ? 'checked' : ''} style="width:18px;min-height:18px"><span>${ic} ${l}</span></label>`).join('')}</div>
+    <p class="muted" id="sfHelp" style="font-size:13px;margin:0 0 12px"></p>
+    ${(S.ests || []).length > 1 ? `<div class="field"><label for="sfEst">Établissement</label><select id="sfEst"><option value="">Tous</option>${S.ests.map(e => `<option value="${esc(e.id)}">${esc(e.name)}</option>`).join('')}</select></div>` : ''}
+    <div class="field"><label for="sfPin">Code provisoire (4 chiffres)</label><input id="sfPin" value="${pin}" inputmode="numeric" pattern="\\d{4}" maxlength="4" required style="letter-spacing:8px;font-size:20px;text-align:center"></div>
+    <button class="primary" style="width:100%" id="sfBtn">Créer le compte</button></form>`);
+  let touched = false;
+  $('sfUser').oninput = () => { touched = true; $('sfUser').value = $('sfUser').value.toLowerCase().replace(/[^a-z0-9]/g, ''); };
+  $('sfName').oninput = () => { if (!touched) $('sfUser').value = userSlug($('sfName').value); };
+  const help = () => { const r = document.querySelector('[name=sfRole]:checked'); $('sfHelp').textContent = r ? (ROLE_HELP[r.value] || '') : ''; };
+  document.querySelectorAll('[name=sfRole]').forEach(r => r.onchange = help); help();
+  $('sfForm').onsubmit = async (e) => { e.preventDefault(); const b = $('sfBtn'); b.disabled = true;
+    const name = $('sfName').value.trim(), username = $('sfUser').value.trim(), p = $('sfPin').value.trim();
+    try {
+      const r = await staffAdmin({ action: 'create', display_name: name, username, pin: p, role: document.querySelector('[name=sfRole]:checked').value, establishment_id: $('sfEst') ? $('sfEst').value || null : null });
+      await loadCommon(); done(); showCredentials(name, r.login.code, r.login.username, p);
+    } catch (err) { toast(err.message, true); b.disabled = false; }
+  };
+}
 async function renderEquipe(){
   const el = $('v-equipe'); el.innerHTML = '<p class="muted">Chargement…</p>';
   const isOwner = can(['owner']);
-  const [team, inv] = await Promise.all([ sb.rpc('org_team', { p_org: S.org }), sb.from('organization_invitations').select('*').eq('organization_id', S.org).eq('status', 'pending').order('created_at', { ascending: false }) ]);
+  const [team, inv, org] = await Promise.all([
+    sb.rpc('org_team_v2', { p_org: S.org }),
+    sb.from('organization_invitations').select('*').eq('organization_id', S.org).eq('status', 'pending').order('created_at', { ascending: false }),
+    sb.from('organizations').select('staff_code').eq('id', S.org).single()
+  ]);
   if (team.error) { el.innerHTML = head('Équipe') + `<p class="muted">${esc(errMsg(team.error))}</p>`; return; }
+  const code = org.data && org.data.staff_code;
+  const members = team.data || [];
+  const hasStaff = members.some(m => m.username);
   const u = (S.overview && S.overview.usage) || {};
   const me = S.session.user.id;
   const canTouch = (m) => m.user_id !== me && m.role !== 'owner' && (isOwner || m.role !== 'admin');
   const roleOpts = (sel) => Object.entries(INVITABLE).filter(([k]) => isOwner || k !== 'admin').map(([k, v]) => `<option value="${k}" ${k === sel ? 'selected' : ''}>${v}</option>`).join('');
-  const invMsg = (i) => `Bonjour, vous êtes invité(e) à rejoindre « ${$('orgLabel').textContent.split(' · ')[0]} » sur Horus Hotel en tant que ${ROLE_LABEL[i.role]}. Créez votre compte avec l\u2019adresse ${i.email} sur ${location.origin + location.pathname}, puis cliquez sur « Rejoindre ».`;
-  el.innerHTML = head('Équipe', `<span class="pill st-trial">${u.users ?? (team.data || []).filter(m => m.is_active).length} / ${u.max_users ?? '∞'} utilisateurs</span>`) + readOnlyNote() + `
-    <form class="card row" id="invForm" style="align-items:flex-end;margin-bottom:16px">
-      <div style="flex:2 1 220px"><label for="iMail">Adresse e-mail de l\u2019employé</label><input id="iMail" type="email" required placeholder="prenom.nom@exemple.com"></div>
-      <div style="flex:1 1 170px"><label for="iRole">Rôle</label><select id="iRole">${roleOpts('receptionist')}</select></div>
+  const invMsg = (i) => `Bonjour, vous êtes invité(e) à rejoindre « ${$('orgLabel').textContent.split(' · ')[0]} » sur Horus Hotel en tant que ${ROLE_LABEL[i.role]}. Créez votre compte avec l’adresse ${i.email} sur ${location.origin + location.pathname}, puis cliquez sur « Rejoindre ».`;
+  const initials = (m) => (m.display_name || m.username || m.email || '?').split(/[\s.@]+/).filter(Boolean).slice(0, 2).map(x => x[0].toUpperCase()).join('');
+  const seen = (d) => d ? 'Vu le ' + new Date(d).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }) : 'Jamais connecté';
+  const card = (m) => `<div class="card" style="display:flex;flex-direction:column;gap:10px;${m.is_active ? '' : 'opacity:.6'}">
+      <div class="row" style="flex-wrap:nowrap"><div style="width:46px;height:46px;border-radius:50%;background:var(--green);color:#fff;display:grid;place-items:center;font-weight:800;flex:none">${esc(initials(m))}</div>
+      <div style="min-width:0"><strong style="display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(m.display_name || m.email || m.username)}${m.user_id === me ? ' <span class="muted">(vous)</span>' : ''}</strong>
+      <span class="muted" style="font-size:13px">${m.username ? '👤 ' + esc(m.username) : '✉️ ' + esc(m.email || '')}</span></div></div>
+      <div class="row" style="gap:6px">${canTouch(m) ? `<select data-role="${esc(m.member_id)}" aria-label="Poste" style="flex:1;min-height:38px">${roleOpts(m.role)}</select>` : `<span class="pill st-trial">${esc(ROLE_LABEL[m.role] || m.role)}</span>`}
+        <span class="pill ${m.is_active ? (m.must_change_password ? 'st-past_due' : 'st-active') : 'st-cancelled'}">${!m.is_active ? 'Suspendu' : m.must_change_password ? 'Code provisoire' : 'Actif'}</span></div>
+      <span class="muted" style="font-size:12px">${seen(m.last_sign_in_at)}</span>
+      ${canTouch(m) ? `<div class="row" style="gap:6px">${m.username ? `<button class="small" type="button" data-reset="${esc(m.member_id)}">Nouveau code</button>` : ''}
+        <button class="small ghost" type="button" data-active="${esc(m.member_id)}" data-on="${m.is_active}" data-staff="${m.username ? 1 : ''}">${m.is_active ? 'Suspendre' : 'Réactiver'}</button></div>` : ''}
+    </div>`;
+  el.innerHTML = head('Équipe', `<span class="pill st-trial">${u.users ?? members.filter(m => m.is_active).length} / ${u.max_users ?? '∞'} utilisateurs</span>`) + readOnlyNote() + `
+    <div class="card" style="margin-bottom:16px;background:var(--ink);color:#FBF6EE;display:flex;flex-wrap:wrap;gap:14px;align-items:center;justify-content:space-between">
+      <div><div style="font-size:13px;opacity:.8">Code hôtel · à donner à vos employés</div><div style="font-family:var(--display);font-size:30px;font-weight:800;letter-spacing:1px">${esc(code || '—')}</div>
+      <div style="font-size:13px;opacity:.8">Connexion : onglet « Personnel » → code hôtel + identifiant + code à 4 chiffres</div></div>
+      <div class="row">${!hasStaff ? `<button class="small ghost" type="button" id="codeEdit" style="color:#FBF6EE;border-color:#FBF6EE">Modifier le code</button>` : ''}<button class="primary" type="button" id="addStaff">+ Ajouter un employé</button></div>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:12px;margin-bottom:16px">${members.map(card).join('')}</div>
+    <details class="card"><summary style="cursor:pointer;font-weight:700">Inviter par e-mail (comptes avec adresse e-mail)</summary>
+    <form class="row" id="invForm" style="align-items:flex-end;margin-top:12px">
+      <div style="flex:2 1 220px"><label for="iMail">Adresse e-mail</label><input id="iMail" type="email" required placeholder="prenom.nom@exemple.com"></div>
+      <div style="flex:1 1 170px"><label for="iRole">Poste</label><select id="iRole">${roleOpts('receptionist')}</select></div>
       <button class="primary">Inviter</button>
       <p class="muted" id="iHelp" style="flex:1 1 100%;margin:0;font-size:13px"></p>
     </form>
-    ${(inv.data || []).length ? `<div class="card" style="margin-bottom:16px"><h3 style="font-size:18px;margin-bottom:8px">Invitations en attente</h3>${inv.data.map(i => `<div class="row between" style="padding:8px 0;border-bottom:1px solid var(--line)"><span>${esc(i.email)} · <strong>${esc(ROLE_LABEL[i.role])}</strong></span><span class="row"><button class="small" type="button" data-copyinv="${esc(i.id)}">Copier le message</button><button class="small ghost" type="button" data-revoke="${esc(i.id)}">Annuler</button></span></div>`).join('')}<p class="muted" style="font-size:12px;margin:10px 0 0">Envoyez le message par WhatsApp ou e-mail : l\u2019employé crée son compte avec cette adresse et rejoint l\u2019équipe.</p></div>` : ''}
-    <div class="card"><h3 style="font-size:18px;margin-bottom:8px">Membres</h3><div class="tablewrap"><table class="table"><thead><tr><th>E-mail</th><th>Rôle</th><th>Statut</th><th></th></tr></thead><tbody>
-      ${(team.data || []).map(m => `<tr><td>${esc(m.email)}${m.user_id === me ? ' <span class="muted">(vous)</span>' : ''}</td>
-        <td>${canTouch(m) ? `<select data-role="${esc(m.member_id)}" aria-label="Rôle de ${esc(m.email)}" style="max-width:180px;min-height:38px">${roleOpts(m.role)}</select>` : `<strong>${esc(ROLE_LABEL[m.role] || m.role)}</strong>`}</td>
-        <td><span class="pill ${m.is_active ? 'st-active' : 'st-cancelled'}">${m.is_active ? 'Actif' : 'Désactivé'}</span></td>
-        <td style="text-align:right">${canTouch(m) ? `<button class="small ghost" type="button" data-active="${esc(m.member_id)}" data-on="${m.is_active}">${m.is_active ? 'Désactiver' : 'Réactiver'}</button>` : ''}</td></tr>`).join('')}
-    </tbody></table></div></div>`;
+    ${(inv.data || []).length ? `<h3 style="font-size:16px;margin:14px 0 6px">Invitations en attente</h3>${inv.data.map(i => `<div class="row between" style="padding:8px 0;border-bottom:1px solid var(--line)"><span>${esc(i.email)} · <strong>${esc(ROLE_LABEL[i.role])}</strong></span><span class="row"><button class="small" type="button" data-copyinv="${esc(i.id)}">Copier le message</button><button class="small ghost" type="button" data-revoke="${esc(i.id)}">Annuler</button></span></div>`).join('')}` : ''}
+    </details>`;
+  $('addStaff').onclick = () => openStaffForm(isOwner, renderEquipe);
+  if ($('codeEdit')) $('codeEdit').onclick = () => {
+    modal(`<h2 style="font-size:22px;margin:0 0 10px">Code hôtel</h2><p class="muted" style="margin:0 0 12px">Court et facile à retenir. Il ne pourra plus être changé après la création du premier compte personnel.</p>
+      <form id="ceForm"><div class="field"><input id="ceVal" value="${esc(code || '')}" pattern="[a-z0-9]{3,20}" maxlength="20" required autocapitalize="none"></div><button class="primary" style="width:100%">Enregistrer</button></form>`);
+    $('ceVal').oninput = () => { $('ceVal').value = $('ceVal').value.toLowerCase().replace(/[^a-z0-9]/g, ''); };
+    $('ceForm').onsubmit = async (e) => { e.preventDefault(); const { error } = await sb.rpc('set_staff_code', { p_org: S.org, p_code: $('ceVal').value }); if (error) return toast(errMsg(error), true); closeModal(); toast('Code hôtel enregistré.'); renderEquipe(); };
+  };
   const help = () => { $('iHelp').textContent = ROLE_HELP[$('iRole').value] || ''; }; $('iRole').onchange = help; help();
   $('invForm').onsubmit = async (e) => { e.preventDefault();
     const { data: row, error } = await sb.from('organization_invitations').insert({ organization_id: S.org, email: $('iMail').value.trim().toLowerCase(), role: $('iRole').value, invited_by: me }).select('*').single();
     if (error) return toast(error.code === '23505' ? 'Une invitation est déjà en attente pour cette adresse.' : errMsg(error), true);
-    try { await navigator.clipboard.writeText(invMsg(row)); toast('Invitation créée. Message copié : envoyez-le à l\u2019employé.'); } catch (_) { toast('Invitation créée.'); }
+    try { await navigator.clipboard.writeText(invMsg(row)); toast('Invitation créée. Message copié : envoyez-le à l’employé.'); } catch (_) { toast('Invitation créée.'); }
     renderEquipe(); };
   el.querySelectorAll('[data-copyinv]').forEach(b => b.onclick = async () => { const i = inv.data.find(x => x.id === b.dataset.copyinv); try { await navigator.clipboard.writeText(invMsg(i)); toast('Message copié.'); } catch (_) { modal(`<p>${esc(invMsg(i))}</p><button class="primary" data-close>Fermer</button>`); } });
   el.querySelectorAll('[data-revoke]').forEach(b => b.onclick = async () => { const { error } = await sb.from('organization_invitations').update({ status: 'revoked' }).eq('id', b.dataset.revoke); if (error) return toast(errMsg(error), true); toast('Invitation annulée.'); renderEquipe(); });
-  el.querySelectorAll('[data-role]').forEach(sel => sel.onchange = async () => { const { error } = await sb.from('organization_members').update({ role: sel.value }).eq('id', sel.dataset.role); if (error) { toast(errMsg(error), true); return renderEquipe(); } toast('Rôle modifié.'); });
-  el.querySelectorAll('[data-active]').forEach(b => b.onclick = async () => { const { error } = await sb.from('organization_members').update({ is_active: b.dataset.on !== 'true' }).eq('id', b.dataset.active); if (error) return toast(errMsg(error), true); await loadCommon(); renderEquipe(); });
+  el.querySelectorAll('[data-role]').forEach(sel => sel.onchange = async () => { const { error } = await sb.from('organization_members').update({ role: sel.value }).eq('id', sel.dataset.role); if (error) { toast(errMsg(error), true); return renderEquipe(); } toast('Poste modifié.'); });
+  el.querySelectorAll('[data-reset]').forEach(b => b.onclick = async () => { const m = members.find(x => x.member_id === b.dataset.reset); const p = randPin(); b.disabled = true;
+    try { await staffAdmin({ action: 'reset', member_id: m.member_id, pin: p }); renderEquipe(); showCredentials(m.display_name, code, m.username, p); } catch (err) { toast(err.message, true); b.disabled = false; } });
+  el.querySelectorAll('[data-active]').forEach(b => b.onclick = async () => { const on = b.dataset.on !== 'true'; b.disabled = true;
+    try {
+      if (b.dataset.staff) await staffAdmin({ action: on ? 'reactivate' : 'suspend', member_id: b.dataset.active });
+      else { const { error } = await sb.from('organization_members').update({ is_active: on }).eq('id', b.dataset.active); if (error) throw new Error(errMsg(error)); }
+      toast(on ? 'Compte réactivé.' : 'Compte suspendu.'); await loadCommon(); renderEquipe();
+    } catch (err) { toast(err.message, true); b.disabled = false; } });
 }
 
 /* ================= Ma page publique (espace propriétaire) ================= */
