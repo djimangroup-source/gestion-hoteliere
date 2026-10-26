@@ -10,7 +10,14 @@ const CORS = {
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { ...CORS, "Content-Type": "application/json" } });
 const ROLES = ["admin", "manager", "receptionist", "housekeeping", "accountant", "staff"];
 export const staffEmail = (code: string, username: string) => `${username}.${code}@staff.horushotel.app`;
-export const staffPassword = (code: string, username: string, pin: string) => `hh:${code}:${username}:${pin}`;
+let PEPPER: string | null = null;
+// Mot de passe dérivé avec la clé secrète serveur (même calcul que « staff-login »)
+async function staffPassword(admin: any, code: string, username: string, pin: string) {
+  if (!PEPPER) { const { data } = await admin.from("server_secrets").select("value").eq("name", "staff_pepper").single(); PEPPER = data.value; }
+  const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(PEPPER!), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  const sig = new Uint8Array(await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(`${code}|${username}|${pin}`)));
+  return "hk1:" + btoa(String.fromCharCode(...sig)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
@@ -41,7 +48,7 @@ Deno.serve(async (req) => {
     const { data: exists } = await admin.from("organization_members").select("id").eq("organization_id", org).eq("username", username).maybeSingle();
     if (exists) return json({ error: "Cet identifiant est déjà utilisé dans votre établissement." }, 409);
     const { data: created, error: e1 } = await admin.auth.admin.createUser({
-      email: staffEmail(code, username), password: staffPassword(code, username, body.pin), email_confirm: true,
+      email: staffEmail(code, username), password: await staffPassword(admin, code, username, body.pin), email_confirm: true,
       user_metadata: { staff: true, display_name: display, staff_code: code, username },
     });
     if (e1 || !created?.user) return json({ error: /already/i.test(e1?.message || "") ? "Cet identifiant existe déjà." : "Création impossible : " + (e1?.message || "erreur") }, 400);
@@ -62,9 +69,10 @@ Deno.serve(async (req) => {
 
   if (body.action === "reset") {
     if (!pinOk(body.pin)) return json({ error: "Le code doit contenir exactement 4 chiffres." }, 400);
-    const { error } = await admin.auth.admin.updateUserById(t.user_id, { password: staffPassword(code, t.username, body.pin) });
+    const { error } = await admin.auth.admin.updateUserById(t.user_id, { password: await staffPassword(admin, code, t.username, body.pin) });
     if (error) return json({ error: error.message }, 400);
     await admin.from("organization_members").update({ must_change_password: true }).eq("id", t.id);
+    await admin.from("staff_login_attempts").delete().eq("key", `acc:${code}:${t.username}`);
     await log("reinitialisation", `Code réinitialisé : ${t.display_name || t.username}`);
     return json({ ok: true });
   }
