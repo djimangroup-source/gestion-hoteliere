@@ -955,7 +955,7 @@ if (window.HorusApp && window.HorusApp.postMessage) {
 }
 /* ---------- Mise à jour de l'application sans réinstaller ni perdre la connexion ---------- */
 const plur = (n, one, many) => `${Number(n) || 0} ${Math.abs(Number(n) || 0) >= 2 ? many : one}`;
-const APP_VERSION = '2026.10.27-10';
+const APP_VERSION = '2026.10.27-11';
 async function refreshApp(){
   toast('Actualisation…');
   try { const reg = navigator.serviceWorker && await navigator.serviceWorker.getRegistration(); if (reg) { await reg.update(); if (reg.waiting) reg.waiting.postMessage('skipWaiting'); } } catch (_) {}
@@ -1151,7 +1151,7 @@ async function ensureLegalAccepted(){
       const { error } = await sb.from('legal_acceptances').insert({ version: LEGAL_VERSION, user_agent: navigator.userAgent.slice(0, 300) });
       if (error && error.code !== '23505') { $('lgGo').disabled = false; return toast(errMsg(error), true); }
       delete $('modal').dataset.locked; closeModal(); resolve(true); };
-    $('lgOut').onclick = async () => { delete $('modal').dataset.locked; closeModal(); await sb.auth.signOut(); resolve(false); };
+    $('lgOut').onclick = () => { resolve(false); doLogout(); };
     // Les liens « Lire » ouvrent le document dans la même fenêtre : on rouvre l'acceptation après fermeture
     document.querySelectorAll('#modalBody [data-legal]').forEach(b => b.addEventListener('click', (e) => { e.stopPropagation(); e.preventDefault(); window.open(legalUrl(b.dataset.legal), '_blank', 'noopener'); }, true));
     reopen();
@@ -1321,7 +1321,16 @@ $('authForm').addEventListener('submit', async e => {
   } catch (err) { toast(err.message === 'Invalid login credentials' ? 'Identifiants incorrects.' : errMsg(err), true); }
   finally { btn.disabled = false; }
 });
-document.addEventListener('click', async e => { if (e.target.closest('[data-logout]')) { e.preventDefault(); delete $('modal').dataset.locked; closeModal(); await clearDataCache(); await sb.auth.signOut(); } });
+/* Déconnexion fiable : la session est effacée sur l'appareil même si le serveur ne répond pas (réseau faible, jeton expiré). */
+async function doLogout(){
+  try { delete $('modal').dataset.locked; closeModal(); } catch (_) {}
+  try { await clearDataCache(); } catch (_) {}
+  try { await Promise.race([sb.auth.signOut({ scope: 'local' }), new Promise(r => setTimeout(r, 2500))]); } catch (_) {}
+  try { Object.keys(localStorage).filter(k => k.startsWith('sb-') || k === 'hh_last_view').forEach(k => localStorage.removeItem(k)); } catch (_) {}
+  sb.auth.signOut({ scope: 'global' }).catch(() => {});
+  location.replace(location.pathname);
+}
+document.addEventListener('click', e => { if (e.target.closest('[data-logout]')) { e.preventDefault(); doLogout(); } });
 
 $('onboardAdmin').addEventListener('click', e => { e.preventDefault(); S.view = 'admin'; boot(); });
 $('onboardForm').addEventListener('submit', async e => {
@@ -1575,7 +1584,7 @@ function openSettings(){
     sub: () => { closeModal(); go('abonnement'); }, pwd: () => $('navPwd').click(),
     look: () => sub('Apparence et langue', [['theme', 'look', 'Thème de l’application'], ['lang', 'web', 'Langue / Language']]),
     theme: () => $('navTheme').click(), lang: () => openLang(),
-    out: () => { closeModal(); document.querySelector('[data-logout]').click(); }, guide: () => { closeModal(); $('navGuide').click(); }, legal: () => $('navLegal').click(), refresh: () => refreshApp()
+    out: () => doLogout(), guide: () => { closeModal(); $('navGuide').click(); }, legal: () => $('navLegal').click(), refresh: () => refreshApp()
   };
   function bind(){ document.querySelectorAll('#modalBody [data-st]').forEach(b => b.onclick = (e) => { e.preventDefault(); const f = A[b.dataset.st]; if (f) f(); }); }
   bind();
