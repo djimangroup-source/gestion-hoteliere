@@ -959,7 +959,7 @@ if (window.HorusApp && window.HorusApp.postMessage) {
 }
 /* ---------- Mise à jour de l'application sans réinstaller ni perdre la connexion ---------- */
 const plur = (n, one, many) => `${Number(n) || 0} ${Math.abs(Number(n) || 0) >= 2 ? many : one}`;
-const APP_VERSION = '2026.10.27-13';
+const APP_VERSION = '2026.10.27-14';
 async function refreshApp(){
   toast('Actualisation…');
   try { const reg = navigator.serviceWorker && await navigator.serviceWorker.getRegistration(); if (reg) { await reg.update(); if (reg.waiting) reg.waiting.postMessage('skipWaiting'); } } catch (_) {}
@@ -2048,7 +2048,7 @@ async function renderAdmin(){
     body = partners + `<div class="card" style="margin-bottom:16px"><div class="row between" style="margin-bottom:10px;flex-wrap:wrap;gap:8px"><h3 style="font-size:20px">Commissions Nuittea — ${new Date(m + 'T00:00:00').toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })}</h3>
       <label class="row" style="gap:6px">Mois <input type="month" id="admMonth" value="${m.slice(0, 7)}" style="max-width:170px"></label></div>
       <p class="muted" style="margin-bottom:10px">Séjours Nuittea dont l’arrivée tombe dans le mois. Les demandes en attente et les annulations ne génèrent pas de commission.</p>
-      <div class="tablewrap"><table class="table"><thead><tr><th>Établissement</th><th class="r">Réservations</th><th class="r">En attente</th><th class="r">Annulées</th><th class="r">Chiffre d’affaires</th><th class="r">Commission due</th></tr></thead><tbody>
+      <div class="tablewrap"><table class="table"><thead><tr><th>Établissement</th><th class="r">Réservations</th><th class="r">En attente</th><th class="r">Annulées</th><th class="r">Chiffre d’affaires</th><th class="r">Commission</th></tr></thead><tbody>
       ${(N.rows || []).map(r => `<tr><td><strong>${esc(r.establishment)}</strong><div class="muted" style="font-size:12px">${esc(r.organization)}</div></td><td class="r">${r.bookings}</td><td class="r">${r.pending}</td><td class="r">${r.cancelled}</td><td class="r">${fcfa(r.revenue)}</td><td class="r"><strong>${fcfa(r.commission)}</strong></td></tr>`).join('') || '<tr><td colspan="6" class="muted">Aucune réservation Nuittea ce mois.</td></tr>'}
       ${(N.rows || []).length ? `<tr><td colspan="5" class="r"><strong>Total dû</strong></td><td class="r"><strong>${fcfa(nayaDue)}</strong></td></tr>` : ''}</tbody></table></div></div>
       <div class="card"><h3 style="font-size:20px;margin-bottom:10px">Établissements inscrits sur Nuittea</h3>
@@ -2627,7 +2627,7 @@ async function renderNaya(){
       <div class="grid" style="grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-bottom:12px">
         <div class="card" style="padding:12px"><div class="muted" style="font-size:12px">Réservations</div><div style="font-weight:800;font-size:20px">${R.length}</div></div>
         <div class="card" style="padding:12px"><div class="muted" style="font-size:12px">Chiffre d’affaires</div><div style="font-weight:800;font-size:20px">${money(ca)}</div></div>
-        <div class="card" style="padding:12px"><div class="muted" style="font-size:12px">Commission due</div><div style="font-weight:800;font-size:20px">${money(com)}</div></div></div>
+        <div class="card" style="padding:12px"><div class="muted" style="font-size:12px">Commission Nuittea</div><div style="font-weight:800;font-size:20px">${money(com)}</div></div></div>
       ${R.length ? `<div class="tablewrap"><table class="table"><thead><tr><th>Client</th><th>Séjour</th><th>Statut</th><th style="text-align:right">Total</th><th style="text-align:right">Commission</th></tr></thead><tbody>
         ${R.map(r => { const c = ['cancelled','no_show','pending'].includes(r.status) ? 0 : Math.round(Number(r.total_amount) * (P[r.id] || 0) / 100); return `<tr><td><strong>${esc(r.guest_name)}</strong></td><td>Ch. ${esc(r.room_number)} · ${dfr(r.check_in)} → ${dfr(r.check_out)}</td><td>${esc(RSTATUS[r.status] || r.status)}</td><td style="text-align:right;white-space:nowrap">${money(r.total_amount)}</td><td style="text-align:right;white-space:nowrap">${c ? money(c) : '<span class="muted">—</span>'}</td></tr>`; }).join('')}
       </tbody></table></div><p class="muted" style="font-size:12px;margin:8px 0 0">La commission ne compte pas les demandes en attente, les annulations ni les absences.</p>` : '<p class="muted">Aucune réservation Nuittea ce mois-ci.</p>'}`);
@@ -3935,8 +3935,8 @@ async function renderEquipe(){
 
 /* ================= Modules à cocher, devise, résultat & analyse ================= */
 const CURRENCIES = { XOF: ['Franc CFA (UEMOA)', 'F', 0], XAF: ['Franc CFA (CEMAC)', 'F', 0], GNF: ['Franc guinéen', 'FG', 0], CDF: ['Franc congolais', 'FC', 0], MGA: ['Ariary', 'Ar', 0], MAD: ['Dirham marocain', 'DH', 2], NGN: ['Naira', '₦', 0], GHS: ['Cedi', 'GH₵', 2], EUR: ['Euro', '€', 2], USD: ['Dollar US', '$', 2] };
-const MODULES = { passes: 'Passes (séjours de quelques heures)', planning: 'Planning', clients: 'Clients', inventaire: 'Inventaire (linge, produits)', menage: 'Ménage (état des chambres)', pointage: 'Pointage du personnel', resto: 'Restaurant & Bar', depenses: 'Dépenses', factures: 'Factures', rapports: 'Rapports', mapage: 'Ma fiche Nuittea (photos, description)', controle: 'Contrôle propriétaire', notifs: 'Notifications', multi: 'Plusieurs établissements', equipe: 'Équipe' };
-const MODULE_GROUPS = [['Hébergement', ['planning','clients','inventaire','menage']], ['Argent', ['depenses','factures']], ...(RESTO_ACTIF ? [['Restaurant & Bar', ['resto']]] : []), ['Pilotage', ['rapports','controle','mapage']], ['Organisation', ['pointage','notifs','multi','equipe']]];
+const MODULES = { passes: 'Passes (séjours de quelques heures)', planning: 'Planning', clients: 'Clients', inventaire: 'Inventaire (linge, produits)', menage: 'Ménage (état des chambres)', pointage: 'Pointage du personnel', resto: 'Restaurant & Bar', depenses: 'Dépenses', factures: 'Factures', rapports: 'Rapports', controle: 'Contrôle propriétaire', notifs: 'Notifications', multi: 'Plusieurs établissements', equipe: 'Équipe' };
+const MODULE_GROUPS = [['Hébergement', ['planning','clients','inventaire','menage']], ['Argent', ['depenses','factures']], ...(RESTO_ACTIF ? [['Restaurant & Bar', ['resto']]] : []), ['Pilotage', ['rapports','controle']], ['Organisation', ['pointage','notifs','multi','equipe']]];
 const MODULE_HELP = { planning: 'Vue calendrier des chambres', clients: 'Fichier clients et historique', resto: 'Caisse restaurant/bar, produits et stock', depenses: 'Charges fixes, opérationnelles, budget', factures: 'Factures numérotées', rapports: 'Rapports financiers et exports', mapage: 'Page publique et réservation en ligne', controle: 'Alertes et journal des actions', inventaire: 'Draps, serviettes, savons, entretien, minibar', pointage: 'Arrivées et départs du personnel, heures du mois', menage: 'Statuts « à nettoyer » et rappels de ménage', notifs: 'La cloche et les alertes en direct', multi: 'Sélecteur d’établissement (si vous en avez plusieurs)', equipe: 'Comptes du personnel et invitations' };
 /* Mode « réservations » : par défaut, seul le cœur de la gestion des réservations est affiché. Le propriétaire peut réactiver les autres volets dans Réglages → Fonctionnalités. */
 const CORE_MODULES = ['planning', 'clients', 'menage', 'factures', 'notifs', 'multi', 'equipe'];
