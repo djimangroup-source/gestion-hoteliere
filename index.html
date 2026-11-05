@@ -1096,7 +1096,7 @@ if (window.HorusApp && window.HorusApp.postMessage) {
 }
 /* ---------- Mise à jour de l'application sans réinstaller ni perdre la connexion ---------- */
 const plur = (n, one, many) => `${Number(n) || 0} ${Math.abs(Number(n) || 0) >= 2 ? many : one}`;
-const APP_VERSION = '2026.11.05-9';
+const APP_VERSION = '2026.11.05-10';
 async function refreshApp(){
   toast('Actualisation…');
   try { const reg = navigator.serviceWorker && await navigator.serviceWorker.getRegistration(); if (reg) { await reg.update(); if (reg.waiting) reg.waiting.postMessage('skipWaiting'); } } catch (_) {}
@@ -2416,7 +2416,7 @@ const SOURCE = { direct:'Direct', telephone:'Téléphone', walk_in:'Walk-in', wh
 const srcOpts = (cur) => cur === 'naya' ? opt({ naya: 'Nuittea' }, 'naya') : opt(Object.fromEntries(Object.entries(SOURCE).filter(([k]) => k !== 'naya')), cur);
 const PMETHOD = { cash:'Espèces', orange_money:'Orange Money', mtn_money:'MTN MoMo', moov_money:'Moov Money', wave:'Wave', card:'Carte', bank_transfer:'Virement' };
 const HKS = { clean:'Propre', dirty:'Sale', cleaning:'En nettoyage', ready:'Prête', out_of_service:'Hors service' };
-const money = (n) => { const c = (typeof CURRENCIES !== 'undefined' && CURRENCIES[S.currency]) || [0, 'F', 0]; const v = Number(n || 0); const t = new Intl.NumberFormat('fr-FR', { minimumFractionDigits: c[2] && v % 1 ? 2 : 0, maximumFractionDigits: c[2] }).format(c[2] ? v : Math.round(v)).replace(/[\u202f\u00a0 ]/g, '\u00a0'); return c[1] === '$' ? '$' + t : t + '\u00a0' + c[1]; };
+const money = (n) => { if (S.maskMoney && S.view === 'dashboard') return '••• ' + (((typeof CURRENCIES !== 'undefined' && CURRENCIES[S.currency]) || [0, 'F'])[1]); const c = (typeof CURRENCIES !== 'undefined' && CURRENCIES[S.currency]) || [0, 'F', 0]; const v = Number(n || 0); const t = new Intl.NumberFormat('fr-FR', { minimumFractionDigits: c[2] && v % 1 ? 2 : 0, maximumFractionDigits: c[2] }).format(c[2] ? v : Math.round(v)).replace(/[\u202f\u00a0 ]/g, '\u00a0'); return c[1] === '$' ? '$' + t : t + '\u00a0' + c[1]; };
 const iso = (d) => { const x = new Date(d); x.setMinutes(x.getMinutes() - x.getTimezoneOffset()); return x.toISOString().slice(0,10); };
 const today = () => iso(new Date());
 const addDays = (s, n) => { const d = new Date(s + 'T00:00:00'); d.setDate(d.getDate() + n); return iso(d); };
@@ -2546,7 +2546,7 @@ function nayaBalanceCard(B, compact){
       ${compact ? '<button class="small primary" data-go="naya">Voir le détail</button>' : `<div style="font-size:13px;color:#3B4D46;text-align:right">Dû au total : ${money(B.earned)}<br>Déjà réglé : ${money(B.paid)}${B.last_payment ? '<br>Dernier règlement : ' + dfr(String(B.last_payment).slice(0, 10)) : ''}</div>`}</div>
     ${compact ? '' : `<div style="margin-top:10px;padding-top:10px;border-top:1px dashed rgba(0,0,0,.15)"><strong style="font-size:14px">Comment régler</strong>${ins}<div class="muted" style="font-size:12px;margin-top:6px">Indiquez le nom de votre établissement en référence. Le solde se met à jour dès que l’équipe Nuittea enregistre votre paiement.</div></div>`}</div>`;
 }
-async function renderDashboard(){ if (!S._idPurged && S.org) { S._idPurged = true; setTimeout(idPurge, 4000); } await renderDashboardCore(); if (S.view !== 'dashboard') return; drawCA(S._caP || (() => { try { return localStorage.getItem('hh_ca_p'); } catch (_) { return null; } })() || 'today');
+async function renderDashboard(){ if (!S._idPurged && S.org) { S._idPurged = true; setTimeout(idPurge, 4000); } await renderDashboardCore(); { const mb = $('maskBtn'); if (mb) mb.onclick = () => { S.maskMoney = !S.maskMoney; try { localStorage.setItem('hh_mask', S.maskMoney ? '1' : '0'); } catch (_) {} renderDashboard(); }; } if (S.view !== 'dashboard') return; drawCA(S._caP || (() => { try { return localStorage.getItem('hh_ca_p'); } catch (_) { return null; } })() || 'today');
   if (SHOW_COMMISSION_DUE && can(['owner','admin','manager']) && S.org) { const { data: B } = await sb.rpc('naya_commission_balance', { p_org: S.org }); const nb = $('nayaDueBanner'); if (nb) { nb.innerHTML = nayaBalanceCard(B, true); nb.querySelectorAll('[data-go]').forEach(x => x.onclick = () => go(x.dataset.go)); } }
 }
 async function renderDashboardCore(){
@@ -2587,7 +2587,7 @@ async function renderDashboardCore(){
   el.innerHTML = `
     <div class="row between" style="margin-bottom:20px;align-items:flex-end">
       <div><div class="muted" style="font-size:14px">${hello} · ${new Date().toLocaleDateString('fr-FR', { weekday:'long', day:'numeric', month:'long' })}</div><h1 style="font-size:clamp(28px,4vw,40px)">Aujourd’hui</h1></div>
-      <div class="row">${upgradeBtn()}<button data-walkin>Walk-in</button><button class="primary" data-newresa aria-keyshortcuts="N">Nouvelle réservation<kbd class="kb" aria-hidden="true">N</kbd></button></div>
+      <div class="row"><button type="button" class="ghost" id="maskBtn" aria-pressed="${!!S.maskMoney}" aria-label="${S.maskMoney ? 'Afficher les montants' : 'Masquer les montants'}" title="${S.maskMoney ? 'Afficher les montants' : 'Masquer les montants'}"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${S.maskMoney ? '<path d="M3 3l18 18M10.6 10.6a2 2 0 0 0 2.8 2.8M9.4 5.2A9.6 9.6 0 0 1 12 5c5 0 9 5 10 7a17 17 0 0 1-3.2 4.2M6.3 6.3C4.2 7.8 2.7 10 2 12c1 2 5 7 10 7a9.4 9.4 0 0 0 4.4-1.1"/>' : '<path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>'}</svg></button>${upgradeBtn()}<button data-walkin>Walk-in</button><button class="primary" data-newresa aria-keyshortcuts="N">Nouvelle réservation<kbd class="kb" aria-hidden="true">N</kbd></button></div>
     </div>
     ${readOnlyNote()}
     ${guide.checklist}
@@ -2804,8 +2804,9 @@ async function renderReservations(){
     body = `<div class="card"><div class="row between" style="margin-bottom:10px"><h3 style="font-size:20px">${TABS.find(x => x[0] === f.tab)[1]}</h3><label class="row" style="gap:6px;margin:0;font-weight:500"><input type="checkbox" id="rfUnp" style="width:22px;height:22px;min-height:0" ${f.unpaid ? 'checked' : ''}> Solde impayé</label></div>${table(rows, f.q ? 'Aucun résultat pour cette recherche.' : 'Rien à afficher ici.')}</div>`; }
 
   el.innerHTML = head('Réservations', `<input id="rfQ" value="${esc(f.q)}" placeholder="Nom, chambre, téléphone…" aria-label="Rechercher une réservation (nom, chambre, téléphone, numéro)" style="width:min(300px,100%)" aria-label="Rechercher"><button data-walkin>Walk-in</button><button class="primary" data-newresa>Nouvelle réservation</button>`) + readOnlyNote() +
-    `<div class="row" role="tablist" style="gap:6px;background:#E9DCC8;padding:5px;border-radius:26px;width:fit-content;max-width:100%;overflow-x:auto;margin-bottom:16px;flex-wrap:nowrap">${TABS.map(([k, l, n]) => `<button role="tab" aria-selected="${k === f.tab}" class="small ${k === f.tab ? 'primary' : 'ghost'}" style="white-space:nowrap;border:0" data-rtab="${k}">${l}${n ? ' · ' + n : ''}</button>`).join('')}</div>` + body;
+    `<div class="row" role="tablist" style="gap:6px;background:#E9DCC8;padding:5px;border-radius:26px;width:fit-content;max-width:100%;overflow-x:auto;margin-bottom:16px;flex-wrap:nowrap">${TABS.map(([k, l, n]) => `<button role="tab" aria-selected="${k === f.tab}" class="small ${k === f.tab ? 'primary' : 'ghost'}" style="white-space:nowrap;border:0" data-rtab="${k}">${l}${n ? ' · ' + n : ''}</button>`).join('')}</div>` + (S.resSrc ? (() => { const m0 = t.slice(0, 8) + '01', rows = all.filter(r => (r.source === S.resSrc || (S.resSrc === 'walk_in' && r.source === 'direct')) && r.check_in >= m0 && !['cancelled', 'no_show'].includes(r.status)); return `<section class="card" style="margin-bottom:16px"><div class="row between" style="margin-bottom:10px"><h3 style="font-size:18px">Réservations du mois · ${esc(S.resSrc === 'walk_in' ? 'Sur place' : (SOURCE[S.resSrc] || S.resSrc))} · ${rows.length}</h3><button type="button" class="small ghost" id="srcClear">Fermer</button></div>${table(rows, 'Aucune réservation pour ce canal ce mois-ci.')}</section>`; })() : '') + body;
   el.querySelectorAll('[data-rtab]').forEach(b => b.onclick = () => { f.tab = b.dataset.rtab; renderReservations(); });
+  { const sc = $('srcClear'); if (sc) sc.onclick = () => { S.resSrc = null; renderReservations(); }; }
   let qt; $('rfQ').oninput = () => { clearTimeout(qt); qt = setTimeout(() => { f.q = $('rfQ').value; renderReservations().then(() => { const i = $('rfQ'); i.focus(); i.setSelectionRange(i.value.length, i.value.length); }); }, 350); };
   const u = $('rfUnp'); if (u) u.onchange = () => { f.unpaid = u.checked; renderReservations(); };
   el.querySelectorAll('[data-pay]').forEach(b => b.onclick = (e) => { e.preventDefault(); const r = all.find(x => x.id === b.dataset.pay); if (r) openEncaisser(r, renderReservations); });
@@ -4296,6 +4297,31 @@ async function loadDashResult(){
   const { data, error } = await sb.rpc('business_analytics', { p_org: S.org, p_months: 6 });
   if (error || !data) { box.remove(); return; }
   S.ana = data; const s = data.series, cur = s[s.length - 1], prev = s[s.length - 2] || {};
+  const t0 = today(), mA = t0.slice(0, 8) + '01', dim = new Date(+t0.slice(0, 4), +t0.slice(5, 7), 0).getDate(), dEl = Number(t0.slice(8, 10));
+  try { await sb.rpc('generate_recurring_charges', { p_est: S.est, p_month: mA }); } catch (_) {}
+  const [rcR, fxR, chR] = await Promise.all([
+    sb.from('recurring_charges').select('amount').eq('organization_id', S.org).eq('is_active', true),
+    sb.from('expenses').select('amount').eq('organization_id', S.org).eq('nature', 'fixed').in('status', ['paid', 'pending']).gte('paid_on', mA),
+    sb.from('reservations').select('source,total_amount,status').eq('establishment_id', S.est).not('status', 'in', '(cancelled,no_show)').gte('check_in', mA).lt('check_in', addDays(t0.slice(0, 8) + String(dim).padStart(2, '0'), 1))
+  ]);
+  const fixedMonth = (rcR.data || []).reduce((a, x) => a + Number(x.amount || 0), 0);
+  const fixedPaid = (fxR.data || []).reduce((a, x) => a + Number(x.amount || 0), 0);
+  const variable = Math.max(0, Number(cur.expenses || 0) - fixedPaid), fixedPro = Math.round(fixedMonth * dEl / dim);
+  const fixedCount = Math.max(fixedPaid, fixedPro), est = Number(cur.revenue || 0) - variable - fixedCount;
+  const revpar = data.rooms_count && cur.days ? Number(cur.rooms || 0) / (data.rooms_count * cur.days) : 0;
+  const CHC = { walk_in: '#1F6FA8', direct: '#1F6FA8', naya: '#3F9ED8', telephone: '#7FB8E0', whatsapp: '#2E9E6B', agence: '#C08A2E', en_ligne: '#9AAAB8' };
+  const chT = {}; (chR.data || []).forEach(r => { const k = r.source === 'direct' ? 'walk_in' : (r.source || 'direct'); chT[k] = (chT[k] || 0) + Number(r.total_amount || 0); });
+  const chSum = Object.values(chT).reduce((a, v) => a + v, 0), chList = Object.entries(chT).filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]);
+  const chLbl = (k) => k === 'walk_in' ? 'Sur place' : (SOURCE[k] || k);
+  S._dashExtra = `<div class="card" style="margin:-4px 0 16px;padding:16px 20px;display:grid;grid-template-columns:repeat(auto-fit,minmax(135px,1fr));gap:14px">
+    <div><div style="font-size:12px;font-weight:700;color:var(--muted)">Bénéfice estimé du mois</div><div style="font-size:22px;font-weight:800;color:${est < 0 ? 'var(--red)' : 'var(--green)'}">${est < 0 ? '−' : ''}${money(Math.abs(est))}</div><div class="muted" style="font-size:12px">${fixedMonth ? 'après charges fixes au prorata' : 'charges fixes non renseignées'}</div></div>
+    <div><div style="font-size:12px;font-weight:700;color:var(--muted)">Charges fixes</div><div style="font-size:22px;font-weight:800">${fixedMonth ? money(fixedMonth) : '—'}</div><div class="muted" style="font-size:12px">${fixedMonth ? 'par mois · ' + money(fixedCount) + ' compté à ce jour' : '<button type="button" class="small ghost" id="fixAdd" style="min-height:30px;padding:2px 10px">Ajouter loyer, salaires…</button>'}</div></div>
+    <div><div style="font-size:12px;font-weight:700;color:var(--muted)">Dépenses variables</div><div style="font-size:22px;font-weight:800">${money(variable)}</div><div class="muted" style="font-size:12px">ce mois-ci</div></div>
+    <div><div style="font-size:12px;font-weight:700;color:var(--muted)">Revenu par chambre disponible</div><div style="font-size:22px;font-weight:800">${revpar ? money(Math.round(revpar)) : '—'}</div><div class="muted" style="font-size:12px">par chambre et par nuit</div></div>
+    ${chSum ? `<div style="grid-column:1/-1"><div style="font-size:12px;font-weight:700;color:var(--muted);margin-bottom:6px">Réservations du mois par canal</div>
+      <div style="display:flex;height:10px;border-radius:5px;overflow:hidden;background:var(--line)" role="img" aria-label="${chList.map(([k, v]) => chLbl(k) + ' ' + Math.round(v / chSum * 100) + ' %').join(', ')}">${chList.map(([k, v]) => `<span style="flex:${v};background:${CHC[k] || '#9AAAB8'}"></span>`).join('')}</div>
+      <div class="row" style="gap:6px 14px;margin-top:8px;font-size:12.5px">${chList.map(([k, v]) => `<button type="button" class="ghost chlink" data-chsrc="${esc(k)}" style="min-height:28px;padding:2px 8px;font-size:12.5px"><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:${CHC[k] || '#9AAAB8'};margin-right:6px"></span>${esc(chLbl(k))} ${Math.round(v / chSum * 100)} % · ${money(v)}</button>`).join('')}</div></div>` : ''}
+  </div>`;
   { const av = $('adrVal'), as = $('adrSub'); if (av) { av.textContent = cur.sold ? money(cur.adr) : '—'; as.textContent = cur.sold ? `ce mois-ci · ${plur(cur.sold, 'nuitée', 'nuitées')}` : 'aucune nuitée ce mois-ci'; } }
   const ch = pctChg(cur.result, prev.result), max = Math.max(1, ...s.map(x => Math.max(x.revenue, x.expenses)));
   box.innerHTML = `<button type="button" id="resCard" class="card rescard" style="width:100%;text-align:left;display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr);gap:16px;align-items:center;margin-bottom:16px;cursor:pointer;min-height:0;padding:18px 20px">
@@ -4308,6 +4334,9 @@ async function loadDashResult(){
       <div class="muted" style="font-size:12px;margin-top:2px">${ch === null ? '' : (ch >= 0 ? '▲ ' : '▼ ') + Math.abs(ch) + ' % vs mois dernier · '}Touchez pour l’analyse détaillée →</div></div>
     <div aria-hidden="true" style="display:flex;gap:6px;align-items:flex-end;height:84px">${s.map(x => `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px"><div style="width:100%;display:flex;gap:2px;align-items:flex-end;height:66px"><div style="flex:1;background:var(--green);border-radius:3px 3px 0 0;height:${Math.max(2, x.revenue / max * 66)}px"></div><div style="flex:1;background:var(--gold-l);border-radius:3px 3px 0 0;height:${Math.max(2, x.expenses / max * 66)}px"></div></div><span class="muted" style="font-size:12px">${moisFr(x.m)}</span></div>`).join('')}</div>
   </button>`;
+  box.insertAdjacentHTML('beforeend', S._dashExtra || '');
+  { const fa = $('fixAdd'); if (fa) fa.onclick = () => { S.depTab = 'fixed'; go('depenses'); }; }
+  box.querySelectorAll('[data-chsrc]').forEach(b => b.onclick = () => { S.resSrc = b.dataset.chsrc; go('reservations'); });
   $('curSel').onchange = (e) => setCurrency(e.target.value);
   $('resCard').onclick = (e) => { if (e.target.closest('#curSel')) return; openAnalysis(6); };
   /* Régularité, en une ligne factuelle : jours du mois en cours avec au moins un encaissement */
@@ -5129,6 +5158,7 @@ class Esc {
   drawer(){ return this.raw(0x1B, 0x70, 0x00, 0x19, 0xFA); }
   bytes(){ return new Uint8Array(this.b); }
 }
+try { S.maskMoney = localStorage.getItem('hh_mask') === '1'; } catch (_) {}
 const moneyTxt = (n) => money(n).replace(/[  ]/g, ' ');
 
 // ---- Connexions ----
