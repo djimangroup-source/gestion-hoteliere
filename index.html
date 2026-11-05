@@ -1103,7 +1103,7 @@ if (window.HorusApp && window.HorusApp.postMessage) {
 }
 /* ---------- Mise à jour de l'application sans réinstaller ni perdre la connexion ---------- */
 const plur = (n, one, many) => `${Number(n) || 0} ${Math.abs(Number(n) || 0) >= 2 ? many : one}`;
-const APP_VERSION = '2026.11.05-11';
+const APP_VERSION = '2026.11.05-12';
 async function refreshApp(){
   toast('Actualisation…');
   try { const reg = navigator.serviceWorker && await navigator.serviceWorker.getRegistration(); if (reg) { await reg.update(); if (reg.waiting) reg.waiting.postMessage('skipWaiting'); } } catch (_) {}
@@ -1506,7 +1506,7 @@ async function boot(){
   if (RECOVERY.pending && !(session.user.user_metadata || {}).staff) { show('auth'); return openNewPassword(true); }
   if (!(await ensureLegalAccepted())) return;
   const [mem, adm] = await Promise.all([
-    sb.from('organization_members').select('organization_id, role, username, display_name, must_change_password, organizations(name)').eq('user_id', session.user.id).eq('is_active', true).limit(1),
+    sb.from('organization_members').select('id, organization_id, role, username, display_name, must_change_password, access_overrides, organizations(name)').eq('user_id', session.user.id).eq('is_active', true).limit(1),
     sb.rpc('is_platform_admin')
   ]);
   S.isAdmin = adm.data === true;
@@ -1757,7 +1757,9 @@ const ROLE_VIEWS = {
   staff: ['resto','dashboard','planning']
 };
 const ROLE_LABEL = { owner:'Propriétaire', admin:'Administrateur', manager:'Gérant', receptionist:'Réceptionniste', housekeeping:'Ménage', accountant:'Comptable', staff:'Serveur / Barman' };
-const allowed = (v) => v === 'admin' ? S.isAdmin : (moduleOn(v) && (!S.member || !ROLE_VIEWS[S.member.role] || ROLE_VIEWS[S.member.role].includes(v)));
+const memberViews = (m) => { const base = ROLE_VIEWS[m.role]; if (!base) return null; const o = (m.access_overrides && m.access_overrides.pages) || {}; return base.filter(v => !(o.remove || []).includes(v)).concat((o.add || []).filter(v => !base.includes(v))); };
+const memberCan = (a) => { const m = S.member; if (!m) return false; if (['owner','admin'].includes(m.role)) return true; const o = m.access_overrides && m.access_overrides.actions; if (o && a in o) return !!o[a]; return a === 'discount' ? ['manager','receptionist'].includes(m.role) : a === 'cancel_payment' ? m.role === 'manager' : false; };
+const allowed = (v) => v === 'admin' ? S.isAdmin : (moduleOn(v) && (!S.member || !memberViews(S.member) || memberViews(S.member).includes(v)));
 function applyRoleNav(){ [['navAna', 'rapports'], ['navReviews', 'rapports'], ['navRates', 'mapage'], ['navDir', 'mapage'], ['navPrn', 'caisse']].forEach(([id, m]) => { const e = $(id); if (e) e.classList.toggle('hidden', !moduleOn(m)); }); document.querySelectorAll('nav.side [data-view]').forEach(b => { if (b.dataset.view !== 'admin') b.classList.toggle('hidden', !allowed(b.dataset.view)); b.classList.toggle('locked', !!lockedView(b.dataset.view)); }); renderEstSwitch(); applyNavExtras(); }
 
 const VIEW_FEATURE = { resto: ['restaurant', 'Le module Restaurant & Bar', 'Vos plats et boissons en photo, une caisse tactile, le stock qui se décompte à chaque vente, les marges et les alertes de réapprovisionnement.'],
@@ -1820,7 +1822,7 @@ async function openEstablishments(){
 }
 function go(view){
   if (view === 'admin' && !S.isAdmin) view = 'abonnement';
-  if (S.org && !allowed(view)) view = (ROLE_VIEWS[S.member.role] || ['dashboard']).find(allowed) || 'dashboard';
+  if (S.org && !allowed(view)) view = (memberViews(S.member) || ['dashboard']).find(allowed) || 'dashboard';
   if (!S.org && view !== 'admin') view = 'admin';
   S.view = view; try { localStorage.setItem('hh_last_view', view); } catch (_) {}
   if (!navigator.onLine && S.offlineBoot && view !== 'resto') { /* vue sans données hors connexion */ }
@@ -2956,7 +2958,7 @@ async function openQuickResa(pre, refresh){
       </div>
       <details id="qMore" ${st.more ? 'open' : ''} style="margin-bottom:12px"><summary style="cursor:pointer;font-weight:600;font-size:14px;min-height:32px">Plus d’options : prix, remise, origine, notes</summary>
         <div class="row" style="gap:10px;margin-top:10px"><div class="field" style="flex:1 1 110px"><label for="qRt">Prix / nuit (F)</label><input id="qRt" type="number" min="0" value="${st.rate ?? ''}"></div>
-          <div class="field" style="flex:1 1 110px"><label for="qDs">Remise (F)</label><input id="qDs" type="number" min="0" value="${st.disc || 0}"></div>
+          <div class="field" style="flex:1 1 110px"><label for="qDs">Remise (F)</label><input id="qDs" type="number" min="0" value="${st.disc || 0}" ${memberCan('discount') ? '' : 'disabled title="Remise réservée au gérant"'}></div>
           <div class="field" style="flex:1 1 130px"><label for="qSr">Origine</label><select id="qSr">${srcOpts(st.src)}</select></div></div>
         <div class="field"><label for="qNo">Notes</label><input id="qNo" value="${esc(st.notes)}" placeholder="Heure d’arrivée, demande particulière…"></div>
       </details>
@@ -3063,7 +3065,7 @@ async function openResaForm(pre, refresh){
       main = `<div class="field"><label for="wPh">Téléphone du client</label><input id="wPh" type="tel" value="${esc(st.phone)}" placeholder="Ex. : 07 07 00 00 01" autocomplete="off"><div id="wPhH" class="muted" style="font-size:13px;margin-top:4px">${known ? `✓ Client déjà venu : <strong>${esc(known.full_name)}</strong> — <a href="#" id="wNew">autre client</a>` : 'S’il est déjà venu, sa fiche se remplit toute seule.'}</div></div>
         <div class="field ${known ? 'hidden' : ''}"><label for="wNm">Nom complet</label><input id="wNm" value="${esc(st.name)}" autocomplete="off" list="wGl"><datalist id="wGl">${G.slice(0, 300).map(g => `<option value="${esc(g.full_name)}">${esc(g.phone || '')}</option>`).join('')}</datalist></div>
         <div class="row"><div class="field" style="flex:1 1 120px"><label for="wRt">Prix / nuit (F)</label><input id="wRt" type="number" min="0" value="${st.rate ?? ''}"></div>${st.rateNote ? `<p class="muted" style="flex:1 1 100%;font-size:12px;margin:-6px 0 6px;color:var(--green)">${esc(st.rateNote)}</p>` : ''}
-          <div class="field" style="flex:1 1 110px"><label for="wDs">Remise (F) <span title="Au-delà de ${discPct} % de remise, le propriétaire est prévenu automatiquement." style="display:inline-grid;place-items:center;width:17px;height:17px;border-radius:50%;background:var(--ink);color:#fff;font-size:11px;cursor:help">?</span></label><input id="wDs" type="number" min="0" value="${st.disc}"></div>
+          <div class="field" style="flex:1 1 110px"><label for="wDs">Remise (F) <span title="Au-delà de ${discPct} % de remise, le propriétaire est prévenu automatiquement." style="display:inline-grid;place-items:center;width:17px;height:17px;border-radius:50%;background:var(--ink);color:#fff;font-size:11px;cursor:help">?</span></label><input id="wDs" type="number" min="0" value="${st.disc}" ${memberCan('discount') ? '' : 'disabled title="Remise réservée au gérant"'}></div>
           <div class="field" style="flex:1 1 130px"><label for="wSr">Origine</label><select id="wSr">${srcOpts(st.src)}</select></div></div>
         <div id="wDW" class="hidden" style="margin:-6px 0 12px;font-size:13px;color:#6B4A00;background:#FFF4E5;border-radius:10px;padding:8px 10px">Remise supérieure à ${discPct} % : le propriétaire sera prévenu.</div>
         <div class="field"><label for="wNo">Notes</label><input id="wNo" value="${esc(st.notes)}" placeholder="Heure d’arrivée, demande particulière…"></div>
@@ -3494,7 +3496,7 @@ async function renderCaisse(){
   const rows = mv.filter(m => (st.kind === 'all' || (st.kind === 'in' ? ['payment','income'].includes(m.kind) : st.kind === 'out' ? ['expense','refund'].includes(m.kind) : m.kind === 'deposit')) && (st.by === 'all' || m.created_by === st.by));
   const mgr = can(['owner','admin','manager']);
   const reversed = new Set(mv.filter(m => (m.reference || '').startsWith('ANN:')).map(m => m.reference.slice(4)));
-  const canRev = (m) => mgr && sess && ['payment','income','expense'].includes(m.kind) && !(m.reference || '').startsWith('ANN:') && !reversed.has(m.id) && (m.method !== 'cash' || m.session_id === sess.id);
+  const canRev = (m) => memberCan('cancel_payment') && sess && ['payment','income','expense'].includes(m.kind) && !(m.reference || '').startsWith('ANN:') && !reversed.has(m.id) && (m.method !== 'cash' || m.session_id === sess.id);
   const KICON = { payment:'<path d="M3 18V7M21 18v-6H3M7 12V9h5v3"></path>', income:'<path d="M12 5v14M5 12h14"></path>', expense:'<path d="M5 12h14"></path>', refund:'<path d="M9 14L4 9l5-5"></path><path d="M4 9h11a5 5 0 0 1 0 10h-3"></path>', deposit:'<path d="M3 21h18M5 21V10M19 21V10M12 3l9 6H3z"></path>' };
   const KBG = { payment:'#E3F2EA', income:'#FFF4DE', expense:'#FCE8E6', refund:'#FCE8E6', deposit:'#EAEFF6' };
   const ico = (k) => `<span class="kj-ic" style="background:${KBG[k]}"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${KICON[k] || ''}</svg></span>`;
@@ -4288,14 +4290,18 @@ function openStaffForm(isOwner, done){
 async function renderEquipe(){
   const el = $('v-equipe'); el.innerHTML = skeletonView();
   const isOwner = can(['owner']);
-  const [team, inv, org] = await Promise.all([
+  const [team, inv, org, acc] = await Promise.all([
     sb.rpc('org_team_v2', { p_org: S.org }),
     sb.from('organization_invitations').select('*').eq('organization_id', S.org).eq('status', 'pending').order('created_at', { ascending: false }),
-    sb.from('organizations').select('staff_code').eq('id', S.org).single()
+    sb.from('organizations').select('staff_code').eq('id', S.org).single(),
+    sb.from('organization_members').select('id, access_overrides').eq('organization_id', S.org)
   ]);
+
   if (team.error) { el.innerHTML = head('Équipe') + `<p class="muted">${esc(errMsg(team.error))}</p>`; return; }
   const code = org.data && org.data.staff_code;
-  const members = team.data || [];
+  const ovr = Object.fromEntries((acc.data || []).map(x => [x.id, x.access_overrides || {}]));
+  const members = (team.data || []).map(m => ({ ...m, access_overrides: ovr[m.member_id] || {} }));
+  const custom = (m) => { const o = m.access_overrides || {}; return ((o.pages && ((o.pages.add || []).length || (o.pages.remove || []).length)) || (o.actions && Object.keys(o.actions).length)); };
   const hasStaff = members.some(m => m.username);
   const u = (S.overview && S.overview.usage) || {};
   const me = S.session.user.id;
@@ -4310,8 +4316,10 @@ async function renderEquipe(){
       <span class="muted" style="font-size:13px">${m.username ? ' ' + esc(m.username) : ' ' + esc(m.email || '')}</span></div></div>
       <div class="row" style="gap:6px">${canTouch(m) ? `<select data-role="${esc(m.member_id)}" aria-label="Poste" style="flex:1;min-height:38px">${roleOpts(m.role)}</select>` : `<span class="pill st-trial">${esc(ROLE_LABEL[m.role] || m.role)}</span>`}
         <span class="pill ${m.is_active ? (m.must_change_password ? 'st-past_due' : 'st-active') : 'st-cancelled'}">${!m.is_active ? 'Suspendu' : m.must_change_password ? 'Code provisoire' : 'Actif'}</span></div>
+      <span class="muted" style="font-size:12.5px;line-height:1.4">${esc(m.role === 'owner' ? 'Tous les accès' : (ROLE_HELP[m.role] || ''))}${custom(m) ? ' · <strong>accès ajustés</strong>' : ''}</span>
       <span class="muted" style="font-size:12px">${seen(m.last_sign_in_at)}</span>
       ${canTouch(m) ? `<div class="row" style="gap:6px">${m.username ? `<button class="small" type="button" data-reset="${esc(m.member_id)}">Nouveau code</button>` : ''}
+        <button class="small" type="button" data-fiche="${esc(m.member_id)}">Fiche</button>
         <button class="small ghost" type="button" data-active="${esc(m.member_id)}" data-on="${m.is_active}" data-staff="${m.username ? 1 : ''}">${m.is_active ? 'Suspendre' : 'Réactiver'}</button></div>` : ''}
     </div>`;
   el.innerHTML = head('Équipe', `<span class="pill st-trial">${u.users ?? members.filter(m => m.is_active).length} / ${u.max_users ?? '∞'} utilisateurs</span>`) + readOnlyNote() + `
@@ -4320,7 +4328,8 @@ async function renderEquipe(){
       <div style="font-size:13px;opacity:.8">Connexion : onglet « Personnel » → code hôtel + identifiant + code à 4 chiffres</div></div>
       <div class="row">${!hasStaff ? `<button class="small ghost" type="button" id="codeEdit" style="color:#FBF6EE;border-color:#FBF6EE">Modifier le code</button>` : ''}<button class="primary" type="button" id="addStaff">+ Ajouter un employé</button></div>
     </div>
-    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:12px;margin-bottom:16px">${members.map(card).join('')}</div>
+    ${members.length > 4 ? `<div class="row" style="margin-bottom:12px;gap:8px"><input id="eqQ" type="search" placeholder="Rechercher un employé" style="flex:2 1 200px"><select id="eqR" aria-label="Filtrer par poste" style="flex:1 1 150px"><option value="">Tous les postes</option>${Object.entries(ROLE_LABEL).map(([k, v]) => `<option value="${k}">${v}</option>`).join('')}</select></div>` : ''}
+    <div id="eqGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:12px;margin-bottom:16px">${members.map(card).join('')}</div>
     <details class="card"><summary style="cursor:pointer;font-weight:700">Inviter par e-mail (comptes avec adresse e-mail)</summary>
     <form class="row" id="invForm" style="align-items:flex-end;margin-top:12px">
       <div style="flex:2 1 220px"><label for="iMail">Adresse e-mail</label><input id="iMail" type="email" required placeholder="prenom.nom@exemple.com"></div>
@@ -4331,6 +4340,9 @@ async function renderEquipe(){
     ${(inv.data || []).length ? `<h3 style="font-size:16px;margin:14px 0 6px">Invitations en attente</h3>${inv.data.map(i => `<div class="row between" style="padding:8px 0;border-bottom:1px solid var(--line)"><span>${esc(i.email)} · <strong>${esc(ROLE_LABEL[i.role])}</strong></span><span class="row"><button class="small" type="button" data-copyinv="${esc(i.id)}">Copier le message</button><button class="small ghost" type="button" data-revoke="${esc(i.id)}">Annuler</button></span></div>`).join('')}` : ''}
     </details>`;
   $('addStaff').onclick = () => openStaffForm(isOwner, renderEquipe);
+  const bindCards = () => el.querySelectorAll('[data-fiche]').forEach(b => b.onclick = () => openMemberSheet(members.find(x => x.member_id === b.dataset.fiche)));
+  bindCards();
+  if ($('eqQ')) { const f = () => { const q = $('eqQ').value.trim().toLowerCase(), r = $('eqR').value; const list = members.filter(m => (!r || m.role === r) && (!q || [m.display_name, m.username, m.email].some(x => (x || '').toLowerCase().includes(q)))); $('eqGrid').innerHTML = list.length ? list.map(card).join('') : '<p class="muted">Aucun employé ne correspond.</p>'; bindCards(); bindRows(); }; $('eqQ').oninput = f; $('eqR').onchange = f; }
   if ($('codeEdit')) $('codeEdit').onclick = () => {
     modal(`<h2 style="font-size:22px;margin:0 0 10px">Code hôtel</h2><p class="muted" style="margin:0 0 12px">Court et facile à retenir. Il ne pourra plus être changé après la création du premier compte personnel.</p>
       <form id="ceForm"><div class="field"><input id="ceVal" value="${esc(code || '')}" pattern="[a-z0-9]{3,20}" maxlength="20" required autocapitalize="none"></div><button class="primary" style="width:100%">Enregistrer</button></form>`);
@@ -4345,6 +4357,7 @@ async function renderEquipe(){
     renderEquipe(); };
   el.querySelectorAll('[data-copyinv]').forEach(b => b.onclick = async () => { const i = inv.data.find(x => x.id === b.dataset.copyinv); try { await navigator.clipboard.writeText(invMsg(i)); toast('Message copié.'); } catch (_) { modal(`<p>${esc(invMsg(i))}</p><button class="primary" data-close>Fermer</button>`); } });
   el.querySelectorAll('[data-revoke]').forEach(b => b.onclick = async () => { const { error } = await sb.from('organization_invitations').update({ status: 'revoked' }).eq('id', b.dataset.revoke); if (error) return toast(errMsg(error), true); toast('Invitation annulée.'); renderEquipe(); });
+  const bindRows = () => {
   el.querySelectorAll('[data-role]').forEach(sel => sel.onchange = async () => { const { error } = await sb.from('organization_members').update({ role: sel.value }).eq('id', sel.dataset.role); if (error) { toast(errMsg(error), true); return renderEquipe(); } toast('Poste modifié.'); });
   el.querySelectorAll('[data-reset]').forEach(b => b.onclick = async () => { const m = members.find(x => x.member_id === b.dataset.reset); const p = randPin(); b.disabled = true;
     try { await staffAdmin({ action: 'reset', member_id: m.member_id, pin: p }); renderEquipe(); showCredentials(m.display_name, code, m.username, p); } catch (err) { toast(err.message, true); b.disabled = false; } });
@@ -4354,6 +4367,40 @@ async function renderEquipe(){
       else { const { error } = await sb.from('organization_members').update({ is_active: on }).eq('id', b.dataset.active); if (error) throw new Error(errMsg(error)); }
       toast(on ? 'Compte réactivé.' : 'Compte suspendu.'); await loadCommon(); renderEquipe();
     } catch (err) { toast(err.message, true); b.disabled = false; } });
+  }; bindRows();
+}
+const PAGE_LABEL = { dashboard:'Tableau de bord', reservations:'Réservations', planning:'Planning', naya:'Nuittea.com', passes:'Pass', clients:'Clients', chambres:'Chambres', inventaire:'Inventaire', pointage:'Pointage', caisse:'Caisse', resto:'Restaurant et bar', depenses:'Dépenses', factures:'Factures', rapports:'Rapports', controle:'Contrôle', mapage:'Page publique' };
+function openMemberSheet(m){
+  const base = ROLE_VIEWS[m.role] || [];
+  const o = m.access_overrides || {}, op = o.pages || {}, oa = o.actions || {};
+  const eff = new Set(memberViews({ role: m.role, access_overrides: o }) || []);
+  const defAct = { discount: ['manager','receptionist'].includes(m.role), cancel_payment: m.role === 'manager' };
+  const act = (k) => k in oa ? !!oa[k] : defAct[k];
+  const pages = Object.keys(PAGE_LABEL).filter(moduleOn);
+  modal(`<h2 style="font-size:22px;margin:0 0 4px">${esc(m.display_name || m.email || m.username)}</h2>
+    <p class="muted" style="margin:0 0 12px">${esc(ROLE_LABEL[m.role] || m.role)} · ${esc(ROLE_HELP[m.role] || '')}</p>
+    <div class="row" style="gap:6px;margin-bottom:12px"><button class="small primary" type="button" id="msA">Accès</button><button class="small ghost" type="button" id="msH">Activité</button></div>
+    <div id="msBody"></div>`);
+  const showAccess = () => { $('msA').className = 'small primary'; $('msH').className = 'small ghost';
+    $('msBody').innerHTML = `<form id="msForm"><h3 style="font-size:15px;margin:0 0 6px">Pages visibles</h3>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:4px 12px;margin-bottom:12px">${pages.map(v => `<label style="display:flex;gap:8px;align-items:center;font-weight:500"><input type="checkbox" name="pg" value="${v}" ${eff.has(v) ? 'checked' : ''}> ${PAGE_LABEL[v]}${base.includes(v) ? '' : ' <span class="muted" style="font-size:11px">(hors poste)</span>'}</label>`).join('')}</div>
+      <h3 style="font-size:15px;margin:0 0 6px">Actions sensibles</h3>
+      <label style="display:flex;gap:8px;align-items:center;font-weight:500"><input type="checkbox" id="msDisc" ${act('discount') ? 'checked' : ''}> Accorder des remises</label>
+      <label style="display:flex;gap:8px;align-items:center;font-weight:500;margin-bottom:12px"><input type="checkbox" id="msCanc" ${act('cancel_payment') ? 'checked' : ''}> Annuler un encaissement</label>
+      <p class="muted" style="font-size:12.5px;margin:0 0 12px">Ces deux règles sont vérifiées par le serveur. Chaque modification est inscrite au journal.</p>
+      <div class="row" style="gap:8px"><button class="primary" style="flex:1">Enregistrer</button><button class="ghost" type="button" id="msReset">Revenir aux droits du poste</button></div></form>`;
+    const save = async (ov) => { const { error } = await sb.rpc('set_member_access', { p_member: m.member_id, p_overrides: ov }); if (error) return toast(errMsg(error), true); closeModal(); toast('Accès enregistrés.'); renderEquipe(); };
+    $('msForm').onsubmit = (e) => { e.preventDefault();
+      const on = new Set([...document.querySelectorAll('[name=pg]:checked')].map(x => x.value));
+      const add = pages.filter(v => on.has(v) && !base.includes(v)), remove = base.filter(v => pages.includes(v) && !on.has(v));
+      const actions = {}; [['discount', 'msDisc'], ['cancel_payment', 'msCanc']].forEach(([k, id]) => { if ($(id).checked !== defAct[k]) actions[k] = $(id).checked; });
+      save({ pages: { add, remove }, actions }); };
+    $('msReset').onclick = () => save({}); };
+  const showHist = async () => { $('msH').className = 'small primary'; $('msA').className = 'small ghost'; $('msBody').innerHTML = '<p class="muted">Chargement…</p>';
+    const { data, error } = await sb.rpc('member_activity', { p_member: m.member_id, p_limit: 50 });
+    if (error) { $('msBody').innerHTML = `<p class="muted">${esc(errMsg(error))}</p>`; return; }
+    $('msBody').innerHTML = (data || []).length ? `<div style="max-height:50vh;overflow:auto">${data.map(a => `<div style="padding:8px 0;border-bottom:1px solid var(--line)"><div style="font-size:12px" class="muted">${new Date(a.at).toLocaleString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</div><div>${esc(a.summary || (a.entity + ' · ' + a.action))}</div></div>`).join('')}</div>` : '<p class="muted">Aucune action enregistrée pour cet employé.</p>'; };
+  $('msA').onclick = showAccess; $('msH').onclick = showHist; showAccess();
 }
 
 /* ================= Modules à cocher, devise, résultat & analyse ================= */
