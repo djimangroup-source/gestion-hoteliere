@@ -718,7 +718,7 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,te
 
 /* ---- Direction B « Net et professionnel » (boutons, onglets, retours) ---- */
 :root{--b-r:10px;--b-ink:#111827;--b-line:#D0D5DD}
-:is(section[id^="v-"],#modal,.dtop,#onboard,#auth) :is(button,.btn):not(.gstep):not(.loc-sug button):not([role=tab]):not(.toggle button):not(.ghead):not(.leaflet-control *):not(.ck *):not(.lv-chip){
+:is(section[id^="v-"],#modal,.dtop,#onboard,#auth) :is(button,.btn):not(.gstep):not(.loc-sug button):not([role=tab]):not(.toggle button):not(.ghead):not(.leaflet-control *):not(.ck *):not(.lv-chip):not(.lv-tile){
   border-radius:var(--b-r)!important;font-weight:600!important;letter-spacing:0!important;transition:background-color .12s,border-color .12s,box-shadow .12s,transform .06s!important;
   background:#fff!important;color:var(--b-ink)!important;border:1px solid var(--b-line)!important;box-shadow:0 1px 2px rgba(16,24,40,.05)!important}
 :is(section[id^="v-"],#modal,.dtop,#onboard,#auth) :is(button,.btn):not(.gstep):not([role=tab]):not(.toggle button):hover{background:#F9FAFB!important;border-color:#98A2B3!important}
@@ -795,6 +795,7 @@ section[id^="v-"] .card{border-radius:12px}
 .lv-legend .lv-chip:not(#_a):not(#_b){background:var(--lb);color:var(--lc);border:2px solid transparent;border-radius:999px;min-height:36px;padding:4px 14px;font-size:13px;font-weight:600;display:inline-flex;gap:8px;align-items:center;cursor:pointer}
 .lv-legend .lv-chip:not(#_a):not(#_b).on{border-color:var(--ink,#111827)}
 .lv-band{padding:8px 16px;display:flex;flex-direction:column;gap:1px;font-size:13px}.lv-band strong{font-size:14px}
+.lv-tile{transition:transform .12s,box-shadow .12s}.lv-tile:hover{transform:translateY(-1px);box-shadow:0 4px 12px rgba(15,27,45,.12)}
 .lv-dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px;vertical-align:0;box-shadow:0 0 0 1px rgba(0,0,0,.12)}
 /* Centre de contrôle administrateur (style cockpit sombre) */
 #v-admin .ck{background:#0E1621;color:#E8EEF5;border-radius:16px;padding:18px;margin-bottom:18px}
@@ -2596,7 +2597,7 @@ async function renderDashboardCore(){
     <div class="card" style="margin-bottom:16px">
       <div class="row between" style="margin-bottom:12px"><h3 style="font-size:22px">Chambres en direct</h3><div class="row" style="gap:6px">${Object.entries(LIVE).map(([k, v]) => `<span class="pill" style="background:${v[1]};color:${v[2]}">${v[0]} · ${countSt(k)}</span>`).join('')}</div></div>
       ${total ? `<div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(112px,1fr));gap:10px">${live.map(x => { const c = LIVE[x.st];
-        return `<button type="button" data-room="${x.rm.id}" ${x.resa ? `data-open="${x.resa.id}"` : ''} style="cursor:pointer;border:none;font:inherit;text-align:left;width:100%;border-radius:16px;padding:12px;min-height:96px;background:${c[1]};color:${c[2]};display:flex;flex-direction:column;justify-content:space-between;gap:6px;outline-offset:2px" aria-label="Chambre ${esc(x.rm.number)} : ${c[0]}">
+        return `<button type="button" class="lv-tile" data-room="${x.rm.id}" ${x.resa ? `data-open="${x.resa.id}"` : ''} style="cursor:pointer;border:none;font:inherit;text-align:left;width:100%;border-radius:16px;padding:12px;min-height:96px;background:${c[1]};color:${c[2]};display:flex;flex-direction:column;justify-content:space-between;gap:6px;outline-offset:2px" aria-label="Chambre ${esc(x.rm.number)} : ${c[0]}">
           <span style="font-family:var(--display);font-weight:800;font-size:24px;line-height:1">${esc(x.rm.number)}</span>
           <span style="font-size:12px;font-weight:600;opacity:.9;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${x.resa ? esc(x.resa.guest_name) : esc(x.rm.room_type || c[0])}</span>
           <span style="font-size:11px;opacity:.8">${c[0]}</span></button>`; }).join('')}</div>` : '<p class="muted">Aucune chambre.</p>'}
