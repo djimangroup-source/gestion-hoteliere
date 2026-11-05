@@ -1096,7 +1096,7 @@ if (window.HorusApp && window.HorusApp.postMessage) {
 }
 /* ---------- Mise à jour de l'application sans réinstaller ni perdre la connexion ---------- */
 const plur = (n, one, many) => `${Number(n) || 0} ${Math.abs(Number(n) || 0) >= 2 ? many : one}`;
-const APP_VERSION = '2026.11.05-7';
+const APP_VERSION = '2026.11.05-8';
 async function refreshApp(){
   toast('Actualisation…');
   try { const reg = navigator.serviceWorker && await navigator.serviceWorker.getRegistration(); if (reg) { await reg.update(); if (reg.waiting) reg.waiting.postMessage('skipWaiting'); } } catch (_) {}
@@ -3693,14 +3693,21 @@ async function printReceipt(key){
   const est = S.ests.find(x => x.id === r0.establishment_id) || {};
   const total = rows.reduce((a, m) => a + Number(m.amount), 0);
   await teamNames();
-  w.document.write(`<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>Reçu ${receiptNo(key)}</title><style>body{font:14px/1.5 system-ui,sans-serif;color:#1C2B26;max-width:420px;margin:30px auto;padding:0 18px}h1{font-size:20px;margin:0;color:#1F7AB8}table{width:100%;border-collapse:collapse;margin:10px 0}td{padding:7px 0;border-bottom:1px dashed #C9D8D1}.r{text-align:right}.t{font-size:18px;font-weight:800}.m{color:#5E6E68;font-size:12px}${printCss('ticket')}</style></head><body>
-    ${rcptHead(est)}<hr class="tk-sep">
-    <div class="tk-c"><div class="tk-big">REÇU N° ${receiptNo(key)}</div><div class="m">${new Date(r0.created_at).toLocaleString('fr-FR', { dateStyle:'long', timeStyle:'short' })}</div></div>
-    ${b ? `<hr class="tk-sep"><p style="margin:4px 0">Client : <strong>${esc(b.guest_name)}</strong><br>Chambre ${esc(b.room_number)} · du ${dfr(b.check_in)} au ${dfr(b.check_out)}</p>` : ''}
-    <table>${rows.map(m => `<tr><td>${esc(m.label)} · ${PMETHOD[m.method]}${m.reference ? `<br><span class="m">réf. ${esc(m.reference)}</span>` : ''}</td><td class="r">${money(m.amount)}</td></tr>`).join('')}
-    <tr class="tot"><td class="t">Total reçu</td><td class="r t">${money(total)}</td></tr></table>
-    ${b ? `<p class="tk-c" style="margin:6px 0">${Number(b.balance) > 0 ? 'Reste à payer : <strong>' + money(b.balance) + '</strong>' : '<strong>✓ Séjour entièrement réglé</strong>'}</p>` : ''}<hr class="tk-sep">
-    ${rcpt(est).show_server !== false ? `<p class="m">Encaissé par ${esc(who(r0.created_by))}.</p>` : ''}${rcptFoot(est, 'Merci de votre confiance.')}${S.overview && S.overview.plan && S.overview.plan.slug === 'decouverte' ? '<p class="m" style="text-align:center;margin-top:18px">Propulsé par Nuittea Manager · gestion hôtelière gratuite</p>' : ''}
+  const when = new Date(r0.created_at), nights = b ? Math.max(1, Math.round((new Date(b.check_out) - new Date(b.check_in)) / 864e5)) : 0;
+  const kv = (k, v) => `<div class="rc-kv"><span>${k}</span><strong>${v}</strong></div>`;
+  const paid = b && Number(b.balance) <= 0;
+  w.document.write(`<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>Reçu ${receiptNo(key)}</title><style>body{font:14px/1.5 system-ui,sans-serif;color:#111;max-width:420px;margin:30px auto;padding:0 18px}h1{font-size:20px;margin:0}.m{color:#555;font-size:12px}${printCss('ticket')}${RECEIPT_CSS}</style></head><body>
+    ${rcptHead(est)}
+    <div class="rc-title">Reçu de paiement</div>
+    <div class="rc-grid">${kv('N°', receiptNo(key))}${kv('Date', when.toLocaleDateString('fr-FR'))}${kv('Heure', when.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }))}${rcpt(est).show_server !== false ? kv('Caisse', esc(who(r0.created_by))) : ''}</div>
+    ${b ? `<div class="rc-box"><div class="rc-lbl">Séjour</div><div class="rc-guest">${esc(b.guest_name)}</div>
+      <div class="rc-stay"><span>Chambre <strong>${esc(b.room_number)}</strong></span><span>${plur(nights, 'nuit', 'nuits')}</span></div>
+      <div class="rc-dates"><span>Arrivée<br><strong>${dfr(b.check_in)}</strong></span><span class="rc-arrow">→</span><span>Départ<br><strong>${dfr(b.check_out)}</strong></span></div></div>` : ''}
+    <div class="rc-lbl" style="margin-top:10px">Détail</div>
+    <div class="rc-lines">${rows.map(m => `<div class="rc-line"><div><div>${esc(m.label)}</div><div class="m">${PMETHOD[m.method] || esc(m.method || '')}${m.reference ? ' · réf. ' + esc(m.reference) : ''}</div></div><div class="rc-amt">${money(m.amount)}</div></div>`).join('')}</div>
+    <div class="rc-total"><span>Total reçu</span><strong>${money(total)}</strong></div>
+    ${b ? (paid ? `<div class="rc-stamp">Séjour soldé</div>` : `<div class="rc-due"><span>Reste à payer</span><strong>${money(b.balance)}</strong></div>`) : ''}
+    <div class="rc-foot">${rcptFoot(est, 'Merci de votre confiance.')}<div class="m" style="text-align:center">Conservez ce reçu, il justifie votre paiement.</div>${S.overview && S.overview.plan && S.overview.plan.slug === 'decouverte' ? '<div class="m" style="text-align:center;margin-top:8px">Propulsé par Nuittea Manager</div>' : ''}</div>
     <script>window.onload=()=>window.print()<\/script></body></html>`);
   w.document.close();
 }
@@ -4396,6 +4403,20 @@ h1{letter-spacing:-.01em;margin:0}.m{font-size:.85em}
 table td{border-bottom:1px dashed #000!important}
 tr.tot td{border-top:1.5px solid #000!important;border-bottom:none!important;font-weight:800;font-size:1.2em;padding-top:5px!important}
 .tk-sep{border:0;border-top:1px dashed #000;margin:8px 0}.tk-c{text-align:center}.tk-big{font-size:1.15em;font-weight:800}`;
+/* Reçu de paiement : lisible en noir et blanc, sur ticket thermique comme sur feuille */
+const RECEIPT_CSS = `.rc-title{margin:10px 0 8px;padding:6px 0;border-top:2px solid #000;border-bottom:2px solid #000;text-align:center;font-weight:800;letter-spacing:.14em;text-transform:uppercase;font-size:1.02em}
+.rc-grid{display:grid;grid-template-columns:1fr 1fr;gap:4px 10px;margin:0 0 10px}
+.rc-kv{display:flex;flex-direction:column;line-height:1.25}.rc-kv span{font-size:.78em;text-transform:uppercase;letter-spacing:.06em;color:#555}.rc-kv strong{font-weight:700}
+.rc-box{border:1.5px solid #000;border-radius:6px;padding:8px 10px;margin:6px 0}
+.rc-lbl{font-size:.78em;text-transform:uppercase;letter-spacing:.08em;color:#555;font-weight:700}
+.rc-guest{font-size:1.12em;font-weight:800;margin:2px 0 4px}
+.rc-stay{display:flex;justify-content:space-between;border-bottom:1px dashed #000;padding-bottom:5px;margin-bottom:5px}
+.rc-dates{display:flex;justify-content:space-between;align-items:center;line-height:1.25;font-size:.92em}.rc-dates span:last-child{text-align:right}.rc-arrow{font-size:1.3em;font-weight:700}
+.rc-lines{margin:4px 0 0}.rc-line{display:flex;justify-content:space-between;gap:10px;padding:6px 0;border-bottom:1px dotted #000}.rc-amt{white-space:nowrap;font-weight:600}
+.rc-total{display:flex;justify-content:space-between;align-items:baseline;margin:10px 0 6px;padding:8px 10px;border:2px solid #000;border-radius:6px}.rc-total span{font-weight:700;text-transform:uppercase;letter-spacing:.06em;font-size:.9em}.rc-total strong{font-size:1.45em;font-weight:900;white-space:nowrap}
+.rc-stamp{margin:8px auto;width:max-content;padding:4px 14px;border:2px solid #000;border-radius:999px;font-weight:800;text-transform:uppercase;letter-spacing:.12em;font-size:.9em}
+.rc-due{display:flex;justify-content:space-between;padding:6px 10px;border:1.5px dashed #000;border-radius:6px;margin:6px 0}
+.rc-foot{margin-top:12px;padding-top:8px;border-top:1px dashed #000}`;
 const SHEET_SCREEN = (w) => `@media screen{html{background:#E9EEEC}body{width:${w};max-width:${w}!important;min-height:90vh;margin:24px auto!important;padding:16mm 15mm!important;background:#fff;box-shadow:0 6px 30px rgba(20,40,32,.14);border-radius:4px}}`;
 const TICKET_SCREEN = (w) => `@media screen{html{background:#E9EEEC!important;width:auto!important}body{width:${w + 8}mm!important;max-width:${w + 8}mm!important;margin:24px auto!important;padding:5mm 4mm!important;background:#fff!important;box-shadow:0 6px 30px rgba(20,40,32,.14)}}`;
 /* En-tête commun des documents A4/A5 */
