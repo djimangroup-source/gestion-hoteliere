@@ -1116,7 +1116,7 @@ if (window.HorusApp && window.HorusApp.postMessage) {
 }
 /* ---------- Mise à jour de l'application sans réinstaller ni perdre la connexion ---------- */
 const plur = (n, one, many) => `${Number(n) || 0} ${Math.abs(Number(n) || 0) >= 2 ? many : one}`;
-const APP_VERSION = '2026.11.05-15';
+const APP_VERSION = '2026.11.05-16';
 async function refreshApp(){
   toast('Actualisation…');
   try { const reg = navigator.serviceWorker && await navigator.serviceWorker.getRegistration(); if (reg) { await reg.update(); if (reg.waiting) reg.waiting.postMessage('skipWaiting'); } } catch (_) {}
@@ -1990,7 +1990,7 @@ async function renderAbonnement(){
 
 function printInvoice(i){
   if (!i) return;
-  const w = window.open('', '_blank');
+  const w = openDocWin();
   if (!w) return toast("Autorisez l'ouverture de fenêtres pour imprimer la facture.", true);
   w.document.write(`<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>Facture ${esc(i.number)}</title><style>body{max-width:720px;margin:40px auto;padding:0 20px}${printCss('doc')}</style></head><body>
   <div class="dh"><div class="brand"><div><h1>Nuittea Manager</h1><div class="m">Logiciel de gestion hôtelière</div></div></div><div class="meta"><span class="kind">Facture</span><div class="num">${esc(i.number)}</div><div class="m">Émise le ${date(i.issued_at)}</div></div></div>
@@ -3222,7 +3222,7 @@ async function openResa(id, refresh, focusCheckout){
 function printGuestInvoice(i){
   if (!i) return;
   const est = S.ests.find(e => e.id === i.establishment_id) || {};
-  const w = window.open('', '_blank'); if (!w) return toast("Autorisez l'ouverture de fenêtres pour imprimer.", true);
+  const w = openDocWin(); if (!w) return toast("Autorisez l'ouverture de fenêtres pour imprimer.", true);
   const due = Number(i.balance) > 0;
   w.document.write(`<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>Facture ${esc(i.number)}</title><style>body{max-width:760px;margin:36px auto;padding:0 20px}${printCss('doc')}</style></head><body>
   ${docHead(est, 'Facture', i.number, 'Émise le ' + new Date(i.issued_at).toLocaleDateString('fr-FR', { dateStyle: 'long' }))}
@@ -3462,7 +3462,7 @@ async function uploadReceipt(file){
   return path;
 }
 async function viewReceipt(path){
-  const w = window.open('', '_blank');
+  const w = window.open("", "_blank");
   const { data, error } = await sb.storage.from('receipts').createSignedUrl(path, 300);
   if (error || !data) { if (w) w.close(); return toast(errMsg(error), true); }
   if (w) w.location = data.signedUrl; else window.location.href = data.signedUrl;
@@ -3706,8 +3706,31 @@ function openEncaisser(b, done){
   draw();
 }
 
+/* Documents (reçus, factures, rapports) : sur téléphone ou application installée, ouverts dans un panneau
+   plein écran avec « Fermer », « Imprimer » et « Partager » (une nouvelle fenêtre n'y peut pas être refermée). */
+function openDocWin(){
+  const mobile = matchMedia('(max-width: 899px)').matches || isStandalone() || (typeof IN_APP !== 'undefined' && IN_APP);
+  if (!mobile) return window.open('', '_blank');
+  const old = document.getElementById('docWin'); if (old) old.remove();
+  const ov = document.createElement('div'); ov.id = 'docWin';
+  ov.style.cssText = 'position:fixed;inset:0;z-index:10050;background:#fff;display:flex;flex-direction:column';
+  ov.innerHTML = '<div style="display:flex;gap:8px;align-items:center;padding:10px 12px;padding-top:max(10px,env(safe-area-inset-top));border-bottom:1px solid #e5e7eb;background:#fff"><button type="button" id="dwClose" style="min-height:44px;padding:0 16px;border-radius:10px;border:1px solid #d1d5db;background:#fff;font-weight:700">✕ Fermer</button><span style="flex:1"></span><button type="button" id="dwShare" style="min-height:44px;padding:0 14px;border-radius:10px;border:1px solid #d1d5db;background:#fff;font-weight:600">Partager</button><button type="button" id="dwPrint" style="min-height:44px;padding:0 16px;border-radius:10px;border:0;background:#0F2A44;color:#fff;font-weight:700">Imprimer</button></div><iframe id="dwFrame" title="Document" style="flex:1;border:0;width:100%;background:#fff"></iframe>';
+  document.body.appendChild(ov); document.body.style.overflow = 'hidden';
+  const fr = ov.querySelector('#dwFrame'), cw = fr.contentWindow, d = cw.document;
+  const close = () => { ov.remove(); document.body.style.overflow = ''; window.removeEventListener('popstate', onPop); };
+  const onPop = () => close();
+  try { history.pushState({ docWin: 1 }, ''); window.addEventListener('popstate', onPop); } catch (_) {}
+  ov.querySelector('#dwClose').onclick = () => { if (history.state && history.state.docWin) history.back(); else close(); };
+  ov.querySelector('#dwPrint').onclick = () => { try { cw.focus(); cw.print(); } catch (_) {} };
+  ov.querySelector('#dwShare').onclick = async () => { const t = d.title || 'Document', txt = (d.body && d.body.innerText || '').slice(0, 3000);
+    try { if (navigator.share) await navigator.share({ title: t, text: txt }); else { await navigator.clipboard.writeText(txt); toast('Texte du document copié.'); } } catch (_) {} };
+  // Le document ne lance pas l'impression tout seul sur téléphone : l'utilisateur choisit « Imprimer » ou « Partager ».
+  const wrap = { document: { open: () => d.open(), write: (h) => d.write(String(h).replace(/<script>\s*window\.onload\s*=\s*\(\)\s*=>\s*\{?\s*window\.print\(\);?\s*\}?\s*<\\?\/script>|<script>\s*window\.print\(\)\s*<\\?\/script>/g, '')), close: () => d.close() },
+    print: () => { try { cw.print(); } catch (_) {} }, close: () => ov.querySelector('#dwClose').click(), focus: () => {} };
+  d.open(); return wrap;
+}
 async function printReceipt(key){
-  const w = window.open('', '_blank'); if (!w) return toast("Autorisez l'ouverture de fenêtres pour imprimer.", true);
+  const w = openDocWin(); if (!w) return toast("Autorisez l'ouverture de fenêtres pour imprimer.", true);
   let { data: rows } = await sb.from('cash_movements').select('*').eq('payment_group', key);
   if (!rows || !rows.length) ({ data: rows } = await sb.from('cash_movements').select('*').eq('id', key));
   rows = rows || []; if (!rows.length) { w.close(); return toast('Reçu introuvable.', true); }
@@ -3794,7 +3817,7 @@ async function openExtras(refresh, cart){
 }
 function printExtraReceipt(group, lines, total, method){
   const est = (S.ests || []).find(x => x.id === S.est) || {};
-  const w = window.open('', '_blank'); if (!w) return;
+  const w = openDocWin(); if (!w) return;
   w.document.write(`<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>Reçu</title><style>body{font:14px/1.5 system-ui,sans-serif;color:#111;max-width:420px;margin:30px auto;padding:0 18px}h1{font-size:20px;margin:0}.m{color:#555;font-size:12px}${printCss('ticket')}${RECEIPT_CSS}</style></head><body>
     ${rcptHead(est)}<div class="rc-title">Reçu · Ventes annexes</div>
     <div class="m" style="text-align:center;margin-bottom:8px">${new Date().toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })} · ${PMETHOD[method] || ''}</div>
@@ -3959,7 +3982,7 @@ async function printZ(s){
   await teamNames();
   const d = await closureData(s); const est = S.ests.find(x => x.id === s.establishment_id) || {};
   const gap = Number(s.counted_balance || 0) - d.expected;
-  const html = () => { const w = window.open('', '_blank'); if (!w) return toast("Autorisez l'ouverture de fenêtres pour imprimer.", true);
+  const html = () => { const w = openDocWin(); if (!w) return toast("Autorisez l'ouverture de fenêtres pour imprimer.", true);
     w.document.write(`<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>Ticket Z</title><style>body{font:13px/1.45 ui-monospace,Menlo,monospace;max-width:300px;margin:12px auto;padding:0 8px}h1{text-align:center;font-size:18px;margin:0}table{width:100%;border-collapse:collapse}td{padding:2px 0}.r{text-align:right}.t td{border-top:1px dashed #000;font-weight:700}${printCss('ticket')}</style></head><body>
       <h1>${esc(est.name || '')}</h1><p style="text-align:center">TICKET Z · CLÔTURE<br>${new Date(s.closed_at || Date.now()).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })}<br>par ${esc(who(s.closed_by))}</p>
       <table><tr><td colspan="2"><b>Encaissements</b></td></tr>${d.byM.map(([k, v]) => `<tr><td>${PMETHOD[k]}</td><td class="r">${money(v)}</td></tr>`).join('')}<tr class="t"><td>Total</td><td class="r">${money(d.totalIn)}</td></tr></table>
@@ -3976,7 +3999,7 @@ async function printZ(s){
 }
 
 async function printClosure(s){
-  const w = window.open('', '_blank'); if (!w) return toast("Autorisez l'ouverture de fenêtres pour imprimer.", true);
+  const w = openDocWin(); if (!w) return toast("Autorisez l'ouverture de fenêtres pour imprimer.", true);
   await teamNames();
   const { data: mv } = await sb.from('cash_movements').select('*').eq('establishment_id', s.establishment_id).gte('created_at', s.opened_at).lte('created_at', s.closed_at || new Date().toISOString()).order('created_at');
   const rows = mv || [], cash = rows.filter(m => m.session_id === s.id);
@@ -4325,7 +4348,7 @@ function exportReportCsv(r){
   toast('Fichier téléchargé : il s\u2019ouvre dans Excel.');
 }
 function printReport(r){
-  const w = window.open('', '_blank'); if (!w) return toast("Autorisez l'ouverture de fenêtres pour imprimer.", true);
+  const w = openDocWin(); if (!w) return toast("Autorisez l'ouverture de fenêtres pour imprimer.", true);
   const est = S.ests.find(x => x.id === S.est) || { name: $('orgLabel').textContent.split(' · ')[0] };
   const row = (a, b) => `<tr><td>${a}</td><td class="r">${b}</td></tr>`;
   const kpi = (l, v) => `<div class="kpi"><span>${l}</span><b>${v}</b></div>`;
@@ -5423,7 +5446,7 @@ async function renderResto(){
 
 const PAY_NAME = { cash: 'Espèces', orange_money: 'Orange Money', mtn_money: 'MTN MoMo', moov_money: 'Moov Money', wave: 'Wave', card: 'Carte', bank_transfer: 'Virement' };
 function printPosTicket(s, items){
-  const w = window.open('', '_blank'); if (!w) return toast("Autorisez l'ouverture de fenêtres pour imprimer.", true);
+  const w = openDocWin(); if (!w) return toast("Autorisez l'ouverture de fenêtres pour imprimer.", true);
   const est = (S.ests || []).find(x => x.id === S.est) || {};
   w.document.write(`<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>Ticket ${s.number}</title><style>body{font:13px/1.45 ui-monospace,Menlo,monospace;color:#111;max-width:300px;margin:16px auto;padding:0 10px}h1{font-size:16px;margin:0;text-align:center}.c{text-align:center}table{width:100%;border-collapse:collapse;margin:10px 0}td{padding:3px 0;vertical-align:top}.r{text-align:right}.t td{border-top:1px dashed #000;font-weight:700;font-size:15px;padding-top:6px}.m{color:#555;font-size:11px}${printCss('ticket')}</style></head><body>
     ${rcptHead(est)}
@@ -5587,7 +5610,7 @@ function openPrinterSetup(role = 'caisse'){
   modal('<div></div>'); $('modalBody').style.maxWidth = '560px'; draw();
 }
 function printKitchenHtml(o){
-  const w = window.open('', '_blank'); if (!w) return toast("Autorisez l'ouverture de fenêtres pour imprimer.", true);
+  const w = openDocWin(); if (!w) return toast("Autorisez l'ouverture de fenêtres pour imprimer.", true);
   w.document.write(`<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>Bon ${esc(o.ref)}</title><style>body{font:15px/1.4 ui-monospace,Menlo,monospace;max-width:300px;margin:12px auto;padding:0 8px}h1{text-align:center;font-size:22px;margin:0}.b{font-size:18px;font-weight:700;margin:6px 0}.m{font-size:12px}${printCss('ticket')}</style></head><body>
     <h1>${o.outlet === 'bar' ? 'BAR' : 'CUISINE'}</h1><p style="text-align:center">Bon n° ${esc(o.ref)} · ${new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</p>
     ${o.table ? `<div class="b">Table : ${esc(o.table)}</div>` : ''}${o.server ? `<div>Serveur : ${esc(o.server)}</div>` : ''}<hr>
