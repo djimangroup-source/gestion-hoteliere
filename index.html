@@ -718,7 +718,7 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,te
 
 /* ---- Direction B « Net et professionnel » (boutons, onglets, retours) ---- */
 :root{--b-r:10px;--b-ink:#111827;--b-line:#D0D5DD}
-:is(section[id^="v-"],#modal,.dtop,#onboard,#auth) :is(button,.btn):not(.gstep):not(.loc-sug button):not([role=tab]):not(.toggle button):not(.ghead):not(.leaflet-control *):not(.ck *):not(.lv-chip):not(.lv-tile){
+:is(section[id^="v-"],#modal,.dtop,#onboard,#auth) :is(button,.btn):not(.gstep):not(.loc-sug button):not([role=tab]):not(.toggle button):not(.ghead):not(.leaflet-control *):not(.ck *):not(.lv-chip):not(.lv-tile):not(.xitem){
   border-radius:var(--b-r)!important;font-weight:600!important;letter-spacing:0!important;transition:background-color .12s,border-color .12s,box-shadow .12s,transform .06s!important;
   background:#fff!important;color:var(--b-ink)!important;border:1px solid var(--b-line)!important;box-shadow:0 1px 2px rgba(16,24,40,.05)!important}
 :is(section[id^="v-"],#modal,.dtop,#onboard,#auth) :is(button,.btn):not(.gstep):not([role=tab]):not(.toggle button):hover{background:#F9FAFB!important;border-color:#98A2B3!important}
@@ -801,6 +801,13 @@ section[id^="v-"] .card{border-radius:12px}
 body.adminonly .tabbar .admtab{display:flex!important}
 body.adminonly .tabbar [data-tab="dashboard"],body.adminonly .tabbar [data-tab="heberg"],body.adminonly .tabbar [data-tab="argent"],body.adminonly .tabbar [data-tab="resto"]{display:none!important}
 .more-grid button{justify-content:flex-start!important;text-align:left!important;min-height:52px;line-height:1.25}
+.xgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:8px;max-height:46vh;overflow-y:auto;padding:2px}
+.xgrid .xitem:not(#_a):not(#_b){position:relative;display:flex;flex-direction:column;align-items:flex-start;gap:2px;min-height:84px;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:#fff;text-align:left;cursor:pointer}
+.xgrid .xitem:not(#_a):not(#_b).on{border-color:var(--green);background:var(--green-l)}
+.xgrid .xitem:not(#_a):not(#_b):disabled{opacity:.5;cursor:not-allowed}
+.xitem .xl{font-weight:700;font-size:14px;line-height:1.25;padding-right:24px}.xitem .xp{font-weight:800;font-size:15px;color:var(--green-d,#1F6FA8)}.xitem .xs{font-size:11.5px;color:var(--muted)}
+.xitem .xq{position:absolute;top:6px;right:8px;min-width:22px;height:22px;border-radius:11px;background:var(--green);color:#fff;font-size:12px;font-weight:800;display:grid;place-items:center;padding:0 6px}
+.xcart{margin-top:12px;border-top:1px solid var(--line);padding-top:10px}
 /* Centre de contrôle administrateur (style cockpit sombre) */
 #v-admin .ck{background:#0E1621;color:#E8EEF5;border-radius:16px;padding:18px;margin-bottom:18px}
 #v-admin .ck h3{color:#E8EEF5;font-size:15px;font-weight:600;margin:0 0 10px}
@@ -1096,7 +1103,7 @@ if (window.HorusApp && window.HorusApp.postMessage) {
 }
 /* ---------- Mise à jour de l'application sans réinstaller ni perdre la connexion ---------- */
 const plur = (n, one, many) => `${Number(n) || 0} ${Math.abs(Number(n) || 0) >= 2 ? many : one}`;
-const APP_VERSION = '2026.11.05-10';
+const APP_VERSION = '2026.11.05-11';
 async function refreshApp(){
   toast('Actualisation…');
   try { const reg = navigator.serviceWorker && await navigator.serviceWorker.getRegistration(); if (reg) { await reg.update(); if (reg.waiting) reg.waiting.postMessage('skipWaiting'); } } catch (_) {}
@@ -3505,7 +3512,7 @@ async function renderCaisse(){
     `<div class="k-top">
       <div class="k-hero"><div class="l">Espèces attendues dans le tiroir</div><div class="v">${money(expected)}</div>
         <div class="f">${sess ? `<span>Fond <b>${money(sess.opening_balance)}</b></span><span>+ Entrées <b>${money(cashIn)}</b></span><span>− Sorties <b>${money(cashOut)}</b></span>` : '<span>Caisse fermée</span>'}</div></div>
-      <div class="k-side"><button type="button" class="primary k-cta" id="kPay">Encaisser un client</button>
+      <div class="k-side"><button type="button" class="primary k-cta" id="kPay">Encaisser un client</button><button type="button" class="k-cta" id="kExtra" style="margin-top:8px">Ventes annexes${(() => { const n = xHold().length; return n ? ` · ${n} en attente` : ''; })()}</button>
         ${sess ? `<div class="k-acts">${act('kExp', 'Dépense', '<path d="M5 12h14"></path>')}${act('kInc', 'Entrée', '<path d="M12 5v14M5 12h14"></path>')}${act('kDep', 'Versement', '<path d="M3 21h18M5 21V10M19 21V10M12 3l9 6H3z"></path>', mgr)}${act('kClose', 'Clôturer', '<rect x="4" y="11" width="16" height="10" rx="2"></rect><path d="M8 11V7a4 4 0 0 1 8 0v4"></path>')}</div>` : ''}</div>
     </div>
     <div class="k-kpis">
@@ -3559,6 +3566,7 @@ async function renderCaisse(){
   const a = (id, fn) => { const b = $(id); if (b) b.onclick = fn; };
   a('kExp', () => hasF('expenses') ? openExpenseForm({ fromCaisse: true, onDone: renderCaisse }) : openSimpleMove('expense', renderCaisse));
   a('kInc', () => openSimpleMove('income', renderCaisse));
+  a('kExtra', () => openExtras(renderCaisse));
   a('kDep', () => openSimpleMove('deposit', renderCaisse));
   a('kClose', () => openClosure(sess, expected, renderCaisse));
   a('kOpt', () => openCashOptions(renderCaisse));
@@ -3714,6 +3722,95 @@ async function printReceipt(key){
     <div class="rc-foot">${rcptFoot(est, 'Merci de votre confiance.')}<div class="m" style="text-align:center">Conservez ce reçu, il justifie votre paiement.</div>${S.overview && S.overview.plan && S.overview.plan.slug === 'decouverte' ? '<div class="m" style="text-align:center;margin-top:8px">Propulsé par Nuittea Manager</div>' : ''}</div>
     <script>window.onload=()=>window.print()<\/script></body></html>`);
   w.document.close();
+}
+
+
+/* ---------- Ventes annexes : boissons, petit-déjeuner, blanchisserie, transport ---------- */
+const XCAT = { boissons: 'Boissons', petit_dejeuner: 'Petit-déjeuner', blanchisserie: 'Blanchisserie', transport: 'Transport', autre: 'Autre' };
+const xHoldKey = () => 'hh_xhold_' + (S.est || '');
+const xHold = () => { try { return JSON.parse(localStorage.getItem(xHoldKey()) || '[]'); } catch (_) { return []; } };
+const xHoldSave = (l) => { try { localStorage.setItem(xHoldKey(), JSON.stringify(l.slice(0, 20))); } catch (_) {} };
+async function openExtras(refresh, cart){
+  const [iR, sR] = await Promise.all([
+    sb.from('extra_items').select('*').eq('establishment_id', S.est).eq('is_active', true).order('sort_order').order('label'),
+    sb.from('reservation_balances').select('id,guest_name,room_number,status,balance').eq('establishment_id', S.est).in('status', ['checked_in', 'confirmed']).lte('check_in', today()).gte('check_out', today()).order('room_number')
+  ]);
+  if (iR.error) return toast(errMsg(iR.error), true);
+  const items = iR.data || [], stays = sR.data || [], mgr = can(['owner', 'admin', 'manager']);
+  const st = { cart: cart || {}, cat: '' };
+  const draw = () => {
+    const list = items.filter(i => !st.cat || i.category === st.cat), cats = [...new Set(items.map(i => i.category))];
+    const lines = Object.entries(st.cart).map(([id, q]) => [items.find(i => i.id === id), q]).filter(([i]) => i);
+    const total = lines.reduce((a, [i, q]) => a + Number(i.price) * q, 0), held = xHold();
+    modal(`<div class="row between" style="margin-bottom:10px;flex-wrap:nowrap"><h2 style="font-size:22px">Ventes annexes</h2><button type="button" class="small ghost" data-close aria-label="Fermer" style="border:0;font-size:18px">✕</button></div>
+      ${items.length ? `<div class="row" style="gap:6px;margin-bottom:10px">${['', ...cats].map(c => `<button type="button" class="small ${st.cat === c ? 'primary' : 'ghost'}" data-xcat="${c}">${c ? XCAT[c] : 'Tout'}</button>`).join('')}</div>
+      <div class="xgrid">${list.map(i => { const out = i.stock !== null && i.stock <= 0, low = i.stock !== null && i.stock > 0 && i.stock <= 3, inCart = st.cart[i.id] || 0;
+        return `<button type="button" class="xitem${inCart ? ' on' : ''}" data-xadd="${i.id}" ${out ? 'disabled' : ''} aria-label="${esc(i.label)}, ${money(i.price)}${inCart ? ', ' + inCart + ' dans le panier' : ''}"><span class="xl">${esc(i.label)}</span><span class="xp">${money(i.price)}</span><span class="xs">${out ? 'Épuisé' : low ? 'Stock faible · ' + i.stock : i.stock !== null ? 'Stock ' + i.stock : XCAT[i.category]}</span>${inCart ? `<span class="xq">${inCart}</span>` : ''}</button>`; }).join('')}</div>`
+      : `<div class="card" style="text-align:center;padding:24px"><p style="margin:0 0 10px">Aucun article pour l’instant.</p>${mgr ? '<button type="button" class="primary" id="xManage2">Créer mes articles</button>' : '<p class="muted" style="margin:0">Demandez au gérant de créer les articles.</p>'}</div>`}
+      <div class="xcart">
+        <div class="row between" style="flex-wrap:nowrap"><strong>Panier</strong>${lines.length ? '<button type="button" class="small ghost" id="xClear">Vider</button>' : ''}</div>
+        ${lines.length ? lines.map(([i, q]) => `<div class="row between" style="flex-wrap:nowrap;padding:6px 0;border-bottom:1px solid var(--line)"><span>${esc(i.label)}</span><span class="row" style="gap:6px;flex-wrap:nowrap"><button type="button" class="small ghost" data-xdec="${i.id}" aria-label="Retirer un ${esc(i.label)}" style="min-width:36px">−</button><strong>${q}</strong><button type="button" class="small ghost" data-xadd="${i.id}" aria-label="Ajouter un ${esc(i.label)}" style="min-width:36px">+</button><span style="min-width:84px;text-align:right">${money(Number(i.price) * q)}</span></span></div>`).join('') : '<p class="muted" style="margin:6px 0">Touchez un article pour l’ajouter.</p>'}
+        <div class="row between" style="margin-top:10px;font-size:18px"><span>Total</span><strong>${money(total)}</strong></div>
+        ${lines.length ? `<div class="field" style="margin-top:10px"><label for="xDest">Paiement</label><select id="xDest"><option value="pay">Encaisser maintenant</option>${stays.length ? `<optgroup label="Porter sur la note du séjour">${stays.map(r => `<option value="${r.id}">Ch. ${esc(r.room_number)} · ${esc(r.guest_name)}</option>`).join('')}</optgroup>` : ''}</select></div>
+        <div class="field" id="xMethW"><label for="xMeth">Moyen</label><select id="xMeth">${Object.entries(PMETHOD).map(([k, v]) => `<option value="${k}">${v}</option>`).join('')}</select></div>
+        <div class="row" style="gap:8px"><button type="button" class="primary" id="xGo" style="flex:1">Valider ${money(total)}</button><button type="button" class="ghost" id="xHoldB">Mettre en attente</button></div>` : ''}
+      </div>
+      <div class="row between" style="margin-top:12px;gap:8px">${held.length ? `<button type="button" class="small ghost" id="xHeld">En attente · ${held.length}</button>` : '<span></span>'}${mgr ? '<button type="button" class="small ghost" id="xManage">Gérer les articles</button>' : ''}</div>`);
+    $('modalBody').style.maxWidth = '640px';
+    document.querySelectorAll('[data-xcat]').forEach(b => b.onclick = () => { st.cat = b.dataset.xcat; draw(); });
+    document.querySelectorAll('[data-xadd]').forEach(b => b.onclick = () => { const i = items.find(x => x.id === b.dataset.xadd); const q = (st.cart[i.id] || 0) + 1; if (i.stock !== null && q > i.stock) return toast(`Stock insuffisant : il reste ${i.stock}.`, true); st.cart[i.id] = q; draw(); });
+    document.querySelectorAll('[data-xdec]').forEach(b => b.onclick = () => { const k = b.dataset.xdec; st.cart[k] = (st.cart[k] || 0) - 1; if (st.cart[k] <= 0) delete st.cart[k]; draw(); });
+    const g = (id, fn) => { const e = $(id); if (e) e.onclick = fn; };
+    g('xClear', () => { st.cart = {}; draw(); });
+    g('xManage', () => openExtraItems(() => openExtras(refresh, st.cart)));
+    g('xManage2', () => openExtraItems(() => openExtras(refresh, st.cart)));
+    const d = $('xDest'); if (d) d.onchange = () => { $('xMethW').classList.toggle('hidden', d.value !== 'pay'); };
+    g('xHoldB', () => { const dv = $('xDest').value, sr = stays.find(r => r.id === dv), name = sr ? `Ch. ${sr.room_number} · ${sr.guest_name}` : `Vente de ${new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}`; const l = xHold(); l.unshift({ name: name.slice(0, 40), cart: st.cart, at: new Date().toISOString() }); xHoldSave(l); toast('Vente mise en attente.'); st.cart = {}; draw(); });
+    g('xHeld', () => { const l = xHold();
+      modal(`<h2 style="font-size:20px;margin-bottom:10px">Ventes en attente</h2>${l.map((h, k) => { const n = Object.values(h.cart).reduce((a, q) => a + q, 0); return `<div class="row between" style="padding:8px 0;border-bottom:1px solid var(--line);flex-wrap:nowrap"><span><strong>${esc(h.name)}</strong><span class="muted" style="font-size:12px"> · ${plur(n, 'article', 'articles')} · ${new Date(h.at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</span></span><span class="row" style="gap:6px;flex-wrap:nowrap"><button type="button" class="small primary" data-xres="${k}">Reprendre</button><button type="button" class="small ghost" data-xdel="${k}">Supprimer</button></span></div>`; }).join('')}<button type="button" class="ghost" id="xBack" style="width:100%;margin-top:12px">Retour</button>`);
+      $('xBack').onclick = () => draw();
+      document.querySelectorAll('[data-xres]').forEach(b => b.onclick = () => { const l2 = xHold(), h = l2.splice(+b.dataset.xres, 1)[0]; xHoldSave(l2); st.cart = { ...st.cart, ...h.cart }; draw(); });
+      document.querySelectorAll('[data-xdel]').forEach(b => b.onclick = () => { const l2 = xHold(); l2.splice(+b.dataset.xdel, 1); xHoldSave(l2); toast('Vente en attente supprimée.'); draw(); }); });
+    g('xGo', async () => { const btn = $('xGo'); btn.disabled = true; const dest = $('xDest').value, resa = dest === 'pay' ? null : dest;
+      const { data, error } = await sb.rpc('extra_sale_record', { p_est: S.est, p_items: Object.entries(st.cart).map(([item_id, qty]) => ({ item_id, qty })), p_reservation: resa, p_method: resa ? null : $('xMeth').value, p_reference: null });
+      if (error) { btn.disabled = false; if (/caisse ouverte/i.test(error.message || '')) return askOpenCash(() => openExtras(refresh, st.cart), 'La caisse du jour n’est pas encore ouverte. Ouvrez-la, puis validez de nouveau la vente.'); return toast(errMsg(error), true); }
+      closeModal(); toast(resa ? 'Ajouté à la note du séjour.' : 'Vente encaissée.'); if (!resa && data) printExtraReceipt(data, lines, total, $('xMeth') ? $('xMeth').value : 'cash'); refresh && refresh(); });
+  };
+  draw();
+}
+function printExtraReceipt(group, lines, total, method){
+  const est = (S.ests || []).find(x => x.id === S.est) || {};
+  const w = window.open('', '_blank'); if (!w) return;
+  w.document.write(`<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>Reçu</title><style>body{font:14px/1.5 system-ui,sans-serif;color:#111;max-width:420px;margin:30px auto;padding:0 18px}h1{font-size:20px;margin:0}.m{color:#555;font-size:12px}${printCss('ticket')}${RECEIPT_CSS}</style></head><body>
+    ${rcptHead(est)}<div class="rc-title">Reçu · Ventes annexes</div>
+    <div class="m" style="text-align:center;margin-bottom:8px">${new Date().toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })} · ${PMETHOD[method] || ''}</div>
+    <div class="rc-lines">${lines.map(([i, q]) => `<div class="rc-line"><div>${q} × ${esc(i.label)}</div><div class="rc-amt">${money(Number(i.price) * q)}</div></div>`).join('')}</div>
+    <div class="rc-total"><span>Total</span><strong>${money(total)}</strong></div>
+    <div class="rc-foot">${rcptFoot(est, 'Merci de votre visite.')}</div><script>window.onload=()=>window.print()<\/script></body></html>`);
+  w.document.close();
+}
+async function openExtraItems(back){
+  if (!can(['owner', 'admin', 'manager'])) return;
+  const { data, error } = await sb.from('extra_items').select('*').eq('establishment_id', S.est).order('is_active', { ascending: false }).order('label');
+  if (error) return toast(errMsg(error), true);
+  const items = data || [];
+  modal(`<div class="row between" style="margin-bottom:10px;flex-wrap:nowrap"><h2 style="font-size:22px">Articles des ventes annexes</h2><button type="button" class="small ghost" id="xiBack">Retour</button></div>
+    <form id="xiForm" class="row" style="align-items:flex-end;gap:8px;margin-bottom:12px">
+      <div style="flex:2 1 160px"><label for="xiL">Article</label><input id="xiL" required maxlength="60" placeholder="Coca-Cola 33 cl"></div>
+      <div style="flex:1 1 110px"><label for="xiP">Prix (F)</label><input id="xiP" type="number" min="0" step="1" required></div>
+      <div style="flex:1 1 130px"><label for="xiC">Catégorie</label><select id="xiC">${Object.entries(XCAT).map(([k, v]) => `<option value="${k}">${v}</option>`).join('')}</select></div>
+      <div style="flex:1 1 100px"><label for="xiS">Stock (facultatif)</label><input id="xiS" type="number" min="0" step="1" placeholder="—"></div>
+      <button class="primary">Ajouter</button></form>
+    ${items.length ? `<div class="tablewrap"><table class="table"><thead><tr><th>Article</th><th>Catégorie</th><th class="r">Prix</th><th class="r">Stock</th><th><span class="sr-only">Actions</span></th></tr></thead><tbody>${items.map(i => `<tr style="${i.is_active ? '' : 'opacity:.55'}"><td>${esc(i.label)}</td><td>${XCAT[i.category]}</td><td class="r"><input type="number" min="0" value="${Number(i.price)}" data-xprice="${i.id}" aria-label="Prix de ${esc(i.label)}" style="max-width:110px;min-height:36px"></td><td class="r"><input type="number" min="0" value="${i.stock ?? ''}" placeholder="—" data-xstock="${i.id}" aria-label="Stock de ${esc(i.label)}" style="max-width:90px;min-height:36px"></td><td><button type="button" class="small ghost" data-xtog="${i.id}" data-on="${i.is_active}">${i.is_active ? 'Retirer' : 'Remettre'}</button></td></tr>`).join('')}</tbody></table></div>` : '<p class="muted">Ajoutez vos premiers articles : boissons du minibar, petit-déjeuner, lavage de linge, transfert aéroport…</p>'}`);
+  $('modalBody').style.maxWidth = '720px';
+  $('xiBack').onclick = () => back ? back() : closeModal();
+  $('xiForm').onsubmit = async (e) => { e.preventDefault(); const sv = $('xiS').value.trim();
+    const { error: er } = await sb.from('extra_items').insert({ organization_id: S.org, establishment_id: S.est, label: $('xiL').value.trim(), price: +$('xiP').value, category: $('xiC').value, stock: sv === '' ? null : Math.max(0, parseInt(sv, 10) || 0) });
+    if (er) return toast(errMsg(er), true); toast('Article ajouté.'); openExtraItems(back); };
+  const upd = async (id, v) => { const { error: er } = await sb.from('extra_items').update(v).eq('id', id); if (er) return toast(errMsg(er), true); toast('Enregistré.'); };
+  document.querySelectorAll('[data-xprice]').forEach(i => i.onchange = () => upd(i.dataset.xprice, { price: Math.max(0, +i.value || 0) }));
+  document.querySelectorAll('[data-xstock]').forEach(i => i.onchange = () => upd(i.dataset.xstock, { stock: i.value === '' ? null : Math.max(0, parseInt(i.value, 10) || 0) }));
+  document.querySelectorAll('[data-xtog]').forEach(b => b.onclick = async () => { await upd(b.dataset.xtog, { is_active: b.dataset.on !== 'true' }); openExtraItems(back); });
 }
 
 const GAP_REASONS = ['Erreur de monnaie rendue', 'Dépense non enregistrée', 'Erreur de saisie', 'Paiement noté en espèces par erreur', 'Billet manquant / perte'];
