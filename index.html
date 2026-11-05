@@ -797,6 +797,10 @@ section[id^="v-"] .card{border-radius:12px}
 .lv-band{padding:8px 16px;display:flex;flex-direction:column;gap:1px;font-size:13px}.lv-band strong{font-size:14px}
 .lv-tile{transition:transform .12s,box-shadow .12s}.lv-tile:hover{transform:translateY(-1px);box-shadow:0 4px 12px rgba(15,27,45,.12)}
 .lv-dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px;vertical-align:0;box-shadow:0 0 0 1px rgba(0,0,0,.12)}
+.tabbar .admtab{display:none!important}
+body.adminonly .tabbar .admtab{display:flex!important}
+body.adminonly .tabbar [data-tab="dashboard"],body.adminonly .tabbar [data-tab="heberg"],body.adminonly .tabbar [data-tab="argent"],body.adminonly .tabbar [data-tab="resto"]{display:none!important}
+.more-grid button{justify-content:flex-start!important;text-align:left!important;min-height:52px;line-height:1.25}
 /* Centre de contrôle administrateur (style cockpit sombre) */
 #v-admin .ck{background:#0E1621;color:#E8EEF5;border-radius:16px;padding:18px;margin-bottom:18px}
 #v-admin .ck h3{color:#E8EEF5;font-size:15px;font-weight:600;margin:0 0 10px}
@@ -956,6 +960,9 @@ section[id^="v-"] .card{border-radius:12px}
     <button data-tab="heberg"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 18V7M21 18v-6H3M7 12V9h5v3"></path></svg>Hébergement</button>
     <button data-tab="argent"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="6" width="20" height="12" rx="2"></rect><circle cx="12" cy="12" r="2.5"></circle></svg>Argent</button>
     <button data-tab="resto"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3v8M5 3v5a2 2 0 0 0 4 0V3M7 11v10M17 21V3c-2 1-3 4-3 7h3"></path></svg>Resto</button>
+    <button data-tab="adm:apercu" class="admtab"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="9" rx="1.5"></rect><rect x="14" y="3" width="7" height="5" rx="1.5"></rect><rect x="14" y="12" width="7" height="9" rx="1.5"></rect><rect x="3" y="16" width="7" height="5" rx="1.5"></rect></svg>Contrôle</button>
+    <button data-tab="adm:clients" class="admtab"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.5"></circle><path d="M2.5 20c.8-3.6 3.4-5.5 6.5-5.5s5.7 1.9 6.5 5.5M16 4.5a3.5 3.5 0 0 1 0 7M18.5 14.8c1.6.8 2.6 2.5 3 5.2"></path></svg>Clients</button>
+    <button data-tab="adm:paiements" class="admtab"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="5" width="20" height="14" rx="2"></rect><path d="M2 10h20M6 15h4"></path></svg>Paiements</button>
     <button data-tab="more"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.5"></circle><circle cx="12" cy="12" r="1.5"></circle><circle cx="19" cy="12" r="1.5"></circle></svg>Plus</button>
   </nav>
   <main id="mainContent" tabindex="-1">
@@ -1089,7 +1096,7 @@ if (window.HorusApp && window.HorusApp.postMessage) {
 }
 /* ---------- Mise à jour de l'application sans réinstaller ni perdre la connexion ---------- */
 const plur = (n, one, many) => `${Number(n) || 0} ${Math.abs(Number(n) || 0) >= 2 ? many : one}`;
-const APP_VERSION = '2026.11.05-6';
+const APP_VERSION = '2026.11.05-7';
 async function refreshApp(){
   toast('Actualisation…');
   try { const reg = navigator.serviceWorker && await navigator.serviceWorker.getRegistration(); if (reg) { await reg.update(); if (reg.waiting) reg.waiting.postMessage('skipWaiting'); } } catch (_) {}
@@ -1631,16 +1638,19 @@ function drawSubnav(){
   const g = groupOf(S.view), list = g ? groupViews(g) : [];
   if (list.length < 2) { box.classList.add('hidden'); box.innerHTML = ''; return; }
   box.classList.remove('hidden');
-  box.innerHTML = list.map(v => `<button type="button" class="${v === S.view ? '' : 'ghost'}" data-sub="${v}">${esc(VIEW_LABEL[v] || v)}</button>`).join('');
+  box.innerHTML = list.map(v => `<button type="button" class="${v === S.view ? 'on' : 'ghost'}" ${v === S.view ? 'aria-current="page"' : ''} data-sub="${v}">${esc(VIEW_LABEL[v] || v)}</button>`).join('');
+  const cur = box.querySelector('.on'); if (cur) requestAnimationFrame(() => { box.scrollLeft = Math.max(0, cur.offsetLeft - 16); });
   box.querySelectorAll('[data-sub]').forEach(b => b.onclick = () => go(b.dataset.sub));
 }
 function syncTabbar(){
   document.querySelectorAll('#tabbar [data-tab]').forEach(b => { const t = b.dataset.tab;
-    if (t !== 'more' && t !== 'dashboard') b.classList.toggle('hidden', !groupViews(t).length);
-    b.classList.toggle('on', t === S.view || t === groupOf(S.view) || (t === 'more' && S.view !== 'dashboard' && !['heberg','argent','resto'].includes(groupOf(S.view)))); });
+    if (t !== 'more' && t !== 'dashboard' && !t.startsWith('adm:')) b.classList.toggle('hidden', !groupViews(t).length);
+    if (t.startsWith('adm:')) return b.classList.toggle('on', S.view === 'admin' && (S._admTab || 'apercu') === t.slice(4));
+    b.classList.toggle('on', t === S.view || t === groupOf(S.view) || (t === 'more' && S.view !== 'dashboard' && !(document.body.classList.contains('adminonly') && S.view === 'admin' && ['apercu', 'clients', 'paiements'].includes(S._admTab || 'apercu')) && !['heberg','argent','resto'].includes(groupOf(S.view)))); });
   const s = $('notifBadge'), m = $('mNotifBadge'); if (s && m) { m.textContent = s.textContent; m.classList.toggle('hidden', s.classList.contains('hidden')); }
 }
 function openTab(t){
+  if (t.startsWith('adm:')) { S._admTab = t.slice(4); if (S.view === 'admin') { renderAdmin(); syncTabbar(); window.scrollTo(0, 0); return; } return go('admin'); }
   if (t === 'more') return openMore();
   if (t === 'dashboard') return go('dashboard');
   const list = groupViews(t); if (!list.length) return;
@@ -1648,15 +1658,17 @@ function openTab(t){
   go(list.includes(last) ? last : list[0]);
 }
 function openMore(){
-  const pilot = groupViews('pilot').map(v => [VIEW_LABEL[v], () => go(v)]);
-  if (canAna() && moduleOn('rapports')) pilot.unshift(['Résultat & analyse', () => openAnalysis(6)]);
-  pilot.unshift(['Assistant', () => openAssistant()]);
-  if (moduleOn('rapports')) pilot.push(['Avis clients', () => openReviews()]);
-  if (moduleOn('pointage')) pilot.unshift([CLOCK.state === 'in' ? 'Pointer mon départ' : 'Pointer mon arrivée', () => toggleClock()]);
+  const pilot = S.org ? groupViews('pilot').map(v => [VIEW_LABEL[v], () => go(v)]) : [];
+  if (!S.org && S.isAdmin) [['formules', 'Formules'], ['naya', 'Nuittea.com'], ['lieux', 'Lieux']].forEach(([k, l]) => pilot.push([l, () => { S._admTab = k; go('admin'); }]));
+  if (S.org && canAna() && moduleOn('rapports')) pilot.unshift(['Résultat & analyse', () => openAnalysis(6)]);
+  if (S.org) pilot.unshift(['Assistant', () => openAssistant()]);
+  if (S.org && moduleOn('rapports')) pilot.push(['Avis clients', () => openReviews()]);
+  if (S.org && moduleOn('pointage')) pilot.unshift([CLOCK.state === 'in' ? 'Pointer mon départ' : 'Pointer mon arrivée', () => toggleClock()]);
   const settings = [...document.querySelectorAll('nav.side .menu button')].filter(b => !b.classList.contains('hidden')).map(b => [b.textContent.trim(), () => b.click()]);
-  const sec = (title, items) => items.length ? `<h3 style="font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:14px 0 6px">${title}</h3><div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px">${items.map(([l], i) => `<button type="button" class="ghost" data-mi="${title}|${i}" style="min-height:52px;border-radius:14px;justify-content:flex-start;text-align:left;white-space:normal">${esc(l)}</button>`).join('')}</div>` : '';
-  const map = { 'Pilotage': pilot, 'Réglages': settings };
-  modal(`<h2 style="font-size:22px">Plus</h2>${sec('Pilotage', pilot)}${sec('Réglages', settings)}`);
+  const sec = (title, items) => items.length ? `<h3 style="font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:14px 0 6px">${title}</h3><div class="more-grid" style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px">${items.map(([l], i) => `<button type="button" class="ghost" data-mi="${title}|${i}" style="min-height:52px;border-radius:14px;justify-content:flex-start;text-align:left;white-space:normal">${esc(l)}</button>`).join('')}</div>` : '';
+  const ptitle = S.org ? 'Pilotage' : 'Administration';
+  const map = { [ptitle]: pilot, 'Réglages': settings };
+  modal(`<h2 style="font-size:22px">Plus</h2>${sec(ptitle, pilot)}${sec('Réglages', settings)}`);
   document.querySelectorAll('[data-mi]').forEach(x => x.onclick = () => { const [t, i] = x.dataset.mi.split('|'); closeModal(); map[t][+i][1](); });
 }
 document.querySelectorAll('#tabbar [data-tab]').forEach(b => b.onclick = () => openTab(b.dataset.tab));
@@ -2281,6 +2293,7 @@ async function renderAdmin(){
   el.querySelectorAll('[data-go]').forEach(b => b.onclick = () => { S._admTab = b.dataset.go; if (b.dataset.fil) S._admFilter = b.dataset.fil; S._admPlan = b.dataset.plan || ''; S._admQ = b.dataset.q || ''; renderAdmin().then(() => { window.scrollTo({ top: 0 }); const q = $('subSearch'); if (q && S._admQ) { q.value = S._admQ; q.dispatchEvent(new Event('input')); } }); });
   el.querySelectorAll('[data-admplan]').forEach(b => b.onclick = () => { S._admPlan = b.dataset.admplan; renderAdmin(); });
   el.querySelectorAll('[data-admtab]').forEach(b => b.onclick = () => { S._admTab = b.dataset.admtab; renderAdmin(); });
+  if (typeof syncTabbar === 'function') syncTabbar();
   el.querySelectorAll('[data-lxfil]').forEach(b => b.onclick = () => { S._lxFil = b.dataset.lxfil; renderAdmin(); });
   if ($('lxQ')) { let t; $('lxQ').oninput = () => { clearTimeout(t); t = setTimeout(() => { S._lxQ = $('lxQ').value; const pos = $('lxQ').value.length; renderAdmin().then(() => { const i = $('lxQ'); if (i) { i.focus(); i.setSelectionRange(pos, pos); } }); }, 300); }; }
   el.querySelectorAll('[data-lxok]').forEach(b => b.onclick = async () => { const x = S._lxAll.find(y => y.id === b.dataset.lxok); b.disabled = true;
