@@ -4218,13 +4218,14 @@ function openReception(items){
       <div class="row"><div class="field" style="flex:2 1 180px"><label for="rvS">Fournisseur</label><input id="rvS" maxlength="80" value="${esc(st.sup || '')}" placeholder="Ex. : Solibra, grossiste…"></div><div class="field" style="flex:1 1 120px"><label for="rvR">N° de bon</label><input id="rvR" maxlength="60" value="${esc(st.ref || '')}" placeholder="Facultatif"></div></div>
       <div class="row" style="gap:6px;align-items:flex-end"><div style="flex:1 1 200px"><label for="rvI">Ajouter un article</label><select id="rvI"><option value="">Choisir…</option>${items.filter(i => !st.lines.some(l => l.id === i.id)).map(i => `<option value="${i.id}">${esc(i.label)}</option>`).join('')}</select></div></div>
       <div style="margin:10px 0;max-height:40vh;overflow:auto">${st.lines.map((l, k) => `<div class="row" style="gap:6px;padding:6px 0;border-bottom:1px solid var(--line);flex-wrap:nowrap"><span style="flex:1;min-width:0">${esc(l.label)}</span><input type="number" min="1" data-rq="${k}" value="${l.qty || ''}" placeholder="Qté" style="width:72px;min-height:38px" aria-label="Quantité"><input type="number" min="0" data-rc="${k}" value="${l.cost ?? ''}" placeholder="Prix achat" style="width:100px;min-height:38px" aria-label="Prix d'achat"><button type="button" class="small ghost" data-rx="${k}" aria-label="Retirer">✕</button></div>`).join('') || '<p class="muted">Aucun article.</p>'}</div>
-      <p style="margin:0 0 10px"><strong>Total : ${money(total)}</strong></p>
+      <p style="margin:0 0 10px"><strong id="rvT">Total : ${money(total)}</strong></p>
       <div class="row"><button class="primary">Enregistrer la réception</button><button type="button" class="ghost" data-close>Annuler</button></div>
       <p class="muted" style="font-size:12px;margin:6px 0 0">Le stock augmente et le prix d’achat devient le coût moyen. Pensez à enregistrer le paiement du fournisseur dans les dépenses.</p></form>`);
     const keep = () => { st.sup = $('rvS').value; st.ref = $('rvR').value; };
     $('rvI').onchange = () => { keep(); const i = items.find(x => x.id === $('rvI').value); if (i) st.lines.push({ id: i.id, label: i.label, qty: null, cost: i.unit_cost != null ? Number(i.unit_cost) : null }); draw(); };
-    document.querySelectorAll('[data-rq]').forEach(x => x.oninput = () => { st.lines[x.dataset.rq].qty = parseInt(x.value, 10) || null; });
-    document.querySelectorAll('[data-rc]').forEach(x => x.oninput = () => { st.lines[x.dataset.rc].cost = x.value === '' ? null : +x.value; });
+    const tt = () => { $('rvT').textContent = 'Total : ' + money(st.lines.reduce((a, l) => a + (l.qty || 0) * (l.cost || 0), 0)); };
+    document.querySelectorAll('[data-rq]').forEach(x => x.oninput = () => { st.lines[x.dataset.rq].qty = parseInt(x.value, 10) || null; tt(); });
+    document.querySelectorAll('[data-rc]').forEach(x => x.oninput = () => { st.lines[x.dataset.rc].cost = x.value === '' ? null : +x.value; tt(); });
     document.querySelectorAll('[data-rx]').forEach(x => x.onclick = () => { keep(); st.lines.splice(+x.dataset.rx, 1); draw(); });
     $('rvF').onsubmit = async (e) => { e.preventDefault(); keep();
       if (!st.lines.length || st.lines.some(l => !l.qty)) return toast('Indiquez la quantité de chaque article.', true);
