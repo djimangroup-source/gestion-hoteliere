@@ -1096,7 +1096,7 @@ if (window.HorusApp && window.HorusApp.postMessage) {
 }
 /* ---------- Mise à jour de l'application sans réinstaller ni perdre la connexion ---------- */
 const plur = (n, one, many) => `${Number(n) || 0} ${Math.abs(Number(n) || 0) >= 2 ? many : one}`;
-const APP_VERSION = '2026.11.05-8';
+const APP_VERSION = '2026.11.05-9';
 async function refreshApp(){
   toast('Actualisation…');
   try { const reg = navigator.serviceWorker && await navigator.serviceWorker.getRegistration(); if (reg) { await reg.update(); if (reg.waiting) reg.waiting.postMessage('skipWaiting'); } } catch (_) {}
@@ -3692,6 +3692,8 @@ async function printReceipt(key){
   const { data: b } = r0.reservation_id ? await sb.from('reservation_balances').select('guest_name,room_number,check_in,check_out,balance').eq('id', r0.reservation_id).maybeSingle() : { data: null };
   const est = S.ests.find(x => x.id === r0.establishment_id) || {};
   const total = rows.reduce((a, m) => a + Number(m.amount), 0);
+  let rvTok = null;
+  if (r0.reservation_id && rcpt(est).show_review_qr !== false) { const { data: tk } = await sb.rpc('request_review', { p_reservation: r0.reservation_id }); rvTok = tk || null; }
   await teamNames();
   const when = new Date(r0.created_at), nights = b ? Math.max(1, Math.round((new Date(b.check_out) - new Date(b.check_in)) / 864e5)) : 0;
   const kv = (k, v) => `<div class="rc-kv"><span>${k}</span><strong>${v}</strong></div>`;
@@ -3707,6 +3709,7 @@ async function printReceipt(key){
     <div class="rc-lines">${rows.map(m => `<div class="rc-line"><div><div>${esc(m.label)}</div><div class="m">${PMETHOD[m.method] || esc(m.method || '')}${m.reference ? ' · réf. ' + esc(m.reference) : ''}</div></div><div class="rc-amt">${money(m.amount)}</div></div>`).join('')}</div>
     <div class="rc-total"><span>Total reçu</span><strong>${money(total)}</strong></div>
     ${b ? (paid ? `<div class="rc-stamp">Séjour soldé</div>` : `<div class="rc-due"><span>Reste à payer</span><strong>${money(b.balance)}</strong></div>`) : ''}
+    ${rvTok ? `<div class="rc-review"><img src="https://api.qrserver.com/v1/create-qr-code/?size=220x220&margin=0&data=${encodeURIComponent(reviewUrl(rvTok))}" alt="" onerror="this.style.display='none'"><div><div class="rc-review-t">Notez votre séjour</div><div class="rc-stars">★ ★ ★ ★ ★</div><div class="m">Scannez ce code avec votre téléphone : 30 secondes suffisent, sans inscription.</div></div></div>` : ''}
     <div class="rc-foot">${rcptFoot(est, 'Merci de votre confiance.')}<div class="m" style="text-align:center">Conservez ce reçu, il justifie votre paiement.</div>${S.overview && S.overview.plan && S.overview.plan.slug === 'decouverte' ? '<div class="m" style="text-align:center;margin-top:8px">Propulsé par Nuittea Manager</div>' : ''}</div>
     <script>window.onload=()=>window.print()<\/script></body></html>`);
   w.document.close();
@@ -4416,7 +4419,9 @@ const RECEIPT_CSS = `.rc-title{margin:10px 0 8px;padding:6px 0;border-top:2px so
 .rc-total{display:flex;justify-content:space-between;align-items:baseline;margin:10px 0 6px;padding:8px 10px;border:2px solid #000;border-radius:6px}.rc-total span{font-weight:700;text-transform:uppercase;letter-spacing:.06em;font-size:.9em}.rc-total strong{font-size:1.45em;font-weight:900;white-space:nowrap}
 .rc-stamp{margin:8px auto;width:max-content;padding:4px 14px;border:2px solid #000;border-radius:999px;font-weight:800;text-transform:uppercase;letter-spacing:.12em;font-size:.9em}
 .rc-due{display:flex;justify-content:space-between;padding:6px 10px;border:1.5px dashed #000;border-radius:6px;margin:6px 0}
-.rc-foot{margin-top:12px;padding-top:8px;border-top:1px dashed #000}`;
+.rc-foot{margin-top:12px;padding-top:8px;border-top:1px dashed #000}
+.rc-review{display:flex;gap:10px;align-items:center;margin:12px 0 4px;padding:8px;border:1.5px solid #000;border-radius:6px}.rc-review img{width:26mm;height:26mm;flex:none}
+.rc-review-t{font-weight:800;font-size:1.05em}.rc-stars{font-size:1.15em;letter-spacing:.05em;margin:1px 0 3px}`;
 const SHEET_SCREEN = (w) => `@media screen{html{background:#E9EEEC}body{width:${w};max-width:${w}!important;min-height:90vh;margin:24px auto!important;padding:16mm 15mm!important;background:#fff;box-shadow:0 6px 30px rgba(20,40,32,.14);border-radius:4px}}`;
 const TICKET_SCREEN = (w) => `@media screen{html{background:#E9EEEC!important;width:auto!important}body{width:${w + 8}mm!important;max-width:${w + 8}mm!important;margin:24px auto!important;padding:5mm 4mm!important;background:#fff!important;box-shadow:0 6px 30px rgba(20,40,32,.14)}}`;
 /* En-tête commun des documents A4/A5 */
@@ -4453,13 +4458,13 @@ function openReceiptEditor(){
       ${f('rcPhone', 'Téléphone', r.phone, est.phone || est.public_phone || 'ex. 07 07 00 00 00', 30)}
       ${f('rcTax', 'Mentions légales (RCCM, NCC…)', r.tax_id, 'ex. RCCM CI-ABJ-2024-B-1234 · NCC 1234567A')}
       <div class="field"><label for="rcFoot">Message de fin</label><textarea id="rcFoot" maxlength="200" rows="2" style="width:100%;min-height:64px;padding:10px 12px;border-radius:12px;border:1px solid var(--line);font:inherit" placeholder="ex. Merci de votre visite ! Wi-Fi : Palmiers2026">${esc(r.footer || '')}</textarea></div>
-      ${[['rcLogo', 'show_logo', 'Afficher le logo', r.show_logo !== false], ['rcServer', 'show_server', 'Afficher le nom du serveur / caissier', r.show_server !== false], ['rcQr', 'show_qr', 'QR code vers ma page de réservation', !!r.show_qr]].map(([id, , l, on]) => `<label class="row" style="gap:8px;font-weight:600;flex-wrap:nowrap;margin-bottom:8px"><input type="checkbox" id="${id}" ${on ? 'checked' : ''} style="width:20px;min-height:20px"> ${l}</label>`).join('')}
+      ${[['rcLogo', 'show_logo', 'Afficher le logo', r.show_logo !== false], ['rcServer', 'show_server', 'Afficher le nom du serveur / caissier', r.show_server !== false], ['rcQr', 'show_qr', 'QR code vers ma page de réservation', !!r.show_qr], ['rcRv', 'show_review_qr', 'QR code pour noter l’hôtel (reçus de séjour)', r.show_review_qr !== false]].map(([id, , l, on]) => `<label class="row" style="gap:8px;font-weight:600;flex-wrap:nowrap;margin-bottom:8px"><input type="checkbox" id="${id}" ${on ? 'checked' : ''} style="width:20px;min-height:20px"> ${l}</label>`).join('')}
       ${!est.public_logo_url ? '<p class="muted" style="font-size:12px;margin:0 0 8px">Ajoutez votre logo dans « Ma fiche Nuittea ».</p>' : ''}
       <button class="primary" style="width:100%" id="rcSave">Enregistrer</button>
     </form>
     <div><div class="muted" style="font-size:12px;margin-bottom:4px">Aperçu</div><div id="rcPrev" style="background:#fff;color:#000;border:1px solid var(--line);border-radius:6px;padding:10px;font:11px/1.4 ui-monospace,Menlo,monospace;box-shadow:0 6px 20px rgba(0,0,0,.08)"></div></div></div>`);
   $('modalBody').style.maxWidth = '720px';
-  const read = () => ({ title: $('rcTitle').value.trim() || null, header: $('rcHeader').value.trim() || null, address: $('rcAddr').value.trim() || null, phone: $('rcPhone').value.trim() || null, tax_id: $('rcTax').value.trim() || null, footer: $('rcFoot').value.trim() || null, show_logo: $('rcLogo').checked, show_server: $('rcServer').checked, show_qr: $('rcQr').checked });
+  const read = () => ({ title: $('rcTitle').value.trim() || null, header: $('rcHeader').value.trim() || null, address: $('rcAddr').value.trim() || null, phone: $('rcPhone').value.trim() || null, tax_id: $('rcTax').value.trim() || null, footer: $('rcFoot').value.trim() || null, show_logo: $('rcLogo').checked, show_server: $('rcServer').checked, show_qr: $('rcQr').checked, show_review_qr: $('rcRv').checked });
   const clean = (o) => Object.fromEntries(Object.entries(o).filter(([, v]) => v !== null));
   const prev = () => { const e2 = { ...est, receipt_settings: clean(read()) };
     $('rcPrev').innerHTML = rcptHead(e2).replace(/<h1 /, '<h1 style="font-size:14px" ') + `<div class="m" style="text-align:center;margin:6px 0">Bar · Ticket n° 128<br>${new Date().toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })}</div>
