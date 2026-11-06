@@ -1143,7 +1143,7 @@ if (window.HorusApp && window.HorusApp.postMessage) {
 }
 /* ---------- Mise à jour de l'application sans réinstaller ni perdre la connexion ---------- */
 const plur = (n, one, many) => `${Number(n) || 0} ${Math.abs(Number(n) || 0) >= 2 ? many : one}`;
-const APP_VERSION = '2026.11.05-22';
+const APP_VERSION = '2026.11.06-01';
 async function refreshApp(){
   toast('Actualisation…');
   try { const reg = navigator.serviceWorker && await navigator.serviceWorker.getRegistration(); if (reg) { await reg.update(); if (reg.waiting) reg.waiting.postMessage('skipWaiting'); } } catch (_) {}
@@ -3251,7 +3251,10 @@ async function openResa(id, refresh, focusCheckout){
   a('aConfirm', async () => { const { error } = await sb.from('reservations').update({ status: 'confirmed' }).eq('id', r.id); if (error) return toast(errMsg(error), true); done('Réservation confirmée. Prévenez le client par téléphone ou WhatsApp.'); });
   a('aIn', async () => { const { error, queued } = await runOrQueue({ kind: 'rpc', fn: 'check_in_reservation', args: { p_reservation: r.id } }, `Arrivée · ${r.guest_name} · ch. ${r.room_number}`); if (error) return toast(errMsg(error), true); closeModal(); if (queued) return toast('Hors connexion : arrivée enregistrée, envoyée au retour du réseau.'); afterCheckIn(r.id, refresh); });
   a('aOut', async () => { if (r.balance > 0 && !$('aOut').dataset.confirm) { $('aOut').dataset.confirm = 1; $('aOut').textContent = `Solde ${money(r.balance)} impayé — confirmer le départ`; return; }
-    const { error, queued } = await runOrQueue({ kind: 'rpc', fn: 'check_out_reservation', args: { p_reservation: r.id } }, `Départ · ${r.guest_name} · ch. ${r.room_number}`); if (error) return toast(errMsg(error), true); closeModal(); if (queued) return toast('Hors connexion : départ enregistré, envoyé au retour du réseau.'); afterCheckOut(r, refresh); });
+    const doOut = async () => { const { error, queued } = await runOrQueue({ kind: 'rpc', fn: 'check_out_reservation', args: { p_reservation: r.id } }, `Départ · ${r.guest_name} · ch. ${r.room_number}`); if (error) return toast(errMsg(error), true); closeModal(); if (queued) return toast('Hors connexion : départ enregistré, envoyé au retour du réseau.'); afterCheckOut(r, refresh); };
+    if (navigator.onLine && !$('aOut').dataset.mb) { const { data: mb } = await sb.from('extra_items').select('id,label,price,minibar_qty,photo_url,promo_price,promo_from,promo_to,happy_price,happy_start,happy_end,stock').eq('establishment_id', r.establishment_id || S.est).eq('in_minibar', true).eq('is_active', true).order('label');
+      if ((mb || []).length) return openMinibar(r, mb, doOut); }
+    doOut(); });
   a('aInv', async () => { const { data, error } = await sb.rpc('issue_guest_invoice', { p_reservation: r.id }); if (error) return toast(errMsg(error), true); const { data: inv } = await sb.from('guest_invoices').select('*').eq('id', data).single(); printGuestInvoice(inv); });
   a('aEdit', () => openResaForm(r, refresh));
   a('aCancel', async () => { if (!$('aCancel').dataset.confirm) { $('aCancel').dataset.confirm = 1; $('aCancel').textContent = 'Confirmer l’annulation'; return; }
@@ -4129,6 +4132,24 @@ async function renderProduits(){
   el.querySelectorAll('[data-copen]').forEach(b => b.onclick = () => openCount(b.dataset.copen));
   if ($('rcNew')) $('rcNew').onclick = () => openReception(items.filter(i => i.is_active));
 }
+/* Relevé du minibar au départ : les consommations sont portées sur la note et sorties du stock */
+function openMinibar(r, items, next){
+  const q = {};
+  const draw = () => { const t = items.reduce((a, i) => a + (q[i.id] || 0) * xPrice(i), 0);
+    modal(`<h2 style="font-size:22px;margin:0 0 4px">Relevé du minibar</h2><p class="muted" style="margin:0 0 12px">Chambre ${esc(r.room_number)} · ${esc(r.guest_name)} · cochez ce qui a été consommé.</p>
+      <div style="max-height:52vh;overflow:auto">${items.map(i => `<div class="row" style="gap:10px;padding:8px 0;border-bottom:1px solid var(--line);flex-wrap:nowrap">${i.photo_url ? `<img src="${esc(i.photo_url)}" alt="" style="width:40px;height:40px;border-radius:8px;object-fit:cover">` : ''}<span style="flex:1;min-width:0"><strong>${esc(i.label)}</strong><div class="muted" style="font-size:12px">${money(xPrice(i))} · ${i.minibar_qty} prévu${i.minibar_qty > 1 ? 's' : ''}</div></span>
+        <button type="button" class="small ghost" data-mm="${i.id}" aria-label="Moins">−</button><strong style="min-width:22px;text-align:center">${q[i.id] || 0}</strong><button type="button" class="small ghost" data-mp="${i.id}" aria-label="Plus">+</button></div>`).join('')}</div>
+      <p style="margin:12px 0"><strong>À porter sur la note : ${money(t)}</strong></p>
+      <div class="row"><button type="button" class="primary" id="mbOk" style="flex:1">${t ? 'Porter sur la note et continuer' : 'Rien consommé · continuer'}</button><button type="button" class="ghost" data-close>Annuler</button></div>`);
+    document.querySelectorAll('[data-mp]').forEach(b => b.onclick = () => { const i = items.find(x => x.id === b.dataset.mp); q[i.id] = Math.min((q[i.id] || 0) + 1, Math.max(i.minibar_qty, 1) * 3); draw(); });
+    document.querySelectorAll('[data-mm]').forEach(b => b.onclick = () => { q[b.dataset.mm] = Math.max(0, (q[b.dataset.mm] || 0) - 1); draw(); });
+    $('mbOk').onclick = async () => { const lines = Object.entries(q).filter(([, n]) => n > 0).map(([item_id, qty]) => ({ item_id, qty }));
+      if (lines.length) { $('mbOk').disabled = true; const { error } = await sb.rpc('extra_sale_record', { p_est: r.establishment_id || S.est, p_items: lines, p_reservation: r.id, p_method: null, p_reference: null });
+        if (error) { $('mbOk').disabled = false; return toast(errMsg(error), true); } toast('Minibar porté sur la note.'); r.balance = Number(r.balance || 0) + t; }
+      next(); };
+  };
+  draw();
+}
 function openStockMove(it, k, done, back){
   const KM = { in: ['Entrée en stock', 'Quantité reçue', true], loss: ['Perte', 'Quantité perdue (casse, péremption…)', false], adjust: ['Inventaire', 'Quantité comptée en réserve', false] }, [t, lab, cost] = KM[k];
   modal(`<h2 style="font-size:22px;margin:0 0 4px">${t}</h2><p class="muted" style="margin:0 0 12px">${esc(it.label)} · stock actuel ${it.stock ?? 'non suivi'}</p>
@@ -4180,8 +4201,10 @@ async function openXProductForm(it, stats){
         <div class="row" style="margin-top:8px">${it ? '' : `<div class="field" style="flex:1 1 120px"><label for="pfQ">Stock initial</label><input id="pfQ" type="number" min="0" placeholder="Non suivi"></div>`}
           <div class="field" style="flex:1 1 120px"><label for="pfAl">Alerte à</label><input id="pfAl" type="number" min="0" value="${v(i.alert_qty)}" placeholder="3"></div></div>
         <label class="row" style="gap:8px;font-weight:500"><input type="checkbox" id="pfPos" style="width:auto" ${i.sell_pos !== false ? 'checked' : ''}> Vendu à la caisse</label>
-        <label class="row" style="gap:8px;font-weight:500"><input type="checkbox" id="pfMb" style="width:auto" ${i.in_minibar ? 'checked' : ''}> Fait partie du minibar</label>
-        <label class="row" style="gap:8px;font-weight:500"><input type="checkbox" id="pfOn" style="width:auto" ${i.online ? 'checked' : ''}> Proposé en option à la réservation sur Nuittea.com</label></details>
+        <label class="row" style="gap:8px;font-weight:500"><input type="checkbox" id="pfMb" style="width:auto" ${i.in_minibar ? 'checked' : ''}> Fait partie du minibar · quantité par chambre <input type="number" id="pfMbQ" min="0" max="50" value="${i.minibar_qty ?? 1}" style="width:70px;min-height:34px" aria-label="Quantité dans chaque minibar"></label>
+        <label class="row" style="gap:8px;font-weight:500"><input type="checkbox" id="pfOn" style="width:auto" ${i.online ? 'checked' : ''}> Proposé en option à la réservation sur Nuittea.com</label>
+        <label class="row" style="gap:8px;font-weight:500;margin-left:26px"><input type="checkbox" id="pfOnN" style="width:auto" ${i.online_per_night ? 'checked' : ''}> Compté par nuit (ex. petit-déjeuner)</label></details>
+      ${it ? `<details style="margin-bottom:10px" id="pfRcD"><summary style="cursor:pointer;font-weight:700">Recette (ingrédients consommés à chaque vente)</summary><div id="pfRc" style="margin-top:8px"><p class="muted">Chargement…</p></div></details>` : ''}
       ${it ? `<div style="border-top:1px solid var(--line);padding-top:10px;margin-bottom:12px"><div style="font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:6px">Stock · ${it.stock === null ? 'non suivi' : it.stock + ' en stock'}</div>
         <div class="row" style="gap:6px"><button type="button" class="small" data-pmv="in">Entrée</button><button type="button" class="small ghost" data-pmv="loss">Perte</button><button type="button" class="small ghost" data-pmv="adjust">Inventaire</button><button type="button" class="small ghost" id="pfHist">Historique</button></div></div>` : ''}
       <div class="row"><button class="primary" style="flex:1">Enregistrer</button></div></form>`);
@@ -4193,6 +4216,18 @@ async function openXProductForm(it, stats){
   $('pfFile').onchange = () => { file = $('pfFile').files[0]; if (file) $('pfPh').innerHTML = `<img src="${URL.createObjectURL(file)}" alt="" style="width:96px;height:96px;object-fit:cover;border-radius:12px">`; };
   if ($('pfScan')) $('pfScan').onclick = () => scanBarcode((code) => { $('pfB').value = code; });
   const back = () => openXProductForm(it, stats);
+  if (it && $('pfRc')) (async () => {
+    const [rR, aR] = await Promise.all([sb.from('extra_recipes').select('ingredient_id, qty').eq('item_id', it.id), sb.from('extra_items').select('id,label,stock').eq('establishment_id', S.est).eq('is_active', true).neq('id', it.id).order('label')]);
+    const all = aR.data || [], st = { lines: (rR.data || []).map(x => ({ id: x.ingredient_id, qty: Number(x.qty) })) };
+    const draw = () => { $('pfRc').innerHTML = `${st.lines.map((l, k) => { const g = all.find(a => a.id === l.id) || {}; return `<div class="row" style="gap:6px;padding:4px 0;flex-wrap:nowrap"><span style="flex:1">${esc(g.label || '?')}${g.stock == null ? ' <span class="muted" style="font-size:12px">(stock non suivi)</span>' : ''}</span><input type="number" min="0.1" step="0.1" value="${l.qty}" data-rcq="${k}" style="width:80px;min-height:34px" aria-label="Quantité"><button type="button" class="small ghost" data-rcx="${k}" aria-label="Retirer">✕</button></div>`; }).join('') || '<p class="muted" style="font-size:13px;margin:0 0 6px">Aucun ingrédient. Exemple : un petit-déjeuner consomme 2 œufs, 1 pain, 1 café.</p>'}
+      <div class="row" style="gap:6px;margin-top:6px"><select id="pfRcA" style="flex:1"><option value="">+ Ajouter un ingrédient…</option>${all.filter(a => !st.lines.some(l => l.id === a.id)).map(a => `<option value="${a.id}">${esc(a.label)}</option>`).join('')}</select><button type="button" class="small" id="pfRcS">Enregistrer la recette</button></div>`;
+      $('pfRcA').onchange = () => { if ($('pfRcA').value) { st.lines.push({ id: $('pfRcA').value, qty: 1 }); draw(); } };
+      document.querySelectorAll('[data-rcq]').forEach(x => x.oninput = () => { st.lines[x.dataset.rcq].qty = +x.value || 0; });
+      document.querySelectorAll('[data-rcx]').forEach(x => x.onclick = () => { st.lines.splice(+x.dataset.rcx, 1); draw(); });
+      $('pfRcS').onclick = async () => { const { error } = await sb.rpc('extra_recipe_set', { p_item: it.id, p_lines: st.lines.filter(l => l.qty > 0).map(l => ({ ingredient_id: l.id, qty: l.qty })) }); if (error) return toast(errMsg(error), true); toast('Recette enregistrée.'); };
+    };
+    draw(); if (st.lines.length) $('pfRcD').open = true;
+  })();
   document.querySelectorAll('[data-pmv]').forEach(b => b.onclick = () => openStockMove(it, b.dataset.pmv, async () => { const { data } = await sb.from('extra_items').select('*').eq('id', it.id).single(); if (S.view === 'produits') renderProduits(); openXProductForm(data || it, stats); }, back));
   if ($('pfHist')) $('pfHist').onclick = () => openStockHist(it, back);
   $('pfF').onsubmit = async (e) => { e.preventDefault();
@@ -4200,7 +4235,7 @@ async function openXProductForm(it, stats){
     const row = { label: $('pfL').value.trim(), description: $('pfD').value.trim() || null, category: $('pfC').value, subcategory: $('pfS').value.trim() || null, barcode: $('pfB').value.trim() || null,
       price: num('pfP') || 0, unit_cost: num('pfA'), promo_price: num('pfPP'), promo_from: $('pfPF').value || null, promo_to: $('pfPT').value || null,
       happy_price: num('pfHP'), happy_start: $('pfHS').value || null, happy_end: $('pfHE').value || null,
-      alert_qty: $('pfAl').value === '' ? null : parseInt($('pfAl').value, 10), sell_pos: $('pfPos').checked, in_minibar: $('pfMb').checked, online: $('pfOn').checked };
+      alert_qty: $('pfAl').value === '' ? null : parseInt($('pfAl').value, 10), sell_pos: $('pfPos').checked, in_minibar: $('pfMb').checked, minibar_qty: Math.max(0, Math.min(50, parseInt($('pfMbQ').value, 10) || 1)), online: $('pfOn').checked, online_per_night: $('pfOnN').checked };
     if (row.promo_from && row.promo_to && row.promo_to < row.promo_from) return toast('La fin de la promotion précède son début.', true);
     const btn = e.submitter; if (btn) btn.disabled = true;
     let id = it && it.id, error;
