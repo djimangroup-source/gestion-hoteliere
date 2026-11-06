@@ -1,6 +1,6 @@
 // Horus Hotel — fonction serveur « staff-login » : connexion du personnel (code hôtel + identifiant + code).
 // • Le mot de passe réel est dérivé avec une clé secrète serveur : impossible de tester les codes directement auprès de l'authentification.
-// • Verrouillage : 5 échecs sur un compte => 15 min ; 30 échecs depuis une même adresse => 1 h.
+// • Verrouillage : 5 échecs sur un compte => 15 min (1 h en cas de récidive dans les 24 h, et alerte au propriétaire) ; 30 échecs depuis une même adresse => 1 h.
 // • Action « change_pin » (utilisateur connecté) : changement du code personnel.
 import { createClient } from "npm:@supabase/supabase-js@2.45.4";
 
@@ -19,8 +19,20 @@ async function staffPassword(code: string, user: string, pin: string) {
 async function attempt(key: string) { const { data } = await admin.from("staff_login_attempts").select("*").eq("key", key).maybeSingle(); return data; }
 async function fail(key: string, max: number, lockMin: number) {
   const a = await attempt(key); const n = (a && (!a.locked_until || new Date(a.locked_until) < new Date()) && a.failures >= max ? 0 : (a ? a.failures : 0)) + 1;
-  await admin.from("staff_login_attempts").upsert({ key, failures: n, locked_until: n >= max ? new Date(Date.now() + lockMin * 60000).toISOString() : null, updated_at: new Date().toISOString() });
-  return n;
+  // Récidive : déjà bloqué dans les dernières 24 h => blocage d'une heure
+  const repeat = !!(a && a.locked_until && Date.now() - new Date(a.locked_until).getTime() < 864e5);
+  const mins = n >= max ? (repeat ? Math.max(lockMin, 60) : lockMin) : 0;
+  await admin.from("staff_login_attempts").upsert({ key, failures: n, locked_until: mins ? new Date(Date.now() + mins * 60000).toISOString() : (a && a.locked_until && repeat ? a.locked_until : null), updated_at: new Date().toISOString() });
+  return { n, mins };
+}
+// Alerte au propriétaire de l'hôtel quand un compte d'employé est bloqué
+async function alertOwner(code: string, user: string, mins: number) {
+  try {
+    const { data: org } = await admin.from("organizations").select("id").eq("staff_code", code).maybeSingle();
+    if (!org) return;
+    await admin.rpc("raise_owner_alert", { p_org: org.id, p_est: null, p_sev: mins >= 60 ? "critical" : "warning", p_kind: "staff_login_locked",
+      p_msg: `Compte « ${user} » bloqué ${mins >= 60 ? "1 heure" : mins + " minutes"} après 5 codes erronés${mins >= 60 ? " (récidive)" : ""}.`, p_entity: "equipe", p_id: null });
+  } catch (_) { /* l'alerte ne doit jamais empêcher la réponse */ }
 }
 const locked = (a: any) => a && a.locked_until && new Date(a.locked_until) > new Date();
 
@@ -46,15 +58,16 @@ Deno.serve(async (req) => {
   const ip = (req.headers.get("x-forwarded-for") || "").split(",")[0].trim() || "inconnue";
   const kAcc = `acc:${code}:${user}`, kIp = `ip:${ip}`;
   const [aAcc, aIp] = await Promise.all([attempt(kAcc), attempt(kIp)]);
-  if (locked(aAcc)) return json({ error: "Trop d’essais : ce compte est bloqué 15 minutes. Votre responsable peut aussi vous donner un nouveau code.", locked: true }, 429);
+  if (locked(aAcc)) { const m = Math.max(1, Math.ceil((new Date(aAcc.locked_until).getTime() - Date.now()) / 60000)); return json({ error: `Trop d’essais : ce compte est bloqué encore ${m} minute${m > 1 ? "s" : ""}. Votre responsable peut le débloquer ou vous donner un nouveau code.`, locked: true }, 429); }
   if (locked(aIp)) return json({ error: "Trop d’essais depuis cet appareil. Réessayez dans une heure.", locked: true }, 429);
   const uc = createClient(URL_, ANON, { auth: { persistSession: false } });
   const { data, error } = await uc.auth.signInWithPassword({ email: staffEmail(code, user), password: await staffPassword(code, user, pin) });
   if (error || !data.session) {
     if (/banned/i.test(error?.message || "")) return json({ error: "Ce compte est suspendu. Contactez votre responsable." }, 403);
-    const n = await fail(kAcc, 5, 15); await fail(kIp, 30, 60);
+    const { n, mins } = await fail(kAcc, 5, 15); await fail(kIp, 30, 60);
+    if (mins) await alertOwner(code, user, mins);
     const left = Math.max(0, 5 - n);
-    return json({ error: left ? `Code hôtel, identifiant ou code incorrect. ${left} essai${left > 1 ? "s" : ""} restant${left > 1 ? "s" : ""}.` : "Trop d’essais : ce compte est bloqué 15 minutes." }, 401);
+    return json({ error: left ? `Code hôtel, identifiant ou code incorrect. ${left} essai${left > 1 ? "s" : ""} restant${left > 1 ? "s" : ""}.` : `Trop d’essais : ce compte est bloqué ${mins >= 60 ? "1 heure" : mins + " minutes"}.` }, 401);
   }
   await admin.from("staff_login_attempts").delete().eq("key", kAcc);
   return json({ ok: true, access_token: data.session.access_token, refresh_token: data.session.refresh_token });
