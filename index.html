@@ -1143,7 +1143,7 @@ if (window.HorusApp && window.HorusApp.postMessage) {
 }
 /* ---------- Mise à jour de l'application sans réinstaller ni perdre la connexion ---------- */
 const plur = (n, one, many) => `${Number(n) || 0} ${Math.abs(Number(n) || 0) >= 2 ? many : one}`;
-const APP_VERSION = '2026.11.06-01';
+const APP_VERSION = '2026.11.06-02';
 async function refreshApp(){
   toast('Actualisation…');
   try { const reg = navigator.serviceWorker && await navigator.serviceWorker.getRegistration(); if (reg) { await reg.update(); if (reg.waiting) reg.waiting.postMessage('skipWaiting'); } } catch (_) {}
@@ -4925,7 +4925,7 @@ async function renderEquipe(){
         <button class="small" type="button" data-fiche="${esc(m.member_id)}">Fiche</button>
         <button class="small ghost" type="button" data-active="${esc(m.member_id)}" data-on="${m.is_active}" data-staff="${m.username ? 1 : ''}">${m.is_active ? 'Suspendre' : 'Réactiver'}</button></div>` : ''}
     </div>`;
-  el.innerHTML = head('Équipe', `<span class="pill st-trial">${u.users ?? members.filter(m => m.is_active).length} / ${u.max_users ?? '∞'} utilisateurs</span>`) + readOnlyNote() + `
+  el.innerHTML = head('Équipe', `<span class="pill st-trial">${u.users ?? members.filter(m => m.is_active).length} / ${u.max_users ?? '∞'} utilisateurs</span><button type="button" class="small" id="eqSec">Sécurité</button>`) + readOnlyNote() + `
     <div class="card" style="margin-bottom:16px;background:var(--ink);color:#FBF6EE;display:flex;flex-wrap:wrap;gap:14px;align-items:center;justify-content:space-between">
       <div><div style="font-size:13px;opacity:.8">Code hôtel · à donner à vos employés</div><div style="font-family:var(--display);font-size:30px;font-weight:800;letter-spacing:1px">${esc(code || '—')}</div>
       <div style="font-size:13px;opacity:.8">Connexion : onglet « Personnel » → code hôtel + identifiant + code à 4 chiffres</div></div>
@@ -4943,6 +4943,7 @@ async function renderEquipe(){
     ${(inv.data || []).length ? `<h3 style="font-size:16px;margin:14px 0 6px">Invitations en attente</h3>${inv.data.map(i => `<div class="row between" style="padding:8px 0;border-bottom:1px solid var(--line)"><span>${esc(i.email)} · <strong>${esc(ROLE_LABEL[i.role])}</strong></span><span class="row"><button class="small" type="button" data-copyinv="${esc(i.id)}">Copier le message</button><button class="small ghost" type="button" data-revoke="${esc(i.id)}">Annuler</button></span></div>`).join('')}` : ''}
     </details>`;
   $('addStaff').onclick = () => openStaffForm(isOwner, renderEquipe);
+  $('eqSec').onclick = () => openSecurity();
   const bindCards = () => el.querySelectorAll('[data-fiche]').forEach(b => b.onclick = () => openMemberSheet(members.find(x => x.member_id === b.dataset.fiche)));
   bindCards();
   if ($('eqQ')) { const f = () => { const q = $('eqQ').value.trim().toLowerCase(), r = $('eqR').value; const list = members.filter(m => (!r || m.role === r) && (!q || [m.display_name, m.username, m.email].some(x => (x || '').toLowerCase().includes(q)))); $('eqGrid').innerHTML = list.length ? list.map(card).join('') : '<p class="muted">Aucun employé ne correspond.</p>'; bindCards(); bindRows(); }; $('eqQ').oninput = f; $('eqR').onchange = f; }
@@ -4973,6 +4974,32 @@ async function renderEquipe(){
   }; bindRows();
 }
 const PAGE_LABEL = { produits:'Produits et stock', dashboard:'Tableau de bord', reservations:'Réservations', planning:'Planning', naya:'Nuittea.com', passes:'Pass', clients:'Clients', chambres:'Chambres', inventaire:'Inventaire', pointage:'Pointage', caisse:'Caisse', resto:'Restaurant et bar', depenses:'Dépenses', factures:'Factures', rapports:'Analyse', controle:'Contrôle', mapage:'Page publique' };
+/* Page Sécurité : connexions, blocages, déconnexion de tous les appareils, rappels */
+async function openSecurity(){
+  modal('<p class="muted">Chargement…</p>');
+  const { data, error } = await sb.rpc('security_overview', { p_org: S.org });
+  if (error) return modal(`<h2 style="font-size:22px">Sécurité</h2><p class="muted">${esc(errMsg(error))}</p>`);
+  const L = data || [], now = Date.now(), d30 = 30 * 864e5;
+  const ago = (t) => { if (!t) return 'jamais'; const m = Math.round((now - new Date(t)) / 60000); return m < 60 ? `il y a ${Math.max(1, m)} min` : m < 1440 ? `il y a ${Math.round(m / 60)} h` : `il y a ${Math.round(m / 1440)} j`; };
+  const dev = (ua) => !ua ? '' : /iphone|ipad/i.test(ua) ? 'iPhone / iPad' : /android/i.test(ua) ? 'Android' : /windows/i.test(ua) ? 'Ordinateur Windows' : /mac os/i.test(ua) ? 'Mac' : 'Autre appareil';
+  const locked = L.filter(m => m.locked_until), idle = L.filter(m => m.is_active && m.role !== 'owner' && (!m.last_sign_in || now - new Date(m.last_sign_in) > d30)), pin = L.filter(m => m.is_active && m.username && m.must_change);
+  const tips = [
+    ...locked.map(m => `<b>${esc(m.name)}</b> est bloqué jusqu’à ${new Date(m.locked_until).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })} après des codes erronés.`),
+    ...idle.map(m => `<b>${esc(m.name)}</b> ne s’est pas connecté depuis plus de 30 jours : désactivez le compte s’il ne travaille plus chez vous.`),
+    ...pin.map(m => `<b>${esc(m.name)}</b> n’a jamais changé le code donné à la création.`)];
+  modal(`<div class="row between" style="margin-bottom:10px;flex-wrap:nowrap"><h2 style="font-size:22px">Sécurité</h2><button type="button" class="small ghost" data-close>Fermer</button></div>
+    ${tips.length ? `<div class="card" style="border-left:4px solid var(--amber);margin-bottom:12px">${tips.map(t => `<p style="margin:3px 0;font-size:14px">${t}</p>`).join('')}</div>` : '<div class="card" style="border-left:4px solid var(--green);margin-bottom:12px"><p style="margin:0">Aucun point d’attention.</p></div>'}
+    <div class="tablewrap" style="max-height:55vh;overflow:auto"><table class="table"><thead><tr><th>Membre</th><th>Dernière connexion</th><th>Appareils</th><th></th></tr></thead><tbody>
+    ${L.map(m => `<tr style="${m.is_active ? '' : 'opacity:.5'}"><td><strong>${esc(m.name)}</strong><div class="muted" style="font-size:12px">${esc(ROLE_LABEL[m.role] || m.role)}${m.username ? ' · ' + esc(m.username) : ''}${m.locked_until ? ' · <b style="color:var(--red)">bloqué</b>' : m.failures ? ` · ${m.failures} échec(s)` : ''}</div></td>
+      <td>${ago(m.last_sign_in)}${m.last_seen ? `<div class="muted" style="font-size:12px">actif ${ago(m.last_seen)}${dev(m.user_agent) ? ' · ' + dev(m.user_agent) : ''}</div>` : ''}</td>
+      <td>${m.sessions || 0}</td>
+      <td style="white-space:nowrap">${m.locked_until ? `<button type="button" class="small primary" data-unl="${m.member_id}">Débloquer</button> ` : ''}${m.sessions ? `<button type="button" class="small ghost" data-sout="${m.member_id}">Déconnecter</button>` : ''}</td></tr>`).join('')}</tbody></table></div>
+    <p class="muted" style="font-size:12px;margin:8px 0 0">« Déconnecter » ferme la session sur tous les appareils du membre ; l’accès déjà ouvert expire au plus tard dans l’heure. Chaque action est inscrite au journal.</p>`);
+  $('modalBody').style.maxWidth = '760px';
+  document.querySelectorAll('[data-unl]').forEach(b => b.onclick = async () => { const { error: e } = await sb.rpc('security_unlock', { p_member: b.dataset.unl }); if (e) return toast(errMsg(e), true); toast('Compte débloqué.'); openSecurity(); });
+  document.querySelectorAll('[data-sout]').forEach(b => b.onclick = async () => { if (!b.dataset.c) { b.dataset.c = 1; b.textContent = 'Confirmer'; return; }
+    const { data: n, error: e } = await sb.rpc('security_signout_all', { p_member: b.dataset.sout }); if (e) return toast(errMsg(e), true); toast(plur(n || 0, 'appareil déconnecté', 'appareils déconnectés') + '.'); openSecurity(); });
+}
 function openMemberSheet(m){
   const base = ROLE_VIEWS[m.role] || [];
   const o = m.access_overrides || {}, op = o.pages || {}, oa = o.actions || {};
