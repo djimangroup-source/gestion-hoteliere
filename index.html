@@ -1143,7 +1143,7 @@ if (window.HorusApp && window.HorusApp.postMessage) {
 }
 /* ---------- Mise à jour de l'application sans réinstaller ni perdre la connexion ---------- */
 const plur = (n, one, many) => `${Number(n) || 0} ${Math.abs(Number(n) || 0) >= 2 ? many : one}`;
-const APP_VERSION = '2026.11.06-02';
+const APP_VERSION = '2026.11.08-01';
 async function refreshApp(){
   toast('Actualisation…');
   try { const reg = navigator.serviceWorker && await navigator.serviceWorker.getRegistration(); if (reg) { await reg.update(); if (reg.waiting) reg.waiting.postMessage('skipWaiting'); } } catch (_) {}
@@ -1641,10 +1641,13 @@ async function loadCommon(){
   const [ov, pl, pr] = await Promise.all([
     sb.rpc('get_subscription_overview', { p_org: S.org }),
     sb.from('plans').select('*').eq('is_active', true).eq('is_public', true).order('sort_order'),
-    sb.from('payment_providers').select('code,name,kind').eq('is_active', true).order('sort_order')
+    sb.from('payment_providers').select('code,name,kind,public_config').eq('is_active', true).order('sort_order')
   ]);
   if (ov.error) toast(errMsg(ov.error), true);
-  S.overview = ov.data; S.plans = pl.data || []; S.providers = pr.data || [];
+  S.overview = ov.data; S.plans = pl.data || [];
+  // Paiement en ligne en mode test : visible seulement par l'administrateur de la plateforme
+  S.providers = (pr.data || []).filter(p => !(p.code === 'geniuspay' && (p.public_config || {}).environment === 'sandbox' && !S.isAdmin));
+  checkGeniusReturn();
   await loadOrgPrefs(); applyRoleNav(); refreshClock(); offBar(); syncOffline();
   renderBanner();
   refreshAlertBadge();
@@ -1924,9 +1927,10 @@ function renderTarifs(){
   if (q) q.onclick = () => modal(`<h2 style="font-size:24px;margin-bottom:10px">Formule ${esc(ent.name)}</h2><p class="muted">La formule ${esc(ent.name)} est établie sur devis selon le nombre d'établissements, de villes et les intégrations souhaitées. Votre demande est à adresser à l'administrateur de la plateforme, qui activera la formule après accord.</p><button class="primary" data-close>Fermer</button>`);
 }
 
-/* Paiement en ligne : désactivé tant que l'agrégateur n'est pas branché (boutons réservés). */
-const PAY_ONLINE = false;
+/* Paiement en ligne disponible dès que Genius Pay est actif (en test : administrateur de la plateforme seulement) */
+let PAY_ONLINE = false;
 function openCheckout(slug, cycle){
+  PAY_ONLINE = S.providers.some(p => p.code === 'geniuspay');
   if (!['owner','admin'].includes(S.member.role)) return toast("Seul le propriétaire ou un administrateur peut gérer l'abonnement.", true);
   const p = S.plans.find(x => x.slug === slug); if (!p) return;
   let months = 1;
@@ -1948,6 +1952,14 @@ function openCheckout(slug, cycle){
     const method = $('payMethod').value;
     const { data, error } = await sb.rpc('start_subscription_checkout', { p_org: S.org, p_plan_slug: slug, p_cycle: cycle, p_method: method, p_months: months });
     if (error) { g.disabled = false; return toast(errMsg(error), true); }
+    if (method === 'geniuspay') {
+      g.textContent = 'Ouverture de la page de paiement…';
+      const { data: gpr, error: ge } = await sb.functions.invoke('geniuspay', { body: { action: 'subscription', payment_id: data, return_url: location.href.split('#')[0].split('?')[0] } });
+      const msg = ge ? await fnErr(ge) : (gpr && gpr.error);
+      if (msg || !gpr || !gpr.url) { g.disabled = false; g.textContent = 'Payer'; return toast(msg || 'Paiement en ligne indisponible.', true); }
+      try { sessionStorage.setItem('hh_gp', data); } catch (_) {}
+      location.href = gpr.url; return;
+    }
     const ref = String(data).slice(0, 8).toUpperCase();
     modal(`<h2 style="font-size:24px">Demande enregistrée</h2>
       <p>Référence de paiement : <strong>${ref}</strong> — montant : <strong>${fcfa(amt())}</strong>.</p>
@@ -1957,6 +1969,21 @@ function openCheckout(slug, cycle){
   };
 }
 
+/* Retour de la page de paiement Genius Pay : le serveur redemande le statut avant toute validation */
+async function fnErr(e){ try { const j = await e.context.json(); return j.error || e.message; } catch (_) { return e.message || 'Erreur'; } }
+async function checkGeniusReturn(){
+  const q = new URLSearchParams(location.search), id = q.get('gp'); if (!id || checkGeniusReturn.done) return; checkGeniusReturn.done = true;
+  history.replaceState(null, '', location.pathname + location.hash);
+  modal(`<h2 style="font-size:22px">Vérification du paiement…</h2><p class="muted">Nous confirmons votre paiement auprès de Genius Pay.</p>`);
+  for (let k = 0; k < 6; k++) {
+    const { data, error } = await sb.functions.invoke('geniuspay', { body: { action: 'verify', payment_id: id } });
+    if (error) { const m = await fnErr(error); return modal(`<h2 style="font-size:22px">Paiement</h2><p>${esc(m)}</p><button class="primary" data-close>Fermer</button>`); }
+    if (data.status === 'succeeded') { modal(`<h2 style="font-size:22px">Paiement confirmé</h2><p>Merci, votre abonnement est prolongé. La facture est disponible dans « Mon abonnement ».</p><button class="primary" data-close>Continuer</button>`); await loadCommon(); if (S.view === 'abonnement') renderAbonnement(); return; }
+    if (data.status === 'failed' || data.status === 'cancelled') return modal(`<h2 style="font-size:22px">Paiement non abouti</h2><p>Le paiement a échoué ou a été annulé. Aucun montant n’a été validé ; vous pouvez réessayer.</p><button class="primary" data-close>Fermer</button>`);
+    await new Promise(r => setTimeout(r, 4000));
+  }
+  modal(`<h2 style="font-size:22px">Paiement en cours de traitement</h2><p>Genius Pay n’a pas encore confirmé le paiement. Votre abonnement sera prolongé automatiquement dès la confirmation.</p><button class="primary" data-close>Fermer</button>`);
+}
 /* ---------- Mon abonnement ---------- */
 async function renderAbonnement(){
   const el = $('v-abonnement'); keepOrSkel(el);
