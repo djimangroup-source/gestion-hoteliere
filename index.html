@@ -1116,7 +1116,48 @@ const FEAT = { notifications:'Notifications', daily_summary:'Résumé quotidien 
 
 function toast(msg, err=false){ document.querySelectorAll('.is-busy').forEach(b => { b.classList.remove('is-busy'); b.removeAttribute('aria-busy'); }); const t=$('toast'); t.textContent=msg; t.className='toast'+(err?' err':''); clearTimeout(t._h); t._h=setTimeout(()=>t.classList.add('hidden'), 5000); }
 function errMsg(e){ const m = (e && (e.message || e.error_description)) || 'Une erreur est survenue.'; if (typeof isNetErr === 'function' && isNetErr(e)) return 'Hors connexion : cette action sera possible dès le retour du réseau. Vous pouvez continuer à consulter vos données.'; return /momo_ref/.test(m) ? 'Saisissez le numéro de transaction Mobile Money (4 caractères minimum).' : m; }
-function modal(html){ $('modalBody').style.maxWidth = ''; $('modalBody').innerHTML = html; $('modal').classList.remove('hidden'); $('modalBody').scrollTop = 0; document.body.classList.add('modal-open'); }
+function modal(html){ $('modalBody').style.maxWidth = ''; $('modalBody').innerHTML = html; $('modal').classList.remove('hidden'); $('modalBody').scrollTop = 0; document.body.classList.add('modal-open'); try { enhanceLists($('modalBody')); } catch (_) {} }
+// Listes de choix sur les champs libres : suggestions (saisie libre possible) pour éviter fautes et doublons
+const LISTS = {
+  pays: ['Côte d’Ivoire','Burkina Faso','Mali','Guinée','Sénégal','Ghana','Togo','Bénin','Niger','Nigeria','Liberia','Sierra Leone','Guinée-Bissau','Gambie','Cap-Vert','Mauritanie','Cameroun','Gabon','Congo','RD Congo','Tchad','Centrafrique','Maroc','Tunisie','Algérie','Égypte','Afrique du Sud','Kenya','Rwanda','Éthiopie','Madagascar','France','Belgique','Suisse','Canada','États-Unis','Royaume-Uni','Allemagne','Italie','Espagne','Portugal','Liban','Chine','Inde','Turquie','Brésil'],
+  perte: ['Casse','Péremption','Vol','Consommation du personnel','Erreur d’inventaire','Offert à un client','Produit abîmé'],
+  pointage: ['Oubli de pointage','Erreur de saisie','Mission extérieure','Panne du téléphone','Arrivée validée par le gérant'],
+  annulEnc: ['Erreur de montant','Erreur de moyen de paiement','Client remboursé','Encaissement en double','Mauvais client'],
+  banques: ['SGCI','SIB','Ecobank','NSIA Banque','BOA','Coris Bank','BICICI','BNI','Société Générale','Banque Atlantique','Orange Money','Wave','MTN Money'],
+  depenses: ['Électricité (CIE)','Eau (SODECI)','Salaires','Loyer','Internet','Carburant groupe électrogène','Gaz','Produits d’entretien','Blanchisserie','Réparation','Fournitures de bureau','Transport','Impôts et taxes']
+};
+let LIST_CACHE = {};
+async function dynList(key){
+  if (LIST_CACHE[key] && LIST_CACHE[key].at > Date.now() - 300000) return LIST_CACHE[key].v;
+  const uniq = (a) => [...new Map(a.filter(Boolean).map(x => [String(x).trim().toLowerCase(), String(x).trim()])).values()].filter(Boolean);
+  let v = [];
+  try {
+    if (key === 'fournisseurs') { const [a, b] = await Promise.all([sb.from('extra_receptions').select('supplier').eq('organization_id', S.org).limit(300), sb.from('products').select('supplier').eq('organization_id', S.org).not('supplier', 'is', null).limit(300)]); v = uniq([...(a.data || []), ...(b.data || [])].map(x => x.supplier)); }
+    if (key === 'depenses') { const [a, b] = await Promise.all([sb.from('expenses').select('label').eq('organization_id', S.org).order('created_at', { ascending: false }).limit(300), sb.from('recurring_charges').select('label').eq('organization_id', S.org).limit(100)]); v = uniq([...(a.data || []), ...(b.data || [])].map(x => x.label).concat(LISTS.depenses)); }
+  } catch (_) {}
+  LIST_CACHE[key] = { at: Date.now(), v }; return v;
+}
+function attachList(inp, values){
+  if (!inp || inp.getAttribute('list') || !values || !values.length) return;
+  const id = 'dl_' + inp.id; let dl = document.getElementById(id);
+  if (!dl) { dl = document.createElement('datalist'); dl.id = id; document.body.appendChild(dl); }
+  dl.innerHTML = values.map(v => `<option value="${esc(v)}">`).join('');
+  inp.setAttribute('list', id); inp.setAttribute('autocomplete', 'off');
+}
+function enhanceLists(root){
+  if (!root) return;
+  const q = (id) => root.querySelector('#' + id);
+  attachList(q('gNat'), LISTS.pays);
+  ['pfN', 'tcWhy'].forEach(id => attachList(q(id), LISTS.pointage));
+  ['seNote', 'smN'].forEach(id => { const i = q(id); if (i && i.required) attachList(i, LISTS.perte); });
+  const mv = q('mvN'); if (mv && /Motif/.test(mv.placeholder || '')) attachList(mv, LISTS.perte);
+  const rv = q('rvR'); if (rv && rv.required) attachList(rv, LISTS.annulEnc);
+  attachList(q('smR'), LISTS.banques);
+  if (S.org) {
+    const fs = ['pfSup', 'rvS', 'seSup'].map(q).filter(Boolean); if (fs.length) dynList('fournisseurs').then(v => fs.forEach(i => attachList(i, v)));
+    const ds = ['xL', 'rcL'].map(q).filter(Boolean); if (ds.length) dynList('depenses').then(v => ds.forEach(i => attachList(i, v)));
+  }
+}
 function closeModal(){ if ($('modal').dataset.locked) return; $('modal').classList.add('hidden'); document.body.classList.remove('modal-open'); }
 $('modal').addEventListener('click', e => { if (e.target.id === 'modal' || e.target.closest('[data-close]')) closeModal(); });
 /* Rapidité : un écran déjà affiché reste visible pendant sa mise à jour (pas d'écran de chargement à chaque retour) */
@@ -1159,7 +1200,7 @@ if (window.HorusApp && window.HorusApp.postMessage) {
 }
 /* ---------- Mise à jour de l'application sans réinstaller ni perdre la connexion ---------- */
 const plur = (n, one, many) => `${Number(n) || 0} ${Math.abs(Number(n) || 0) >= 2 ? many : one}`;
-const APP_VERSION = '2026.11.09-13';
+const APP_VERSION = '2026.11.09-14';
 async function refreshApp(){
   toast('Actualisation…');
   try { const reg = navigator.serviceWorker && await navigator.serviceWorker.getRegistration(); if (reg) { await reg.update(); if (reg.waiting) reg.waiting.postMessage('skipWaiting'); } } catch (_) {}
