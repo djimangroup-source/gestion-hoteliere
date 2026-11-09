@@ -42,6 +42,19 @@ async function settleSubscription(paymentId: string, gpPay: any) {
   return { status: "pending" };
 }
 
+// Réservations Nuittea.com : validation d'après le statut renvoyé par Genius Pay
+async function settleBooking(id: string, gpPay: any) {
+  const st = String(gpPay.status || "").toLowerCase();
+  if (DONE.includes(st)) {
+    const { error } = await admin.rpc("confirm_booking_payment", { p_id: id, p_reference: gpPay.reference || null, p_method: gpPay.payment_method || null, p_environment: gpPay.environment || (SANDBOX ? "sandbox" : "live") });
+    if (error) throw new Error(error.message);
+    return { status: "succeeded" };
+  }
+  if (FAILED.includes(st)) { await admin.rpc("fail_booking_payment", { p_id: id }); return { status: "failed" }; }
+  return { status: "pending" };
+}
+const SITE_URL = Deno.env.get("SITE_URL") || "https://nuittea.pages.dev/";
+
 async function hmacHex(secret: string, msg: string) {
   const k = await crypto.subtle.importKey("raw", new TextEncoder().encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
   const s = new Uint8Array(await crypto.subtle.sign("HMAC", k, new TextEncoder().encode(msg)));
@@ -78,11 +91,50 @@ async function handle(req: Request) {
       const r = await settleSubscription(md.payment_id, pay);
       return json({ ok: true, ...r });
     }
+    if (md.kind === "booking" && md.booking_payment_id) return json({ ok: true, ...(await settleBooking(md.booking_payment_id, pay)) });
     return json({ ok: true, ignored: true });
   }
 
-  // ---- Appels de l'application (utilisateur connecté) ----
   let b: Record<string, string>; try { b = JSON.parse(raw || "{}"); } catch { return json({ error: "Requête invalide." }, 400); }
+
+  // ---- Nuittea.com : paiement d'une réservation qui vient d'être faite (sans compte requis) ----
+  if (b.action === "booking") {
+    if (SANDBOX) return json({ error: "Le paiement en ligne n'est pas encore disponible. Vous réglerez à l'hôtel." }, 403);
+    const digits = (x: string) => String(x || "").replace(/[^0-9]/g, "").slice(-8);
+    const { data: r } = await admin.from("reservations").select("id, organization_id, establishment_id, status, source, guest_name, guest_phone, total_amount, check_in, check_out, created_at, establishments(name, public_name)").eq("public_reference", String(b.reference || "")).maybeSingle();
+    if (!r || r.source !== "naya" || digits(r.guest_phone) !== digits(b.phone) || !digits(b.phone) || Date.now() - new Date(r.created_at).getTime() > 2 * 3600e3) return json({ error: "Réservation introuvable." }, 404);
+    if (!["pending", "confirmed"].includes(r.status)) return json({ error: "Cette réservation ne peut plus être payée en ligne." }, 409);
+    const { data: bal } = await admin.from("reservation_balances").select("balance").eq("id", r.id).maybeSingle();
+    const balance = Math.max(0, Math.round(Number(bal?.balance ?? r.total_amount)));
+    const kind = b.kind === "deposit" ? "deposit" : "full";
+    const amount = kind === "deposit" ? Math.min(balance, Math.max(200, Math.ceil(Number(r.total_amount) * 0.3 / 100) * 100)) : balance;
+    if (amount < 200) return json({ error: "Rien à payer en ligne pour cette réservation." }, 409);
+    const { data: bp, error: be } = await admin.from("booking_payments").insert({ reservation_id: r.id, organization_id: r.organization_id, establishment_id: r.establishment_id, kind, amount }).select("id").single();
+    if (be || !bp) return json({ error: "Paiement impossible pour le moment." }, 500);
+    const back = (b.return_url && /^https:\/\/([a-z0-9-]+\.)?nuittea\.(pages\.dev|com)\//.test(b.return_url) ? b.return_url : SITE_URL).split("#")[0];
+    const sep = back.includes("?") ? "&" : "?";
+    const hotel = (r as any).establishments?.public_name || (r as any).establishments?.name || "Hôtel";
+    const created = await gp("/payments", { method: "POST", body: JSON.stringify({
+      amount, currency: "XOF",
+      description: `${kind === "deposit" ? "Acompte" : "Réservation"} ${hotel} · du ${r.check_in} au ${r.check_out} · réf. ${b.reference}`.slice(0, 480),
+      customer: { name: r.guest_name || "Client", phone: r.guest_phone || undefined, country: "CI" },
+      success_url: `${back}${sep}gpb=${bp.id}&gps=ok`, error_url: `${back}${sep}gpb=${bp.id}&gps=ko`,
+      metadata: { kind: "booking", booking_payment_id: bp.id, reservation_reference: b.reference },
+    }) });
+    const url = created.checkout_url || created.payment_url;
+    if (!url || !created.reference) return json({ error: "Genius Pay n'a pas renvoyé de lien de paiement." }, 502);
+    await admin.from("booking_payments").update({ reference: created.reference, environment: created.environment || "live" }).eq("id", bp.id);
+    return json({ ok: true, url, amount });
+  }
+  if (b.action === "booking_verify") {
+    const { data: bp } = await admin.from("booking_payments").select("id, status, reference, amount, kind").eq("id", String(b.id || "")).maybeSingle();
+    if (!bp) return json({ error: "Paiement introuvable." }, 404);
+    if (bp.status !== "pending" || !bp.reference) return json({ status: bp.status, amount: bp.amount, kind: bp.kind });
+    const gpPay = await gp(`/payments/${encodeURIComponent(bp.reference)}`);
+    return json({ ...(await settleBooking(bp.id, gpPay)), amount: bp.amount, kind: bp.kind });
+  }
+
+  // ---- Appels de l'application (utilisateur connecté) ----
   const uc = createClient(URL_, ANON, { global: { headers: { Authorization: req.headers.get("Authorization") || "" } }, auth: { persistSession: false } });
   const { data: { user } } = await uc.auth.getUser();
   if (!user) return json({ error: "Connexion requise." }, 401);
