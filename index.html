@@ -5523,7 +5523,7 @@ async function preloadViews(){
   const R = { dashboard: renderDashboard, reservations: renderReservations, planning: renderPlanning, chambres: renderChambres, clients: renderClients, caisse: renderCaisse, produits: renderProduits };
   for (const v of Object.keys(R)) {
     if (v === S.view || !allowed(v) || lockedView(v)) continue;
-    await new Promise(r => (window.requestIdleCallback || setTimeout)(r, 1500));
+    await new Promise(r => window.requestIdleCallback ? requestIdleCallback(() => r(), { timeout: 3000 }) : setTimeout(r, 1500));
     if (!navigator.onLine || PRELOAD.done !== S.est) return;
     const keep = S.view; try { S.view = v; await R[v](); } catch (_) {} finally { if (S.view === v) S.view = keep; }
   }
