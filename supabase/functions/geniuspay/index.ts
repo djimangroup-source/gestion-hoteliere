@@ -9,7 +9,11 @@ import { createClient } from "npm:@supabase/supabase-js@2.45.4";
 const CORS = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type", "Access-Control-Allow-Methods": "POST, OPTIONS" };
 const json = (b: unknown, s = 200) => new Response(JSON.stringify(b), { status: s, headers: { ...CORS, "Content-Type": "application/json" } });
 const URL_ = Deno.env.get("SUPABASE_URL")!, ANON = Deno.env.get("SUPABASE_ANON_KEY")!, SVC = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const GP_KEY = Deno.env.get("GENIUSPAY_API_KEY") || "", GP_SECRET = Deno.env.get("GENIUSPAY_API_SECRET") || "", GP_WH = Deno.env.get("GENIUSPAY_WEBHOOK_SECRET") || "";
+// Noms acceptés pour les secrets (ceux saisis dans le tableau de bord Supabase compris)
+const env = (...names: string[]) => { for (const n of names) { const v = (Deno.env.get(n) || "").trim(); if (v) return v; } return ""; };
+const GP_KEY = env("GENIUSPAY_API_KEY", "GENIUS PAY API KEY", "GENIUS_PAY_API_KEY", "apigenius");
+const GP_SECRET = env("GENIUSPAY_API_SECRET", "CLE API GENIUS SECRETE", "GENIUS_PAY_API_SECRET");
+const GP_WH = env("GENIUSPAY_WEBHOOK_SECRET", "GENIUS PAY WEBHOOK SECRET", "GENIUS_PAY_WEBHOOK_SECRET");
 const GP_BASE = (Deno.env.get("GENIUSPAY_BASE_URL") || "https://geniuspay.ci/api/v1/merchant").replace(/\/+$/, "");
 const SANDBOX = /sandbox/.test(GP_KEY) || /sandbox/.test(GP_SECRET);
 const APP_URL = Deno.env.get("APP_URL") || "https://ayekouen.github.io/horus-hotel/";
@@ -46,6 +50,10 @@ async function hmacHex(secret: string, msg: string) {
 function safeEq(a: string, b: string) { if (a.length !== b.length) return false; let r = 0; for (let i = 0; i < a.length; i++) r |= a.charCodeAt(i) ^ b.charCodeAt(i); return r === 0; }
 
 Deno.serve(async (req) => {
+  try { return await handle(req); } catch (e) { return json({ error: `Paiement en ligne : ${(e as Error).message || "erreur inattendue"}` }, 502); }
+});
+
+async function handle(req: Request) {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
   if (req.method !== "POST") return json({ error: "Méthode non autorisée." }, 405);
   if (!GP_KEY || !GP_SECRET) return json({ error: "Le paiement en ligne n'est pas encore configuré." }, 503);
@@ -113,4 +121,4 @@ Deno.serve(async (req) => {
   }
 
   return json({ error: "Action inconnue." }, 400);
-});
+}
