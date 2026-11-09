@@ -13,16 +13,26 @@ const URL_ = Deno.env.get("SUPABASE_URL")!, ANON = Deno.env.get("SUPABASE_ANON_K
 const env = (...names: string[]) => { for (const n of names) { const v = (Deno.env.get(n) || "").trim(); if (v) return v; } return ""; };
 const GP_KEY = env("GENIUSPAY_API_KEY", "GENIUS PAY API KEY", "GENIUS_PAY_API_KEY", "apigenius");
 const GP_SECRET = env("GENIUSPAY_API_SECRET", "CLE API GENIUS SECRETE", "GENIUS_PAY_API_SECRET");
-const GP_WH = env("GENIUSPAY_WEBHOOK_SECRET", "GENIUS PAY WEBHOOK SECRET", "GENIUS_PAY_WEBHOOK_SECRET");
+const GP_WH_ENV = env("GENIUSPAY_WEBHOOK_SECRET", "GENIUS PAY WEBHOOK SECRET", "GENIUS_PAY_WEBHOOK_SECRET");
 const GP_BASE = (Deno.env.get("GENIUSPAY_BASE_URL") || "https://geniuspay.ci/api/v1/merchant").replace(/\/+$/, "");
 const SANDBOX = /sandbox/.test(GP_KEY) || /sandbox/.test(GP_SECRET);
 const APP_URL = Deno.env.get("APP_URL") || "https://ayekouen.github.io/horus-hotel/";
 const admin = createClient(URL_, SVC, { auth: { persistSession: false } });
+const SELF_URL = `${URL_}/functions/v1/geniuspay`;
+// Secret webhook : celui des secrets Supabase s'il existe, sinon celui rangé à la création du webhook (table réservée au serveur)
+async function webhookSecret() {
+  if (GP_WH_ENV) return GP_WH_ENV;
+  const { data } = await admin.from("geniuspay_settings").select("webhook_secret").eq("key", "webhook").maybeSingle();
+  return data?.webhook_secret || "";
+}
+// Frais Genius Pay (grille publique) : 1 % + 100 F + environ 1,5 % opérateur. Le client les paie : l'hôtel reçoit le montant prévu.
+const FEE_RATE = 0.025, FEE_FIXED = 100, MIN_ONLINE = 2000;
+const grossUp = (net: number) => Math.ceil((net + FEE_FIXED) / (1 - FEE_RATE) / 10) * 10;
 
 async function gp(path: string, init: RequestInit = {}) {
   const r = await fetch(GP_BASE + path, { ...init, headers: { "X-API-Key": GP_KEY, "X-API-Secret": GP_SECRET, "Content-Type": "application/json", "Accept": "application/json", ...(init.headers || {}) } });
   const t = await r.text(); let b: any = null; try { b = JSON.parse(t); } catch { b = { raw: t.slice(0, 300) }; }
-  if (!r.ok) throw new Error((b && (b.message || b.error)) || `Genius Pay a répondu ${r.status}.`);
+  if (!r.ok) throw new Error((b && (b.message || b.error?.message || b.error)) || `Genius Pay a répondu ${r.status}.`);
   return b && b.data ? b.data : b;
 }
 const DONE = ["completed", "success", "succeeded", "paid"], FAILED = ["failed", "cancelled", "canceled", "expired"];
@@ -45,6 +55,7 @@ async function settleSubscription(paymentId: string, gpPay: any) {
 // Réservations Nuittea.com : validation d'après le statut renvoyé par Genius Pay
 async function settleBooking(id: string, gpPay: any) {
   const st = String(gpPay.status || "").toLowerCase();
+  if (gpPay.fees != null || gpPay.net_amount != null) await admin.from("booking_payments").update({ gp_fees: gpPay.fees ?? null, gp_net: gpPay.net_amount ?? null }).eq("id", id);
   if (DONE.includes(st)) {
     const { error } = await admin.rpc("confirm_booking_payment", { p_id: id, p_reference: gpPay.reference || null, p_method: gpPay.payment_method || null, p_environment: gpPay.environment || (SANDBOX ? "sandbox" : "live") });
     if (error) throw new Error(error.message);
@@ -75,6 +86,7 @@ async function handle(req: Request) {
   // ---- Appel de Genius Pay (webhook) ----
   const sig = req.headers.get("x-webhook-signature");
   if (sig) {
+    const GP_WH = await webhookSecret();
     if (!GP_WH) return json({ error: "Secret webhook absent." }, 503);
     const ts = req.headers.get("x-webhook-timestamp") || "";
     if (!/^\d+$/.test(ts) || Math.abs(Date.now() / 1000 - Number(ts)) > 300) return json({ error: "Horodatage invalide." }, 401);
@@ -82,6 +94,7 @@ async function handle(req: Request) {
     const given = sig.replace(/^sha256=/, "").trim().toLowerCase();
     if (!safeEq(expected, given)) return json({ error: "Signature invalide." }, 401);
     let evt: any; try { evt = JSON.parse(raw); } catch { return json({ error: "Contenu invalide." }, 400); }
+    if (evt?.event === "webhook.test") return json({ ok: true, test: true });
     const ref = evt?.data?.reference;
     if (!ref) return json({ ok: true, ignored: true });
     // Double vérification : le statut fait foi seulement s'il est redemandé à Genius Pay
@@ -109,13 +122,15 @@ async function handle(req: Request) {
     const kind = b.kind === "deposit" ? "deposit" : "full";
     const amount = kind === "deposit" ? Math.min(balance, Math.max(200, Math.ceil(Number(r.total_amount) * 0.3 / 100) * 100)) : balance;
     if (amount < 200) return json({ error: "Rien à payer en ligne pour cette réservation." }, 409);
-    const { data: bp, error: be } = await admin.from("booking_payments").insert({ reservation_id: r.id, organization_id: r.organization_id, establishment_id: r.establishment_id, kind, amount }).select("id").single();
+    if (amount < MIN_ONLINE) return json({ error: `Le paiement en ligne commence à ${MIN_ONLINE} F. Vous réglerez à l'hôtel.` }, 409);
+    const charged = grossUp(amount);
+    const { data: bp, error: be } = await admin.from("booking_payments").insert({ reservation_id: r.id, organization_id: r.organization_id, establishment_id: r.establishment_id, kind, amount, charged, client_fee: charged - amount }).select("id").single();
     if (be || !bp) return json({ error: "Paiement impossible pour le moment." }, 500);
     const back = (b.return_url && /^https:\/\/([a-z0-9-]+\.)?nuittea\.(pages\.dev|com)\//.test(b.return_url) ? b.return_url : SITE_URL).split("#")[0];
     const sep = back.includes("?") ? "&" : "?";
     const hotel = (r as any).establishments?.public_name || (r as any).establishments?.name || "Hôtel";
     const created = await gp("/payments", { method: "POST", body: JSON.stringify({
-      amount, currency: "XOF",
+      amount: charged, currency: "XOF",
       description: `${kind === "deposit" ? "Acompte" : "Réservation"} ${hotel} · du ${r.check_in} au ${r.check_out} · réf. ${b.reference}`.slice(0, 480),
       customer: { name: r.guest_name || "Client", phone: r.guest_phone || undefined, country: "CI" },
       success_url: `${back}${sep}gpb=${bp.id}&gps=ok`, error_url: `${back}${sep}gpb=${bp.id}&gps=ko`,
@@ -124,11 +139,12 @@ async function handle(req: Request) {
     const url = created.checkout_url || created.payment_url;
     if (!url || !created.reference) return json({ error: "Genius Pay n'a pas renvoyé de lien de paiement." }, 502);
     await admin.from("booking_payments").update({ reference: created.reference, environment: created.environment || "live" }).eq("id", bp.id);
-    return json({ ok: true, url, amount });
+    return json({ ok: true, url, amount, fee: charged - amount, charged });
   }
   if (b.action === "booking_verify") {
-    const { data: bp } = await admin.from("booking_payments").select("id, status, reference, amount, kind").eq("id", String(b.id || "")).maybeSingle();
+    const { data: bp } = await admin.from("booking_payments").select("id, status, reference, amount, kind, gp_fees").eq("id", String(b.id || "")).maybeSingle();
     if (!bp) return json({ error: "Paiement introuvable." }, 404);
+    if (bp.status === "succeeded" && bp.gp_fees == null && bp.reference) { try { const g = await gp(`/payments/${encodeURIComponent(bp.reference)}`); await admin.from("booking_payments").update({ gp_fees: g.fees ?? null, gp_net: g.net_amount ?? null }).eq("id", bp.id); } catch { /* frais relevés plus tard */ } }
     if (bp.status !== "pending" || !bp.reference) return json({ status: bp.status, amount: bp.amount, kind: bp.kind });
     const gpPay = await gp(`/payments/${encodeURIComponent(bp.reference)}`);
     return json({ ...(await settleBooking(bp.id, gpPay)), amount: bp.amount, kind: bp.kind });
@@ -138,6 +154,25 @@ async function handle(req: Request) {
   const uc = createClient(URL_, ANON, { global: { headers: { Authorization: req.headers.get("Authorization") || "" } }, auth: { persistSession: false } });
   const { data: { user } } = await uc.auth.getUser();
   if (!user) return json({ error: "Connexion requise." }, 401);
+
+  if (b.action === "webhook_status" || b.action === "webhook_setup") {
+    const { data: isAdm } = await uc.rpc("is_platform_admin");
+    if (!isAdm) return json({ error: "Accès refusé." }, 403);
+    const { data: cur } = await admin.from("geniuspay_settings").select("webhook_id, webhook_url, environment, created_at, webhook_secret").eq("key", "webhook").maybeSingle();
+    const st = (c: any) => ({ active: !!(c && c.webhook_secret) || !!GP_WH_ENV, webhook_id: c?.webhook_id || null, url: c?.webhook_url || SELF_URL, environment: c?.environment || null, created_at: c?.created_at || null });
+    if (b.action === "webhook_status" || (cur && cur.webhook_secret)) {
+      if (b.action === "webhook_setup" && cur?.webhook_id) { try { await gp(`/webhooks/${cur.webhook_id}/test`, { method: "POST" }); } catch { /* test facultatif */ } }
+      return json(st(cur));
+    }
+    const w = await gp("/webhooks", { method: "POST", body: JSON.stringify({ name: "Nuittea", url: SELF_URL, events: ["payment.success", "payment.failed", "payment.cancelled", "payment.expired", "payment.refunded"] }) });
+    const secret = w.secret || w.webhook_secret || w.signing_secret;
+    if (!secret) return json({ error: "Genius Pay n'a pas renvoyé de secret pour le webhook." }, 502);
+    const row = { key: "webhook", webhook_id: String(w.id ?? ""), webhook_secret: secret, webhook_url: SELF_URL, environment: w.environment || (SANDBOX ? "sandbox" : "live") };
+    const { error: se } = await admin.from("geniuspay_settings").upsert(row);
+    if (se) return json({ error: "Webhook créé mais secret non enregistré : " + se.message }, 500);
+    try { if (row.webhook_id) await gp(`/webhooks/${row.webhook_id}/test`, { method: "POST" }); } catch { /* test facultatif */ }
+    return json(st(row));
+  }
 
   if (b.action === "subscription" || b.action === "verify") {
     const { data: pay } = await admin.from("payments").select("id, organization_id, amount, currency, status, payment_method, transaction_reference, metadata, plans(name)").eq("id", b.payment_id).maybeSingle();
