@@ -41,7 +41,7 @@ Deno.serve(async (req) => {
     const user = createClient(URL_, ANON, { global: { headers: { Authorization: auth } } });
     const { data: ok, error: e1 } = await user.rpc("staff_can", { p_perm: "demo" });
     if (e1 || ok !== true) return json({ error: "Accès refusé." }, 403);
-    const { data: me } = await user.auth.getUser();
+    const { data: me } = await user.auth.getUser(auth.replace(/^Bearer /, ""));
     const admin = createClient(URL_, SERVICE, { auth: { persistSession: false } });
     const { action, role } = await req.json();
 
@@ -62,7 +62,6 @@ Deno.serve(async (req) => {
       if (!ROLES[role]) return json({ error: "Rôle inconnu." }, 400);
       const { data: org } = await admin.from("organizations").select("id").eq("is_test", true).eq("name", "Hôtel Démo Nuittea").maybeSingle();
       if (!org) await seed();
-      else await ensureUsers(admin);
       const { data, error } = await admin.auth.admin.generateLink({ type: "magiclink", email: emailOf(role), options: { redirectTo: APP } });
       if (error) return json({ error: error.message }, 500);
       await log("demo_connexion", { role });
