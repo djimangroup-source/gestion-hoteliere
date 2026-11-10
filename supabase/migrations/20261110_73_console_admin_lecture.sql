@@ -1,0 +1,1 @@
+-- 73 · Fonction de lecture admin_console_data() pour la console (appliquée en production le 10/11/2026 ; définition en base).
