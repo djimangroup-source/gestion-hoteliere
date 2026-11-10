@@ -3,7 +3,6 @@
 import { createClient } from "npm:@supabase/supabase-js@2.45.4";
 
 const URL_ = Deno.env.get("SUPABASE_URL")!;
-const ANON = Deno.env.get("SUPABASE_ANON_KEY")!;
 const SERVICE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const RESEND = Deno.env.get("RESEND_API_KEY") || "";
 const FROM = Deno.env.get("ALERTS_FROM") || "Console Nuittea <onboarding@resend.dev>";
@@ -35,11 +34,12 @@ Deno.serve(async (req) => {
 
     // E-mail de test, demandé depuis la console par un membre de l'équipe
     if (action === "test") {
-      const auth = req.headers.get("Authorization") || "";
-      const user = createClient(URL_, ANON, { global: { headers: { Authorization: auth } } });
-      const { data: ok } = await user.rpc("staff_can", { p_perm: "dashboard" });
-      if (ok !== true) return json({ error: "Accès refusé." }, 403);
-      const { data: me } = await user.auth.getUser(auth.replace(/^Bearer /, ""));
+      const token = (req.headers.get("Authorization") || "").replace(/^Bearer /, "");
+      const { data: me } = await createClient(URL_, SERVICE, { auth: { persistSession: false, autoRefreshToken: false } }).auth.getUser(token);
+      if (!me?.user) return json({ error: "Session invalide : reconnectez-vous." }, 401);
+      const { data: st, error: se } = await admin.from("platform_staff").select("is_active").eq("user_id", me.user.id).maybeSingle();
+      if (se) return json({ error: se.message }, 500);
+      if (!st?.is_active) return json({ error: "Ce compte (" + me.user.email + ") ne fait pas partie de l'équipe Nuittea." }, 403);
       await send(me.user!.email!, "Test des alertes Nuittea", page("Les alertes e-mail fonctionnent", "<p>Cet e-mail confirme que la console Nuittea peut vous envoyer des alertes.</p>"));
       return json({ ok: true, to: me.user!.email });
     }
@@ -60,6 +60,7 @@ Deno.serve(async (req) => {
       for (const it of items || []) {
         const to = (staff || []).filter((s) => s.alert_instant && s.email && (perms.get(s.user_id) || []).includes(it.perm));
         try {
+          if (!to.length) throw new Error("Aucun destinataire autorisé.");
           for (const s of to) await send(s.email!, it.subject, page(it.subject, `<p style="white-space:pre-wrap">${esc(it.body)}</p>`));
           await admin.from("email_outbox").update({ sent_at: new Date().toISOString() }).eq("id", it.id);
         } catch (e) {
